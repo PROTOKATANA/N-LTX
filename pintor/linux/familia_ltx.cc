@@ -9,7 +9,13 @@
 
 # include "gpu_masiva.h"
 
+# include "lienzo.h"
+
 namespace {
+
+// El tamaño de las superficies del lienzo : el monitor más grande
+
+Lienzo lienzo ;
 
 void responder(LlamadaTextura & llamada , FlValue * value) { fl_method_call_respond_success(llamada.call , value , nullptr) ; }
 
@@ -48,6 +54,20 @@ bool fijar_vista(LlamadaTextura & llamada) {
 bool metodo_lienzo(LlamadaTextura & llamada) {
 
 	if (std :: strcmp(llamada.nombre , "vista") == 0) { return fijar_vista(llamada) ; }
+
+	if (std :: strcmp(llamada.nombre , "lienzo") == 0) {
+
+		g_autoptr(FlValue) value = fl_value_new_list() ;
+
+		fl_value_append_take(value , fl_value_new_int(lienzo.ancho)) ;
+
+		fl_value_append_take(value , fl_value_new_int(lienzo.alto)) ;
+
+		responder(llamada , value) ;
+
+		return true ;
+
+	}
 
 	if (std :: strcmp(llamada.nombre , "volcar") == 0) {
 
@@ -105,13 +125,19 @@ bool metodo_masiva(LlamadaTextura & llamada) {
 
 FamiliaTexturas familia_lienzo() {
 
+	lienzo = lienzo_de_monitores() ;
+
 	return FamiliaTexturas{
 
 		"ltx/lienzo" ,
 
 		1 ,
 
-		[](Carril & carril) -> std :: unique_ptr<GpuRenderer> { return std :: make_unique<GpuLienzo>(carril) ; } ,
+		[](Carril & carril) -> std :: unique_ptr<GpuRenderer> {
+
+			return std :: make_unique<GpuLienzo>(carril , lienzo.ancho , lienzo.alto) ;
+
+		} ,
 
 		metodo_lienzo ,
 

@@ -29,6 +29,10 @@ class _VistaDocumentoState extends State<VistaDocumento> {
 
   final _desplazamiento = ScrollController();
   int? _textura;
+
+  /// El tamaño de la textura, en píxeles físicos. No cambia con la ventana: solo se pinta lo que se
+  /// ve, y por eso redimensionar no la recrea.
+  Size _lienzo = Size.zero;
   Size _tam = Size.zero;
   double _pixeles = 1;
   Publicado _publicado = const Publicado(alto: 0, avisos: []);
@@ -45,8 +49,14 @@ class _VistaDocumentoState extends State<VistaDocumento> {
 
   Future<void> _abrir() async {
     final id = await _canal.invokeMethod<int>('create', 0);
+    final lienzo = await _canal.invokeListMethod<int>('lienzo', 0);
     if (!mounted) return;
-    setState(() => _textura = id);
+    setState(() {
+      _textura = id;
+      _lienzo = lienzo == null
+          ? Size.zero
+          : Size(lienzo[0] + 0.0, lienzo[1] + 0.0);
+    });
     _publicar();
     _reloj = Timer.periodic(const Duration(seconds: 1), (_) => _medir());
   }
@@ -94,6 +104,26 @@ class _VistaDocumentoState extends State<VistaDocumento> {
     });
   }
 
+  /// Cada píxel de la textura, en un píxel de la pantalla: reescalarla emborronaría el texto.
+  Widget _textura1a1(int textura, double pixeles) {
+    final imagen = Texture(
+      textureId: textura,
+      filterQuality: FilterQuality.none,
+    );
+    if (_lienzo.isEmpty) return imagen;
+    final tam = _lienzo / pixeles;
+    return ClipRect(
+      child: OverflowBox(
+        alignment: Alignment.topLeft,
+        minWidth: tam.width,
+        maxWidth: tam.width,
+        minHeight: tam.height,
+        maxHeight: tam.height,
+        child: imagen,
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _reloj?.cancel();
@@ -117,10 +147,8 @@ class _VistaDocumentoState extends State<VistaDocumento> {
         return Stack(
           fit: StackFit.expand,
           children: [
-            if (textura == null)
-              const ColoredBox(color: Colors.white)
-            else
-              Texture(textureId: textura),
+            const ColoredBox(color: Colors.white),
+            if (textura != null) _textura1a1(textura, pixeles),
             Scrollbar(
               controller: _desplazamiento,
               thumbVisibility: true,

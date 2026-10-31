@@ -23,13 +23,14 @@ struct MedidasLienzo {
 // Pinta el lienzo de N-LTX : texto, fórmulas, figuras y animaciones en una sola
 // superficie, con lo que Rust prepara en cada fotograma (pintor/src/lienzo.rs).
 // Pinta con MSAA en una textura propia y resuelve al final sobre la superficie
-// compartida con Flutter
+// compartida con Flutter, que mide lo que el lienzo (lienzo.h) : al redimensionar
+// la ventana no se recrea nada y solo cambia la parte que se pinta
 
 class GpuLienzo final : public GpuRenderer {
 
 public:
 
-	explicit GpuLienzo(Carril & carril) ;
+	GpuLienzo(Carril & carril , std :: uint32_t lienzo_ancho , std :: uint32_t lienzo_alto) ;
 
 	~GpuLienzo() override ;
 

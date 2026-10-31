@@ -1,5 +1,7 @@
 # include "gpu_lienzo.h"
 
+# include <algorithm>
+
 # include <atomic>
 
 # include <chrono>
@@ -29,8 +31,6 @@ constexpr float fondo_lienzo[4] = { 1.0f , 1.0f , 1.0f , 1.0f } ;
 constexpr float transparente[4] = { 0.0f , 0.0f , 0.0f , 0.0f } ;
 
 constexpr TEXTURE_FORMAT formato_color = TEX_FORMAT_RGBA8_UNORM ;
-
-constexpr TEXTURE_FORMAT formato_plantilla = TEX_FORMAT_D32_FLOAT_S8X24_UINT ;
 
 // Lo mismo que las constantes de pintor/src/atlas.rs y lista.rs
 
@@ -261,6 +261,18 @@ void fijar_estatica(IPipelineState * pipeline , SHADER_TYPE etapa , const char *
 
 }
 
+// Solo hace falta el stencil, y D24 ocupa la mitad, pero no todas las GPU lo tienen
+
+TEXTURE_FORMAT elegir_plantilla(IRenderDevice * device , std :: uint32_t muestras) {
+
+	const auto & info = device->GetTextureFormatInfoExt(TEX_FORMAT_D24_UNORM_S8_UINT) ;
+
+	const bool sirve = info.Supported && (info.BindFlags & BIND_DEPTH_STENCIL) && (info.SampleCounts & muestras) ;
+
+	return sirve ? TEX_FORMAT_D24_UNORM_S8_UINT : TEX_FORMAT_D32_FLOAT_S8X24_UINT ;
+
+}
+
 // Una textura de color con MSAA, su stencil y dónde se resuelve : una por cada
 // capa abierta a la vez
 
@@ -272,7 +284,21 @@ struct Objetivo {
 
 	RefCntAutoPtr<ITexture> resuelta ;
 
-	bool crear(IRenderDevice * device , std :: uint32_t ancho , std :: uint32_t alto , std :: uint32_t muestras , GError ** error) {
+	bool crear(
+
+		IRenderDevice * device ,
+
+		std :: uint32_t ancho ,
+
+		std :: uint32_t alto ,
+
+		std :: uint32_t muestras ,
+
+		TEXTURE_FORMAT formato_plantilla ,
+
+		GError ** error
+
+	) {
 
 		TextureDesc desc ;
 
@@ -412,6 +438,8 @@ struct Recursos {
 
 	std :: uint32_t alto = 0 ;
 
+	TEXTURE_FORMAT formato_plantilla = TEX_FORMAT_UNKNOWN ;
+
 	Malla base ;
 
 	Malla vivos ;
@@ -423,6 +451,8 @@ struct Recursos {
 	bool crear(IRenderDevice * device , std :: uint32_t muestras , GError ** error) {
 
 		if (listos) { return true ; }
+
+		formato_plantilla = elegir_plantilla(device , muestras) ;
 
 		if (
 
@@ -780,17 +810,20 @@ struct Recursos {
 
 	}
 
-	// Al cambiar de tamaño, las capas se vuelven a crear cuando hagan falta
+	// Solo crecen, y a saltos : encoger o estirar la ventana no crea texturas
+	// en cada paso, y una ventana pequeña no paga el monitor entero
 
 	void acomodar(std :: uint32_t w , std :: uint32_t h) {
 
-		if (w == ancho && h == alto) { return ; }
+		if (w <= ancho && h <= alto) { return ; }
+
+		const auto salto = [](std :: uint32_t v) { return (v + 255u) & ~255u ; } ;
 
 		objetivos.clear() ;
 
-		ancho = w ;
+		ancho = std :: max(ancho , salto(w)) ;
 
-		alto = h ;
+		alto = std :: max(alto , salto(h)) ;
 
 	}
 
@@ -800,7 +833,7 @@ struct Recursos {
 
 			auto nuevo = std :: make_unique<Objetivo>() ;
 
-			if (!nuevo->crear(device , ancho , alto , muestras , error)) { return nullptr ; }
+			if (!nuevo->crear(device , ancho , alto , muestras , formato_plantilla , error)) { return nullptr ; }
 
 			objetivos.push_back(std :: move(nuevo)) ;
 
@@ -822,9 +855,23 @@ class Ejecucion {
 
 public:
 
-	Ejecucion(IRenderDevice * device , IDeviceContext * ctx , Recursos & r , std :: uint32_t muestras) :
+	Ejecucion(
 
-		device_(device) , ctx_(ctx) , r_(r) , muestras_(muestras) {}
+		IRenderDevice * device ,
+
+		IDeviceContext * ctx ,
+
+		Recursos & r ,
+
+		std :: uint32_t muestras ,
+
+		std :: uint32_t ancho ,
+
+		std :: uint32_t alto
+
+	) :
+
+		device_(device) , ctx_(ctx) , r_(r) , muestras_(muestras) , ancho_(ancho) , alto_(alto) {}
 
 	bool abrir_base(GError ** error) {
 
@@ -922,9 +969,9 @@ private:
 
 		Viewport vista ;
 
-		vista.Width = static_cast<float>(r_.ancho) ;
+		vista.Width = static_cast<float>(ancho_) ;
 
-		vista.Height = static_cast<float>(r_.alto) ;
+		vista.Height = static_cast<float>(alto_) ;
 
 		ctx_->SetViewports(1 , &vista , r_.ancho , r_.alto) ;
 
@@ -1056,6 +1103,10 @@ private:
 
 	std :: uint32_t muestras_ ;
 
+	std :: uint32_t ancho_ ;
+
+	std :: uint32_t alto_ ;
+
 	std :: size_t profundidad_ = 0 ;
 
 	ITexture * mascara_ = nullptr ;
@@ -1064,13 +1115,24 @@ private:
 
 } ;
 
-std :: uint32_t muestras_pedidas() {
+// Los trazos y los glifos no dependen del MSAA : solo los rellenos, y con 8× sus
+// curvas pierden los dientes. Si la GPU no llega, lo que tenga
+
+std :: uint32_t muestras_posibles(IRenderDevice * device) {
 
 	const char * pedidas = std :: getenv("NLTX_MSAA") ;
 
-	const int n = pedidas ? std :: atoi(pedidas) : 4 ;
+	const std :: uint32_t n = pedidas ? static_cast<std :: uint32_t>(std :: atoi(pedidas)) : 8u ;
 
-	return n == 2 || n == 8 ? n : 4 ;
+	const auto cuentas = device->GetTextureFormatInfoExt(formato_color).SampleCounts ;
+
+	for (std :: uint32_t m = std :: min(n , 8u) ; m > 1 ; m /= 2) {
+
+		if (cuentas & m) { return m ; }
+
+	}
+
+	return 2 ;
 
 }
 
@@ -1092,7 +1154,13 @@ struct GpuLienzo :: Impl {
 
 	Reloj :: time_point inicio = Reloj :: now() ;
 
-	std :: uint32_t muestras = muestras_pedidas() ;
+	std :: uint32_t muestras = 0 ;
+
+	// El tamaño de la superficie, que no cambia. Sin monitor, 0 : la de la vista
+
+	std :: uint32_t lienzo_ancho ;
+
+	std :: uint32_t lienzo_alto ;
 
 	// NODOS_BANCO_GPU : mide cada fotograma en CPU y en GPU, esperando a la GPU
 
@@ -1118,7 +1186,9 @@ struct GpuLienzo :: Impl {
 
 	std :: atomic<double> ms_carril{ 0 } ;
 
-	explicit Impl(Carril & carril) : surface{ "LTX lienzo" , carril } {
+	Impl(Carril & carril , std :: uint32_t ancho_lienzo , std :: uint32_t alto_lienzo) :
+
+		surface{ "LTX lienzo" , carril } , lienzo_ancho(ancho_lienzo) , lienzo_alto(alto_lienzo) {
 
 		if (std :: getenv("NODOS_BANCO_GPU")) { banco = std :: make_unique<BancoGpu>("LTX" , std :: vector<std :: string>{ "lienzo" }) ; }
 
@@ -1198,9 +1268,17 @@ struct GpuLienzo :: Impl {
 
 		if (w == 0 || h == 0) { return true ; }
 
+		const std :: uint32_t superficie_w = lienzo_ancho ? lienzo_ancho : w ;
+
+		const std :: uint32_t superficie_h = lienzo_alto ? lienzo_alto : h ;
+
+		w = std :: min(w , superficie_w) ;
+
+		h = std :: min(h , superficie_h) ;
+
 		GpuSurface :: Acomodo acomodo = GpuSurface :: Acomodo :: esperando ;
 
-		if (!surface.acomodar(w , h , &acomodo , error)) { return false ; }
+		if (!surface.acomodar(superficie_w , superficie_h , &acomodo , error)) { return false ; }
 
 		if (acomodo == GpuSurface :: Acomodo :: esperando) {
 
@@ -1215,6 +1293,8 @@ struct GpuLienzo :: Impl {
 		auto & r = surface.estado<Recursos>() ;
 
 		const bool nuevos = !r.listos ;
+
+		if (muestras == 0) { muestras = muestras_posibles(surface.device()) ; }
 
 		if (!r.crear(surface.device() , muestras , error)) { return false ; }
 
@@ -1252,7 +1332,7 @@ struct GpuLienzo :: Impl {
 
 		ctx->UpdateBuffer(r.uniforme_vista , 0 , sizeof(u) , &u , RESOURCE_STATE_TRANSITION_MODE_TRANSITION) ;
 
-		Ejecucion ejecucion(surface.device() , ctx , r , muestras) ;
+		Ejecucion ejecucion(surface.device() , ctx , r , muestras , w , h) ;
 
 		ITexture * resuelta = nullptr ;
 
@@ -1278,7 +1358,7 @@ struct GpuLienzo :: Impl {
 
 		}
 
-		surface.fijar_objetivo(fondo_lienzo) ;
+		surface.fijar_region(w , h , fondo_lienzo) ;
 
 		r.enlace_copia->GetVariableByName(SHADER_TYPE_PIXEL , "Capa")->Set(vista_srv(resuelta)) ;
 
@@ -1292,7 +1372,7 @@ struct GpuLienzo :: Impl {
 
 		ctx->Draw(draw) ;
 
-		if (!ruta.empty()) { surface.volcar(ruta.c_str()) ; }
+		if (!ruta.empty()) { surface.volcar(ruta.c_str() , w , h) ; }
 
 		animada = marco->animada() ;
 
@@ -1326,7 +1406,9 @@ struct GpuLienzo :: Impl {
 
 } ;
 
-GpuLienzo :: GpuLienzo(Carril & carril) : impl_(new Impl(carril)) {
+GpuLienzo :: GpuLienzo(Carril & carril , std :: uint32_t lienzo_ancho , std :: uint32_t lienzo_alto) :
+
+	impl_(new Impl(carril , lienzo_ancho , lienzo_alto)) {
 
 	impl_->surface.al_pintar([this](GError ** error) { return !impl_->pendiente || impl_->dibujar(error) ; }) ;
 
