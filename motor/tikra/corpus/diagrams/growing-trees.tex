@@ -1,0 +1,21 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[every node/.style={circle, fill=black!70, inner sep=1.5pt}, thick]
+  \node[fill=red!70!black] at (0,0) {}
+    [grow=right, level distance=1.2cm, sibling distance=8mm, edge from parent/.style={draw, red!70!black}]
+    child { node {} child { node {} } child { node {} } }
+    child { node {} child { node {} } }
+    child { node {} child { node {} } child { node {} } child { node {} } };
+  \node[fill=blue!70!black] at (5.4,0) {}
+    [grow cyclic, edge from parent/.style={draw, blue!70!black},
+     level 1/.style={level distance=1.2cm, sibling angle=72},
+     level 2/.style={level distance=7mm, sibling angle=45}]
+    child foreach \i in {1,...,5} { node {} child { node {} } child { node {} } child { node {} } };
+  \node[fill=green!50!black] at (9,1.2) {}
+    [grow'=down, level distance=1cm, sibling distance=1.1cm, edge from parent/.style={draw, green!50!black}]
+    child { node {} child { node {} } child { node {} } }
+    child { node {} child { node {} } child { node {} } };
+  \node[fill=orange!80!black] at (12.4,-1.2) {}
+    [grow=up, level distance=1cm, sibling distance=1cm, edge from parent/.style={draw, orange!80!black}]
+    child { node {} child { node {} } }
+    child { node {} child { node {} } child { node {} } };
+\end{tikzpicture}

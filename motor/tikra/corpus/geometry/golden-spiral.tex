@@ -1,0 +1,12 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[x=0.8cm, y=0.8cm, line join=round]
+  \foreach \a/\b/\s/\c in {0/0/1/red, -1/0/1/orange, -1/-2/2/yellow, 1/-2/3/green,
+                           -1/1/5/teal, -9/-2/8/blue} {
+    \filldraw[draw=black!60, fill=\c!25] (\a,\b) rectangle ++(\s,\s);
+    \node[black!60, font=\small] at (\a+\s/2,\b+\s/2) {\s};
+  }
+  \draw[very thick, red!70!black]
+    (1,0) arc (0:90:1) arc (90:180:1) arc (180:270:2) arc (270:360:3)
+    arc (0:90:5) arc (90:180:8);
+  \fill[red!70!black] (1,0) circle (2pt);
+\end{tikzpicture}

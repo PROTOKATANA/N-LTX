@@ -1,0 +1,19 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{shadows}
+\begin{tikzpicture}
+  % a made-up badge: rays, a shaded disc, a ribbon and a star
+  \foreach \a in {0,15,...,345} {
+    \pgfmathtruncatemacro\p{50+50*sin(2*\a)}
+    \fill[orange!\p!yellow, opacity=0.8] (0,0) -- (\a-4:2.6) -- (\a+4:2.6) -- cycle;
+  }
+  \shade[ball color=blue!50!cyan, drop shadow] (0,0) circle (1.6);
+  \draw[white, line width=2pt] (0,0) circle (1.42);
+  \draw[white, line width=0.6pt, dash pattern=on 2pt off 2pt] (0,0) circle (1.3);
+  \fill[yellow!90!orange, draw=orange!50!black, line join=round]
+    (90:0.9) \foreach \k in {1,...,9} { -- ({90+\k*36}:{mod(\k,2) ? 0.38 : 0.9}) } -- cycle;
+  % the ribbon, its folded ends darker
+  \fill[red!50!black] (-2.3,-1.25) -- (-1.7,-1.25) -- (-1.7,-1.95) -- (-2.3,-1.95) -- (-2.0,-1.6) -- cycle;
+  \fill[red!50!black] (2.3,-1.25) -- (1.7,-1.25) -- (1.7,-1.95) -- (2.3,-1.95) -- (2.0,-1.6) -- cycle;
+  \shade[top color=red!80, bottom color=red!60!black] (-1.8,-1.1) rectangle (1.8,-1.8);
+  \node[white, font=\bfseries\small] at (0,-1.45) {SINCE 2026};
+\end{tikzpicture}

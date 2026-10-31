@@ -1,0 +1,9 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[view={30}{25}, colormap/plasma, xlabel=$x$, ylabel=$y$, zlabel=$z$,
+    title={Points on a spiral cone}, grid=major, colorbar]
+  \addplot3[scatter, only marks, mark=*, mark size=1.8pt, samples=60, domain=0:6, samples y=0,
+      point meta=z]
+    ({x*cos(deg(2.5*x))/6}, {x*sin(deg(2.5*x))/6}, {x});
+\end{axis}
+\end{tikzpicture}

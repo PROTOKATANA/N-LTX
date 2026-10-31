@@ -1,0 +1,16 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{fadings}
+\begin{tikzfadingfrompicture}[name=word]
+  \node[text=transparent!0, font=\Huge\bfseries] {TIKRA};
+\end{tikzfadingfrompicture}
+\begin{tikzfadingfrompicture}[name=vignette]
+  \shade[inner color=transparent!0, outer color=transparent!100] (-3,-1.5) rectangle (3,1.5);
+\end{tikzfadingfrompicture}
+\begin{tikzpicture}
+  \shade[left color=red, right color=blue, path fading=word, fit fading=false]
+    (-2,-0.6) rectangle (2,0.6);
+  \shade[top color=yellow, bottom color=green!60!black, path fading=word, fit fading=false,
+    fading transform={yshift=-1.3cm}] (-2,-1.9) rectangle (2,-0.7);
+  \fill[purple!80!black, path fading=vignette] (4,-2.3) rectangle (10,1);
+  \node[white, font=\large\itshape] at (7,-0.65) {a vignette};
+\end{tikzpicture}

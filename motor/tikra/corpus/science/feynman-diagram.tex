@@ -1,0 +1,16 @@
+% Made up for the tikra benchmark.
+% A Feynman diagram of electron-positron annihilation into a muon pair, through a virtual photon.
+\begin{tikzpicture}[thick, >=Stealth,
+    fermion/.style={postaction={decorate}, decoration={markings, mark=at position 0.55 with {\arrow{>}}}},
+    photon/.style={decorate, decoration={snake, amplitude=1.6mm, segment length=3.5mm}, red!70!black}]
+  \coordinate (v1) at (0,0); \coordinate (v2) at (4,0);
+  \draw[fermion, blue!70!black] (-2.5,2.2) node[left] {$e^-$} -- (v1);
+  \draw[fermion, blue!70!black] (v1) -- (-2.5,-2.2) node[left] {$e^+$};
+  \draw[photon] (v1) -- node[above=3mm] {$\gamma^*$} (v2);
+  \draw[fermion, green!50!black] (v2) -- (6.5,2.2) node[right] {$\mu^-$};
+  \draw[fermion, green!50!black] (6.5,-2.2) node[right] {$\mu^+$} -- (v2);
+  \fill (v1) circle (2.5pt) (v2) circle (2.5pt);
+  \node[below=2mm] at (v1) {$ie\gamma^\mu$};
+  \node[below=2mm] at (v2) {$ie\gamma^\nu$};
+  \draw[->, gray, thin] (-2.5,-3) -- node[below] {time} (6.5,-3);
+\end{tikzpicture}

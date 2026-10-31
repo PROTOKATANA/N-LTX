@@ -1,0 +1,8 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \foreach \k in {0,...,4} {
+    \draw[thick, purple] ({90+144*\k}:2) -- ({90+144*(\k+1)}:2);
+  }
+  \foreach \k in {0,...,4} { \fill ({90+72*\k}:2) circle (1.5pt); }
+  \draw[dashed] (0,0) circle (2);
+\end{tikzpicture}

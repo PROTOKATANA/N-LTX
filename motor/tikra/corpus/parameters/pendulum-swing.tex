@@ -1,0 +1,19 @@
+% Made up for the tikra gallery: a pendulum, its angle and how high the bob rises. In the
+% playground, drag the bob: it changes the angle and the length of the string.
+\begin{tikzpicture}
+  \def\th{30} % angle from the vertical, degrees, -70..70
+  \def\L{3}   % length of the string, 1.5..4
+  \useasboundingbox (-4.2,-4.6) rectangle (4.2,0.6);
+  \fill[pattern=north east lines] (-1,0) rectangle (1,0.25);
+  \draw[thick] (-1,0) -- (1,0);
+  \coordinate (pivot) at (0,0);
+  \coordinate (bob) at ({-90+\th}:\L);
+  \draw[dashed, gray] (pivot) -- (0,-\L);
+  \draw[dotted, gray] (0,-\L) arc (-90:-90+\th:\L);
+  \draw[thick] (pivot) -- (bob);
+  \draw[->] (0,-0.8) arc (-90:{-90+\th}:0.8);
+  \node at ({-90+\th/2}:1.1) {$\theta$};
+  \pgfmathsetmacro\hgt{\L*(1-cos(\th))}
+  \draw[<->, blue!70!black] ($(bob)+(0.5,0)$) -- ($(0,-\L)+(0.5+{\L*sin(\th)},0)$) node[midway, right] {$h = \pgfmathprintnumber[fixed, precision=2]{\hgt}$};
+  \shade[ball color=red!70!black] (bob) circle (0.22);
+\end{tikzpicture}

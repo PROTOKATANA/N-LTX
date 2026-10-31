@@ -1,0 +1,10 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[axis lines=middle, xmin=0, xmax=4.2, ymin=-0.2, ymax=4.5, domain=0:4, samples=100,
+    xlabel=$x$, ylabel=$y$]
+  \addplot[name path=f, thick, blue] {sqrt(4*x)};
+  \addplot[name path=g, thick, red] {x^2/4};
+  \addplot[orange!30] fill between[of=f and g, soft clip={domain=0:4}];
+  \node at (axis cs:2.6,2.4) {area $=\frac{16}{3}$};
+\end{axis}
+\end{tikzpicture}

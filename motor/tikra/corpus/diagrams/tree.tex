@@ -1,0 +1,11 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[leaf/.style={draw, rectangle, minimum size=0.6cm}, inner/.style={draw, circle, minimum size=0.7cm}]
+  \node[inner] (r) at (0,0) {8};
+  \node[inner] (l) at (-2,-1.5) {3};
+  \node[inner] (rr) at (2,-1.5) {10};
+  \node[leaf] (l1) at (-3,-3) {1};
+  \node[leaf] (l2) at (-1,-3) {6};
+  \node[leaf] (r2) at (3,-3) {14};
+  \draw (r) -- (l); \draw (r) -- (rr);
+  \draw (l) -- (l1); \draw (l) -- (l2); \draw (rr) -- (r2);
+\end{tikzpicture}

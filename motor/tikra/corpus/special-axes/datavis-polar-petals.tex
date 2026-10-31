@@ -1,0 +1,16 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{datavisualization.polar, datavisualization.formats.functions}
+\begin{tikzpicture}
+  \datavisualization [scientific polar axes={0 to 360, clean},
+      all axes=grid,
+      style sheet=vary hue, style sheet=vary dashing,
+      visualize as smooth line/.list={a, b}]
+    data [set=a, format=function] {
+      var angle : interval [0:360] samples 181;
+      func radius = 1 + 0.5*sin(5*\value{angle});
+    }
+    data [set=b, format=function] {
+      var angle : interval [0:360] samples 181;
+      func radius = 0.6 + 0.3*cos(3*\value{angle});
+    };
+\end{tikzpicture}

@@ -1,0 +1,16 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \foreach \m [count=\i from 0] in {normal, multiply, screen, darken, lighten, difference} {
+    \pgfmathsetmacro\x{mod(\i,3)*3.6}
+    \pgfmathsetmacro\y{-int(\i/3)*3.6}
+    \begin{scope}[shift={(\x,\y)}]
+      \fill[gray!20] (-1.6,-1.5) rectangle (1.6,1.6);
+      \begin{scope}[blend group=\m]
+        \fill[red!80] (90:0.55) circle (0.8);
+        \fill[green!80!black] (210:0.55) circle (0.8);
+        \fill[blue!80] (330:0.55) circle (0.8);
+      \end{scope}
+      \node[font=\small\ttfamily, below] at (0,-1.5) {\m};
+    \end{scope}
+  }
+\end{tikzpicture}

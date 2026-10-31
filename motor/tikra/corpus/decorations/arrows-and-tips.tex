@@ -1,0 +1,9 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[>=Latex]
+  \foreach \tip/\y in {->/0, -Latex/-0.6, -Stealth/-1.2, <->/-1.8, ->>/-2.4} {
+    \draw[\tip, thick] (0,\y) -- (3,\y);
+  }
+  \draw[->, ultra thick, red] (4,0) -- (6,-1);
+  \draw[dashed, ->] (4,-1.5) -- (6,-2.4);
+  \draw[densely dotted, thick, <-] (4,-2.6) -- (6,-2.6);
+\end{tikzpicture}

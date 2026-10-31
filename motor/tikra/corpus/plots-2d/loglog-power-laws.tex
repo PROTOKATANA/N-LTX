@@ -1,0 +1,12 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{loglogaxis}[width=11cm, height=7.5cm, xmin=1, xmax=1000, ymin=1e-3, ymax=1e6,
+    domain=1:1000, samples=30, grid=both, minor grid style={gray!15}, major grid style={gray!35},
+    xlabel={problem size $n$}, ylabel={time}, legend pos=north west, legend cell align=left,
+    cycle list={{blue, thick}, {teal, thick}, {orange!90!black, thick}, {red, thick}}]
+  \addplot {0.01*x};      \addlegendentry{$O(n)$}
+  \addplot {0.01*x*(1+ln(x))}; \addlegendentry{$O(n\log n)$}
+  \addplot {0.001*x^2};   \addlegendentry{$O(n^2)$}
+  \addplot {1e-3*x^3};    \addlegendentry{$O(n^3)$}
+\end{loglogaxis}
+\end{tikzpicture}

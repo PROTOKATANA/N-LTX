@@ -1,0 +1,11 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{decorations.pathreplacing, arrows.meta}
+\begin{tikzpicture}[>=Stealth]
+  \draw[help lines] (0,0) -- (2,1.5) .. controls (3,3) and (5,-1) .. (6,1) arc (180:0:1);
+  \draw[decorate, decoration={show path construction,
+      lineto code={\draw[->, blue!70!black, thick] (\tikzinputsegmentfirst) -- (\tikzinputsegmentlast);},
+      curveto code={\draw[red!70!black, dashed] (\tikzinputsegmentfirst) -- (\tikzinputsegmentsupporta) (\tikzinputsegmentlast) -- (\tikzinputsegmentsupportb);
+        \fill[red!70!black] (\tikzinputsegmentsupporta) circle (2pt) (\tikzinputsegmentsupportb) circle (2pt);
+        \draw[->, red!70!black, thick] (\tikzinputsegmentfirst) .. controls (\tikzinputsegmentsupporta) and (\tikzinputsegmentsupportb) .. (\tikzinputsegmentlast);}}]
+    (0,0) -- (2,1.5) .. controls (3,3) and (5,-1) .. (6,1) arc (180:0:1);
+\end{tikzpicture}

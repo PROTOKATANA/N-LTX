@@ -1,0 +1,13 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[scale=1.2]
+  \coordinate (A) at (0,0);
+  \coordinate (B) at (5,0);
+  \coordinate (C) at (1.5,3);
+  \draw[thick, fill=blue!10] (A) -- (B) -- (C) -- cycle;
+  \draw (0.6,0) arc (0:63.4:0.6);
+  \node at (0.95,0.35) {$\alpha$};
+  \node[below left] at (A) {$A$};
+  \node[below right] at (B) {$B$};
+  \node[above] at (C) {$C$};
+  \draw[dashed] (C) -- (1.5,0) node[below] {$H$};
+\end{tikzpicture}

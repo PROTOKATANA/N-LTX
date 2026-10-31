@@ -1,0 +1,16 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[scale=1.4]
+  \coordinate (A) at (-3,0); \coordinate (B) at (3,0); \coordinate (O) at (0,0);
+  \fill[gray!10] (B) arc (0:180:3) -- cycle;
+  \draw[thick] (B) arc (0:180:3) -- cycle;
+  \foreach \t/\c in {35/red, 80/teal, 140/violet} {
+    \coordinate (P) at (\t:3);
+    \draw[\c!80!black, thick] (A) -- (P) -- (B);
+    \pic[draw=\c!80!black, fill=\c!20, angle radius=2.5mm] {right angle=A--P--B};
+    \fill[\c!80!black] (P) circle (1.4pt);
+  }
+  \fill (O) circle (1.2pt) node[below] {$O$};
+  \node[below left] at (A) {$A$};
+  \node[below right] at (B) {$B$};
+  \node[font=\small, align=center] at (0,-0.75) {every angle inscribed in a semicircle is a right angle};
+\end{tikzpicture}

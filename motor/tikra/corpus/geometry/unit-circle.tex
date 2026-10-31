@@ -1,0 +1,11 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[scale=2.5]
+  \draw[->] (-1.2,0) -- (1.3,0) node[right] {$x$};
+  \draw[->] (0,-1.2) -- (0,1.3) node[above] {$y$};
+  \draw (0,0) circle (1);
+  \foreach \a in {0,30,...,330} { \fill (\a:1) circle (0.6pt); }
+  \draw[thick, blue] (0,0) -- (50:1) node[above right] {$P$};
+  \draw[blue] (0.25,0) arc (0:50:0.25);
+  \node[blue] at (25:0.4) {$\theta$};
+  \draw[dashed] (50:1) -- ({cos(50)},0) node[below] {$\cos\theta$};
+\end{tikzpicture}

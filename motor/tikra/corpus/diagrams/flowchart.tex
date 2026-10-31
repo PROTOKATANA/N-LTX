@@ -1,0 +1,16 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[node distance=1.2cm,
+    box/.style={rectangle, draw, rounded corners, minimum width=3cm, minimum height=0.9cm, align=center, fill=blue!8},
+    choice/.style={diamond, draw, aspect=2, fill=orange!15},
+    line/.style={-Stealth, thick}]
+  \node[box] (start) {Start};
+  \node[box, below=of start] (read) {Read a number $n$};
+  \node[choice, below=of read] (test) {$n > 0$?};
+  \node[box, right=2cm of test] (neg) {Print ``no''};
+  \node[box, below=of test] (pos) {Print ``yes''};
+  \draw[line] (start) -- (read);
+  \draw[line] (read) -- (test);
+  \draw[line] (test) -- node[above] {no} (neg);
+  \draw[line] (test) -- node[right] {yes} (pos);
+  \draw[line] (neg) |- (read);
+\end{tikzpicture}

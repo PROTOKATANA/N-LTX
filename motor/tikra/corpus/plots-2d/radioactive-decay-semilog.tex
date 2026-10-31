@@ -1,0 +1,17 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{semilogyaxis}[width=11cm, height=7cm, xmin=0, xmax=40, ymin=1, ymax=2e4,
+    xlabel={time $t$ (days)}, ylabel={activity (Bq)}, grid=major, grid style={gray!25},
+    domain=0:40, samples=81, legend pos=north east, legend cell align=left, legend style={font=\small}]
+  \addplot[very thick, red!80!black] {1e4*exp(-ln(2)*x/3.8)};
+  \addlegendentry{$T_{1/2} = 3.8$ d}
+  \addplot[very thick, blue!80!black] {6e3*exp(-ln(2)*x/8)};
+  \addlegendentry{$T_{1/2} = 8$ d}
+  \addplot[very thick, teal, dashed] {1e4*exp(-ln(2)*x/3.8) + 6e3*exp(-ln(2)*x/8)};
+  \addlegendentry{sum}
+  \addplot[only marks, mark=o, mark size=2.2pt, black]
+    coordinates {(2,12600) (6,8120) (10,6250) (14,4100) (20,2160) (26,1150) (32,595) (38,310)};
+  \addlegendentry{counts}
+  \draw[dotted, thick] (axis cs:8,1) -- (axis cs:8,3000) -- (axis cs:0,3000);
+\end{semilogyaxis}
+\end{tikzpicture}

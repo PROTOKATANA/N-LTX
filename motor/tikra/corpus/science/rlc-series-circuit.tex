@@ -1,0 +1,12 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{circuits.ee.IEC}
+\begin{tikzpicture}[circuit ee IEC, thick, every info/.style={font=\small}]
+  \draw (0,0) to [voltage source={info={$u(t)$}, direction info={->}}] (0,3)
+        to [resistor={info={$R$}}] (3,3)
+        to [inductor={info={$L$}}] (6,3)
+        to [capacitor={info={$C$}}] (6,0)
+        to [amperemeter={info={$i$}}] (3,0)
+        to [make contact={info'={$S$}}] (0,0);
+  \draw[-latex, red!70!black, thin] (2.2,1.8) arc[start angle=150, end angle=-150, radius=0.7];
+  \node[red!70!black, font=\small] at (2.8,1.45) {$i$};
+\end{tikzpicture}

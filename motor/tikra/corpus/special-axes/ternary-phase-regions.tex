@@ -1,0 +1,20 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{ternaryaxis}[xlabel=Fe, ylabel=Cr, zlabel=Ni,
+    xticklabel style={font=\scriptsize}, yticklabel style={font=\scriptsize},
+    zticklabel style={font=\scriptsize}, major grid style={gray!35},
+    title={Isothermal section at 900\,$^\circ$C}]
+  \addplot3[fill=blue!25, draw=blue!60!black, thick] coordinates {
+    (1,0,0) (0.75,0.25,0) (0.55,0.2,0.25) (0.6,0,0.4) (1,0,0)};
+  \addplot3[fill=red!25, draw=red!60!black, thick] coordinates {
+    (0.75,0.25,0) (0.4,0.6,0) (0.3,0.5,0.2) (0.55,0.2,0.25) (0.75,0.25,0)};
+  \addplot3[fill=green!25, draw=green!40!black, thick] coordinates {
+    (0.6,0,0.4) (0.55,0.2,0.25) (0.3,0.5,0.2) (0,0.45,0.55) (0,0,1) (0.6,0,0.4)};
+  \addplot3[fill=yellow!40, draw=orange!70!black, thick] coordinates {
+    (0.4,0.6,0) (0,1,0) (0,0.45,0.55) (0.3,0.5,0.2) (0.4,0.6,0)};
+  \node at (axis cs:0.8,0.08,0.12) {$\alpha$};
+  \node at (axis cs:0.55,0.38,0.07) {$\sigma$};
+  \node at (axis cs:0.25,0.2,0.55) {$\gamma$};
+  \node at (axis cs:0.12,0.75,0.13) {$\alpha'$};
+\end{ternaryaxis}
+\end{tikzpicture}

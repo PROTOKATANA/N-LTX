@@ -1,0 +1,12 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \def\tilt{25}
+  \draw[thick] (0,0) -- (6,0);
+  \begin{scope}[rotate=\tilt]
+    \draw[thick] (0,0) -- (6,0);
+    \draw[fill=yellow!40] (2,0) rectangle (3.2,0.8);
+    \node at (2.6,0.4) {box};
+  \end{scope}
+  \draw (1.5,0) arc (0:\tilt:1.5);
+  \node at (12:1.9) {$\tilt^\circ$};
+\end{tikzpicture}

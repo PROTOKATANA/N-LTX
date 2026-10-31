@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tikra</title>
+<meta name="description" content="TikZ and pgfplots figures to SVG and PNG, without a TeX install. Try it in the browser: it runs on WebAssembly.">
+<link rel="icon" href="pkg/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="pkg/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="pkg/apple-touch-icon.png">
+<meta name="theme-color" content="#fbf9f4">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <a class="name" href="#">tikra</a>
+    <nav>
+      <a href="#playground">Playground</a>
+      <a href="gallery.html">Gallery</a>
+      <a href="changelog.html">Evolution</a>
+      <a href="#docs">Docs</a>
+      <a href="https://github.com/matheusmota-dev-br/tikra/blob/main/spec/subset.md">Subset</a>
+      <a href="https://github.com/matheusmota-dev-br/tikra">GitHub</a>
+      <button class="theme" id="theme" type="button" aria-label="Toggle dark mode">◐</button>
+    </nav>
+  </div>
+
+  <header class="hero">
+    <div class="logo" id="logo" role="img" aria-label="tikra: TikZ to SVG and PNG, no TeX install"></div>
+    <p class="tagline">TikZ and pgfplots to <em>SVG</em> and <em>PNG</em>.<br>No TeX install. JavaScript, Python, Rust or the terminal.</p>
+    <p class="sub">tikra reads the figure, draws paths, nodes and plots itself and typesets the math in labels with <a href="https://matheusmota-dev-br.github.io/mathra/">mathra</a>. The banner above was drawn just now, in your browser, from <a href="https://github.com/matheusmota-dev-br/tikra/blob/main/docs/banner.tex"><code>docs/banner.tex</code></a>.</p>
+    <div class="cta">
+      <a class="button solid" href="#playground">Try it now</a>
+      <a class="button" href="#demo">Watch the demo</a>
+      <a class="button" href="gallery.html">See the gallery</a>
+      <a class="button" href="https://github.com/matheusmota-dev-br/tikra">GitHub</a>
+    </div>
+    <div class="installer" id="installer">
+      <div class="installer-tabs" role="tablist" aria-label="Install for"></div>
+      <div class="installer-line"><code id="install-cmd"></code><button type="button" class="installer-copy" id="install-copy" aria-label="Copy the command">Copy</button></div>
+    </div>
+  </header>
+
+  <div class="play" id="playground">
+    <div class="card editor">
+      <div class="editor-head">
+        <span class="label">TikZ</span>
+      </div>
+      <div class="code">
+        <pre id="highlight" aria-hidden="true"></pre>
+        <textarea id="tex" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="TikZ input">\begin{tikzpicture}
+  \def\a{1}   % amplitude, 0..2
+  \def\k{1}   % frequency, 0..3
+  \draw[help lines, step=0.5] (-0.2,-2.2) grid (4.2,2.2);
+  \draw[->] (-0.2,0) -- (4.3,0) node[right] {$x$};
+  \draw[->] (0,-2.2) -- (0,2.4) node[above] {$y$};
+  \draw[blue, thick, domain=0:4, samples=100] plot (\x, {\a*sin(\k*deg(\x))});
+  \node[blue, right] at (4.3,1.8) {$y = a \sin kx$};
+\end{tikzpicture}</textarea>
+      </div>
+      <div class="params" id="params" aria-label="Numbers in the code" hidden></div>
+      <div class="chips" id="chips" aria-label="Examples"></div>
+      <div class="chips drag-chips" id="drag-chips" aria-label="Examples to drag"><span>Drag on the figure</span></div>
+    </div>
+
+    <div class="card out">
+      <div class="paper">
+        <span class="label">SVG</span>
+        <div class="preview" id="preview" aria-live="polite"><span class="status">Loading WebAssembly…</span></div>
+      </div>
+      <div class="steps" id="steps" hidden>
+        <button class="button" id="step-back" type="button" aria-label="One step back">◀</button>
+        <input type="range" id="step" min="0" max="0" value="0" aria-label="Step of the drawing">
+        <button class="button" id="step-next" type="button" aria-label="One step forward">▶</button>
+        <output id="step-label" aria-live="polite"></output>
+      </div>
+      <div class="messages" id="messages"></div>
+      <div class="actions">
+        <button class="button solid" id="animate" type="button">▶ Animate</button>
+        <button class="button" id="download-gif" type="button">Download GIF</button>
+        <button class="button" id="download-video" type="button" hidden>Download video</button>
+        <button class="button" id="download" type="button">Download SVG</button>
+        <button class="button" id="download-animated" type="button">Animated SVG</button>
+        <button class="button" id="download-interactive" type="button" hidden title="One HTML file: drag the figure's named points, no network needed">Interactive HTML</button>
+        <button class="button" id="download-png" type="button">Download PNG</button>
+        <button class="button" id="copy-svg" type="button">Copy SVG</button>
+        <button class="button" id="copy-link" type="button">Copy link</button>
+        <span class="stats" id="stats" aria-live="polite"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card inspect">
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="warnings" aria-selected="true">Warnings</button>
+      <button role="tab" data-tab="words" aria-selected="false">In words</button>
+      <button role="tab" data-tab="svg" aria-selected="false">SVG source</button>
+    </div>
+    <div class="panel" id="panel" role="tabpanel"></div>
+  </div>
+
+  <section id="demo">
+    <h2>In 60 seconds</h2>
+    <p class="lead">What tikra does, from one command to pgfplots, diagrams and the figure in words. Every drawing and description in it is tikra's real output.</p>
+    <div class="video">
+      <iframe src="https://www.youtube-nocookie.com/embed/vTX69CwtjB4?rel=0" title="tikra in 60 seconds" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+    </div>
+    <p class="video-link"><a href="https://youtu.be/vTX69CwtjB4">Watch on YouTube</a></p>
+  </section>
+
+  <section>
+    <h2>Why tikra</h2>
+    <p class="lead">One small library, the same output everywhere: JavaScript, Python, Rust and the terminal.</p>
+    <div class="features">
+      <div class="card feature">
+        <div class="eq" data-tikz="\tikz \draw[->, thick] (0,0) -- (1.5,0.6) node[right] {$\vec v$};"></div>
+        <h3>No TeX install</h3>
+        <p>No LaTeX, no system fonts, no external process. A single binary, a wheel, an npm package or a crate.</p>
+      </div>
+      <div class="card feature">
+        <div class="eq" data-tikz="\tikz \node[draw, rounded corners] {$\displaystyle\int_0^1 x^2\,dx = \frac{1}{3}$};"></div>
+        <h3>Real math in labels</h3>
+        <p>Labels are typeset by mathra in Latin Modern Math, TeX's own Computer Modern, embedded, so they look the same on every machine.</p>
+      </div>
+      <div class="card feature">
+        <div class="eq" data-tikz="\tikz { \draw (0,0) rectangle (1,0.6); \unknowncommand; \draw[red] (0,0) -- (1,0.6); }"></div>
+        <h3>Warnings, not errors</h3>
+        <p>What tikra does not understand (an unknown command, environment or option) is listed as a warning, and the rest of the figure is drawn.</p>
+      </div>
+      <div class="card feature">
+        <div class="eq"><span class="stat" id="stat-time">—<span> ms</span></span></div>
+        <h3>Fast and stable</h3>
+        <p>Mean time to draw a corpus figure, measured in this page. The same input always writes the same bytes.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="conformance">
+    <h2>How close to TikZ</h2>
+    <p class="lead">Every example of the TikZ and pgfplots manuals, drawn by TeX and by tikra, and compared figure by figure. <a href="https://github.com/matheusmota-dev-br/tikra/blob/main/docs/conformance.md">The full report</a>.</p>
+    <div class="features">
+      <div class="card feature">
+        <div class="eq"><span class="stat" id="conf-ours">—</span></div>
+        <h3>Our 100%</h3>
+        <p id="conf-ours-text">Of the figures a converter can reproduce, the share tikra draws as TeX does.</p>
+      </div>
+      <div class="card feature">
+        <div class="eq"><span class="stat" id="conf-exact">—</span></div>
+        <h3>Exact match</h3>
+        <p id="conf-exact-text">Of every figure of the manuals, the share that matches TeX's drawing.</p>
+      </div>
+      <div class="card feature">
+        <div class="eq"><span class="stat" id="conf-out">—</span></div>
+        <h3>Left out</h3>
+        <p id="conf-out-text">Figures no converter can reproduce: random numbers TeX draws anew on every run, an image file or external program, the day's date. <a href="https://github.com/matheusmota-dev-br/tikra/blob/main/tools/conformance/unreproducible.json">The list</a>, checked by eye.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="gallery">
+    <h2>Gallery</h2>
+    <p class="lead">A few figures of <a href="https://github.com/matheusmota-dev-br/tikra/tree/main/corpus"><code>corpus/</code></a>, drawn live on this page. Click one to open it in the playground, or see them all in the gallery.</p>
+    <div class="gallery" id="tiles"></div>
+    <p class="gallery-more"><a class="button solid" href="gallery.html" id="gallery-all">See all the figures</a></p>
+  </section>
+
+  <section id="docs">
+    <h2>Use it</h2>
+    <p class="lead">Pick your platform. All four packages run the same core, so a figure gives the same SVG, byte for byte, wherever it is converted.</p>
+    <div class="usage">
+      <div class="card platform">
+        <div class="platform-head"><h3>JavaScript and TypeScript</h3><a class="pill live" href="https://www.npmjs.com/package/@mathlabs/tikra">on npm</a></div>
+        <p>Node, bundlers (Vite, webpack, esbuild) and browsers. Types included.</p>
+        <code class="cmd">npm install @mathlabs/tikra</code>
+<pre>import { init, tikzToSvg, render, png } from "@mathlabs/tikra";
+
+await init();  // browsers and bundlers; Node needs nothing
+const svg = tikzToSvg(String.raw`\tikz \draw (0,0) circle (1);`);
+const { warnings, alt, description } = render(code);  // and the figure in words
+const bytes = png(svg, { dpi: 300 });</pre>
+      </div>
+      <div class="card platform">
+        <div class="platform-head"><h3>Python</h3><a class="pill live" href="https://pypi.org/project/tikra/">on PyPI</a></div>
+        <p>Python 3.9 and later, wheels for Linux, macOS and Windows. Types included.</p>
+        <code class="cmd">pip install tikra</code>
+<pre>import tikra
+
+svg = tikra.tikz_to_svg(r"\tikz \draw (0,0) circle (1);")
+open("figure.png", "wb").write(tikra.png(svg, dpi=300))
+tikra.render(code)["warnings"]
+tikra.render(code)["description"]  # the figure in words</pre>
+      </div>
+      <div class="card platform">
+        <div class="platform-head"><h3>Terminal</h3><a class="pill live" href="https://crates.io/crates/tikra-cli">on crates.io</a></div>
+        <p>One binary: a <code>.tex</code> file or stdin to SVG or PNG.</p>
+        <code class="cmd">cargo install tikra-cli</code>
+<pre>tikra figure.tex -o figure.svg
+tikra figure.tex -o figure.png --dpi 300
+tikra figure.tex -o figure.png --transparent
+cat figure.tex | tikra --warnings
+tikra figure.tex --describe</pre>
+      </div>
+      <div class="card platform">
+        <div class="platform-head"><h3>Rust</h3><a class="pill live" href="https://crates.io/crates/tikra">on crates.io</a></div>
+        <p>The core itself, for servers and native apps. API docs on <a href="https://docs.rs/tikra">docs.rs</a>.</p>
+        <code class="cmd">cargo add tikra</code>
+<pre>let out = tikra::convert(code)?;
+std::fs::write("figure.svg", &amp;out.svg)?;
+std::fs::write("figure.png", tikra::png(&amp;out.svg, 300.0, true)?)?;</pre>
+      </div>
+    </div>
+
+    <div class="prose">
+      <h2 style="margin-top:48px">What it reads</h2>
+      <p>A full <code>standalone</code> document, a bare <code>tikzpicture</code>, an inline <code>\tikz</code>, a lone <code>axis</code> environment, or loose TikZ statements. The preamble is read for <code>\definecolor</code>, <code>\colorlet</code>, <code>\tikzset</code> and <code>\usetikzlibrary</code>; TikZ escaped twice or for Markdown is repaired, with a warning.</p>
+
+      <h2 style="margin-top:40px">What it draws</h2>
+      <p><code>\draw</code>, <code>\fill</code>, <code>\filldraw</code>, <code>\path</code>, <code>\node</code>, <code>\coordinate</code>, <code>\clip</code>, <code>\foreach</code>, scopes with transformations, <code>\def</code>, <code>\pgfmathsetmacro</code>, styles, xcolor mixes, positioning and <code>calc</code>, every path operation (<code>--</code>, <code>|-</code>, <code>to[out=,in=]</code>, <code>bend</code>, <code>.. controls ..</code>, <code>rectangle</code>, <code>circle</code>, <code>ellipse</code>, <code>arc</code>, <code>grid</code>, <code>plot</code>), node shapes and anchors, arrow tips, dashes, opacity, and the libraries: decorations, matrices, pics, trees, graphs, chains, mind maps, circuits, shadings, fadings, patterns, spy, data visualization, and pgfplots (2D and 3D axes, legends, colorbars, colormaps, polar, ternary, Smith charts, fill between). The full list is in <a href="https://github.com/matheusmota-dev-br/tikra/blob/main/spec/subset.md">spec/subset.md</a>.</p>
+
+      <h2 style="margin-top:40px">Limits</h2>
+      <p>100,000 statements per figure, 64 levels of nesting, 2,000 samples per plot, coordinates within ±100,000 cm, PNG up to 100 megapixels. Past a limit you get a clear error or a warning, never a hang.</p>
+    </div>
+  </section>
+
+  <footer>
+    <span>tikra · MIT or Apache-2.0 · Latin Modern Math (GUST Font License) and STIX Two Math (OFL-1.1) fonts, through mathra</span>
+    <a href="https://github.com/matheusmota-dev-br/tikra">github.com/matheusmota-dev-br/tikra</a>
+  </footer>
+</div>
+
+<script src="pkg/tikra_wasm.js"></script>
+<script src="pkg/corpus.js"></script>
+<script src="animate.js"></script>
+<script src="params.js"></script>
+<script src="interactive.js"></script>
+<script src="interactive-page.js"></script>
+<script src="pkg/conformance.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const CORPUS = typeof TIKRA_CORPUS === "undefined" ? [] : TIKRA_CORPUS;
+  // "07-flowchart" → "Flowchart"
+  const caption = (name) => { const s = name.replace(/^\d+-/, "").replace(/-/g, " "); return s[0].toUpperCase() + s.slice(1); };
+  const CHIPS = ["polar-rose-petals", "triangle-angles", "pgfplots-legend", "flowchart", "graph-nodes", "spring-decorations", "bar-chart", "polar-star"];
+
+  const $ = (id) => document.getElementById(id);
+  // the conformance numbers, from docs/conformance.md at build time
+  if (typeof TIKRA_CONFORMANCE !== "undefined") {
+    const c = TIKRA_CONFORMANCE;
+    $("conf-ours").textContent = c.ours.pct;
+    $("conf-ours-text").textContent = `${c.ours.done} of the ${c.ours.of} figures a converter can reproduce are drawn as TeX draws them (${c.aliased} of them differ only by antialiasing).`;
+    $("conf-exact").textContent = c.exact.pct;
+    $("conf-exact-text").textContent = `${c.exact.done} of all ${c.exact.of} figures of the manuals match TeX's drawing exactly.`;
+    $("conf-out").textContent = String(c.left_out);
+  }
+  const tex = $("tex"), preview = $("preview"), messages = $("messages"), panel = $("panel");
+  let api = null, last = null, tab = "warnings", locale = "en";
+  // mathra's languages: the figure in words is told in them, the drawing is the same
+  const LOCALES = [["en", "English"], ["pt-BR", "Português (Brasil)"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"], ["it", "Italiano"],
+    ["ru", "Русский"], ["zh", "中文"], ["ja", "日本語"], ["ko", "한국어"], ["hi", "हिन्दी"], ["ar", "العربية"], ["id", "Bahasa Indonesia"],
+    ["tr", "Türkçe"], ["nl", "Nederlands"], ["pl", "Polski"]];
+
+  const escape = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const convert = (code, animate = false, steps = false) => JSON.parse(api.render(code, locale, animate, steps));
+
+  function readHash() {
+    const p = new URLSearchParams(location.hash.slice(1));
+    if (p.has("tikz")) tex.value = p.get("tikz");
+  }
+  const link = () => `${location.href.split("#")[0]}#${new URLSearchParams({ tikz: tex.value })}`;
+
+  // TikZ colors for the editor: commands, environments, braces and brackets, numbers, math, comments
+  const TOKENS = /(%[^\n]*)|(\\(?:begin|end))(\{)([^}\n]*)(\})|(\$[^$\n]*\$)|(\\[a-zA-Z@]+\*?|\\.)|([{}\[\]();])|(-?\d+(?:\.\d+)?)/g;
+  function highlight() {
+    const src = tex.value;
+    let html = "", at = 0;
+    const span = (cls, t) => `<span class="t-${cls}">${escape(t)}</span>`;
+    for (const m of src.matchAll(TOKENS)) {
+      html += escape(src.slice(at, m.index));
+      if (m[1]) html += span("comment", m[1]);
+      else if (m[2]) html += span("cmd", m[2]) + span("brace", m[3]) + span("env", m[4]) + span("brace", m[5]);
+      else if (m[6]) html += span("script", m[6]);
+      else if (m[7]) html += span("cmd", m[7]);
+      else if (m[8]) html += span("brace", m[8]);
+      else html += span("num", m[9]);
+      at = m.index + m[0].length;
+    }
+    // a trailing newline needs a character after it to take up a line
+    $("highlight").innerHTML = html + escape(src.slice(at)) + "\n";
+  }
+
+  // time per conversion and SVG size, measured off the typing path
+  let statsTimer = 0;
+  function scheduleStats() {
+    clearTimeout(statsTimer);
+    $("stats").textContent = "";
+    statsTimer = setTimeout(measure, 250);
+  }
+  const kb = (n) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`);
+  const ms = (t) => (t < 1 ? `${(t * 1000).toFixed(0)} µs` : `${t.toFixed(2)} ms`);
+  async function measure() {
+    if (!last) return;
+    const code = tex.value;
+    let runs = 0;
+    const start = performance.now();
+    while (runs < 200 && performance.now() - start < 40) { api.render(code); runs++; }
+    // coarse browser clocks can read 0 ms for a fast figure: report a floor instead of 0
+    const t = Math.max(0.001, (performance.now() - start) / runs);
+    let gz = "";
+    if (typeof CompressionStream === "function") {
+      const stream = new Blob([last.svg]).stream().pipeThrough(new CompressionStream("gzip"));
+      gz = ` · ${kb((await new Response(stream).arrayBuffer()).byteLength)} gzip`;
+    }
+    $("stats").textContent = `${ms(t)} · ${kb(new Blob([last.svg]).size)} SVG${gz}`;
+  }
+
+  // the figure building itself in a loop, until it is stopped or the code changes
+  let stopLoop = null;
+  function stopAnimation() {
+    if (stopLoop) { stopLoop(); stopLoop = null; interactive?.show(); }
+    $("animate").textContent = "▶ Animate";
+  }
+
+  // the figure step by step: the SVG with its steps numbered, read off the typing path; the slider
+  // at k shows the first k steps, at the end the whole figure
+  let stepsTimer = 0, stepped = null;
+  function scheduleSteps() {
+    clearTimeout(stepsTimer);
+    stepped = null;
+    $("steps").hidden = true;
+    if (last) stepsTimer = setTimeout(readSteps, 250);
+  }
+  function readSteps() {
+    if (!last) return;
+    try {
+      const svg = convert(tex.value, false, true).svg;
+      const count = Number(/data-steps="(\d+)"/.exec(svg)?.[1] ?? 0);
+      if (count < 2) return;
+      stepped = { svg, count };
+      $("step").max = String(count);
+      $("step").value = String(count);
+      showStep(count);
+      $("steps").hidden = false;
+    } catch { /* the figure was drawn; without its steps the slider stays hidden */ }
+  }
+  function showStep(k) {
+    $("step-label").textContent = `${k} of ${stepped.count}`;
+    $("step-back").disabled = k <= 0;
+    $("step-next").disabled = k >= stepped.count;
+  }
+  function goToStep(k) {
+    if (!stepped) return;
+    stopAnimation();
+    interactive?.stop({ redraw: false });
+    k = Math.max(0, Math.min(stepped.count, k));
+    $("step").value = String(k);
+    showStep(k);
+    // the whole figure is the plain SVG; a part of it, the numbered one with the rest hidden
+    if (k === stepped.count) { showFigure(); return; }
+    if (!preview.querySelector("svg[data-steps]")) preview.innerHTML = stepped.svg;
+    for (const el of preview.querySelectorAll("[data-step]")) el.style.visibility = Number(el.dataset.step) < k ? "" : "hidden";
+  }
+
+  // a slider for each number the code defines (\def\r{0.7}): moving it writes the number in the
+  // code, and the figure follows
+  let refreshParams = () => {};
+
+  // the figure in the preview: with a handle on each point the code names (\coordinate (tip) …)
+  // that its numbers move, dragged to change them; the plain SVG otherwise
+  let interactive = null;
+  function showFigure() {
+    if (interactive?.update(tex.value)) return;
+    interactive?.destroy();
+    interactive = null;
+    if (last.points?.length && tikraParams.find(tex.value).length) {
+      try {
+        interactive = tikraInteractive.mount(preview, { code: tex.value, render: (c) => convert(c), change: (c) => { tex.value = c; update(); } });
+        return;
+      } catch { interactive = null; }
+    }
+    preview.innerHTML = last.svg;
+  }
+
+  function update() {
+    highlight();
+    if (!api) return;
+    stopAnimation();
+    messages.replaceChildren();
+    refreshParams();
+    try {
+      last = convert(tex.value);
+      showFigure();
+      $("download-interactive").hidden = !interactive;
+      scheduleStats();
+      scheduleSteps();
+      for (const w of last.warnings) {
+        const el = document.createElement("div");
+        el.className = "msg warn";
+        el.textContent = w;
+        messages.append(el);
+      }
+    } catch (e) {
+      last = null;
+      interactive?.destroy();
+      interactive = null;
+      $("download-interactive").hidden = true;
+      scheduleSteps();
+      preview.innerHTML = tex.value.trim() ? "" : '<span class="status">Type some TikZ on the left.</span>';
+      if (tex.value.trim()) {
+        const el = document.createElement("div");
+        el.className = "msg err";
+        el.textContent = String(e.message ?? e);
+        messages.append(el);
+      }
+    }
+    if (location.protocol !== "file:" || location.hash) history.replaceState(null, "", link());
+    showTab();
+  }
+
+  function showTab() {
+    for (const b of document.querySelectorAll(".tabs button")) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
+    if (!last) { panel.innerHTML = '<p class="empty">No output.</p>'; return; }
+    if (tab === "warnings") {
+      panel.innerHTML = last.warnings.length
+        ? last.warnings.map((w) => `<div class="warning">${escape(w)}</div>`).join("")
+        : '<p class="empty">Nothing was ignored or approximated in this figure.</p>';
+      return;
+    }
+    if (tab === "words") {
+      // what a screen reader says: the SVG's <title> and <desc>
+      const options = LOCALES.map(([c, n]) => `<option value="${c}"${c === locale ? " selected" : ""}>${escape(n)}</option>`).join("");
+      const dir = locale === "ar" ? ' dir="rtl"' : "";
+      panel.innerHTML = `<p class="lang"><label>Language <select id="words-locale">${options}</select></label></p>`
+        + `<div class="rule"><code>alt</code><span lang="${locale}"${dir}>${escape(last.alt)}</span></div>`
+        + `<div class="rule"><code>description</code><span lang="${locale}"${dir}>${escape(last.description)}</span></div>`
+        + `<p class="empty">Written by tikra from what it drew, so not perfect: it says what is in the drawing, not what the figure means. Review it, and write your own with <code>\\begin{tikzpicture}[alt={…}]</code> when it falls short.</p>`;
+      $("words-locale").onchange = (e) => { locale = e.target.value; update(); };
+      return;
+    }
+    panel.innerHTML = `<pre>${escape(last.svg)}</pre>`;
+  }
+
+  // an example: when its points can be dragged, it shows itself being dragged until touched
+  function load(src) {
+    tex.value = src;
+    update();
+    interactive?.play();
+  }
+
+  function flash(button, label) {
+    const old = button.textContent;
+    button.textContent = label;
+    setTimeout(() => (button.textContent = old), 1200);
+  }
+
+  function save(blob, name) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 0);
+  }
+
+  function drawStatic() {
+    $("logo").innerHTML = convert(TIKRA_BANNER, true).svg;
+    $("logo").querySelector("svg")?.setAttribute("aria-hidden", "true");
+    for (const el of document.querySelectorAll("[data-tikz]")) el.innerHTML = convert(el.dataset.tikz).svg;
+    const tiles = $("tiles");
+    let total = 0;
+    // the home page shows a few; gallery.html shows them all
+    const FEATURED = ["lissajous-figure", "lorenz-attractor", "smooth-shaded-surface", "nightingale-rose", "petersen-graph", "clock-snapshots", "feynman-diagram", "normal-distribution", "golden-spiral", "matrix-with-moustaches"];
+    const shown = CORPUS.filter((f) => FEATURED.includes(f.name));
+    const featured = new Map();
+    $("gallery-all").textContent = `See all ${CORPUS.length} figures`;
+    for (const { name, topic, tex: src } of CORPUS) {
+      const start = performance.now();
+      const svg = convert(src).svg;
+      total += performance.now() - start;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "card tile";
+      b.innerHTML = `<div class="eq">${svg}</div><div class="cap"><span>${escape(caption(name))}</span><span>${escape(topic ?? "")}</span></div>`;
+      b.onclick = () => { load(src); $("playground").scrollIntoView(); tex.focus({ preventScroll: true }); };
+      if (shown.some((f) => f.name === name)) featured.set(name, b);
+    }
+    // in the order of FEATURED: the figure with sliders first
+    for (const name of FEATURED) if (featured.has(name)) tiles.append(featured.get(name));
+    if (CORPUS.length) $("stat-time").innerHTML = `${(total / CORPUS.length).toFixed(2)}<span> ms</span>`;
+  }
+
+  // the install command for each platform, in the hero
+  const INSTALL = [
+    ["npm", "npm install @mathlabs/tikra"],
+    ["pip", "pip install tikra"],
+    ["CLI", "cargo install tikra-cli"],
+    ["Rust", "cargo add tikra"],
+  ];
+  function showInstall(i) {
+    $("install-cmd").textContent = INSTALL[i][1];
+    [...document.querySelectorAll(".installer-tabs button")].forEach((b, j) => b.setAttribute("aria-selected", String(i === j)));
+  }
+  INSTALL.forEach(([label], i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.textContent = label;
+    b.onclick = () => showInstall(i);
+    document.querySelector(".installer-tabs").append(b);
+  });
+  showInstall(0);
+  $("install-copy").onclick = async (e) => { await navigator.clipboard.writeText($("install-cmd").textContent); flash(e.target, "Copied"); };
+
+  // the figures whose numbers move a point they name: dragged on the figure itself
+  for (const figure of CORPUS.filter((f) => f.topic === "parameters" && /\\coordinate\s*\(/.test(f.tex))) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = caption(figure.name);
+    b.onclick = () => load(figure.tex);
+    $("drag-chips").append(b);
+  }
+  for (const name of CHIPS) {
+    const figure = CORPUS.find((f) => f.name === name);
+    if (!figure) continue;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = caption(name);
+    b.onclick = () => load(figure.tex);
+    $("chips").append(b);
+  }
+  for (const b of document.querySelectorAll(".tabs button")) b.onclick = () => { tab = b.dataset.tab; showTab(); };
+  refreshParams = tikraParams.mount($("params"), { code: () => tex.value, change: (code) => { tex.value = code; update(); } });
+  tex.addEventListener("input", update);
+  window.addEventListener("hashchange", () => { readHash(); update(); });
+
+  $("copy-link").onclick = async (e) => { await navigator.clipboard.writeText(link()); flash(e.target, "Copied"); };
+  $("copy-svg").onclick = async (e) => { if (last) { await navigator.clipboard.writeText(last.svg); flash(e.target, "Copied"); } };
+  $("animate").onclick = () => {
+    if (stopLoop) return stopAnimation();
+    if (!last) return;
+    interactive?.stop({ redraw: false });
+    if (stepped) { $("step").value = String(stepped.count); showStep(stepped.count); }
+    stopLoop = tikraAnimation.loop(preview, convert(tex.value, true).svg, last.svg);
+    $("animate").textContent = "■ Stop";
+  };
+  $("download-gif").onclick = async (e) => {
+    const b = e.target;
+    if (!last || b.disabled) return;
+    b.disabled = true;
+    try {
+      const bytes = await tikraAnimation.gif(convert(tex.value, true).svg, { progress: (p) => (b.textContent = `GIF ${Math.round(p * 100)}%`) });
+      save(new Blob([bytes], { type: "image/gif" }), "figure.gif");
+    } catch (err) {
+      alert(`Could not make the GIF: ${String(err.message ?? err)}`);
+    } finally {
+      b.disabled = false;
+      b.textContent = "Download GIF";
+    }
+  };
+  $("step").oninput = (e) => goToStep(Number(e.target.value));
+  $("step-back").onclick = () => goToStep(Number($("step").value) - 1);
+  $("step-next").onclick = () => goToStep(Number($("step").value) + 1);
+  // the video is recorded in real time: the button counts it down
+  $("download-video").hidden = !tikraAnimation.recordable();
+  $("download-video").onclick = async (e) => {
+    const b = e.target;
+    if (!last || b.disabled) return;
+    b.disabled = true;
+    try {
+      const { blob, ext } = await tikraAnimation.video(convert(tex.value, true).svg, { progress: (p) => (b.textContent = `Video ${Math.round(p * 100)}%`) });
+      save(blob, `figure.${ext}`);
+    } catch (err) {
+      alert(`Could not make the video: ${String(err.message ?? err)}`);
+    } finally {
+      b.disabled = false;
+      b.textContent = "Download video";
+    }
+  };
+  $("download").onclick = () => { if (last) save(new Blob([last.svg], { type: "image/svg+xml" }), "figure.svg"); };
+  // the SVG that builds itself, with its own play button and bar to drag
+  $("download-animated").onclick = () => {
+    if (last) save(new Blob([tikraAnimation.withControls(convert(tex.value, true).svg)], { type: "image/svg+xml" }), "figure-animated.svg");
+  };
+  // the figure as one HTML file, its points dragged, tikra inside: the page's own scripts, read
+  // back over HTTP (a page opened from disk cannot read them)
+  $("download-interactive").onclick = async (e) => {
+    if (!last) return;
+    const b = e.target;
+    b.disabled = true;
+    try {
+      const text = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(url); return r.text(); };
+      const [glue, wasm, params, script] = await Promise.all(["pkg/tikra_wasm.js", "pkg/tikra_wasm_bytes.js", "params.js", "interactive.js"].map(text));
+      const html = tikraInteractivePage({ code: interactive?.code() ?? tex.value, title: last.alt, glue, wasm, params, interactive: script });
+      save(new Blob([html], { type: "text/html" }), "figure-interactive.html");
+    } catch {
+      alert("The interactive HTML is made from the page's own files: open the page over HTTP (serve site/), not from disk.");
+    } finally {
+      b.disabled = false;
+    }
+  };
+  $("download-png").onclick = () => {
+    if (!last) return;
+    try {
+      save(new Blob([api.png(last.svg, 300, true)], { type: "image/png" }), "figure.png");
+    } catch (e) {
+      const el = document.createElement("div");
+      el.className = "msg err";
+      el.textContent = String(e.message ?? e);
+      messages.append(el);
+    }
+  };
+
+  // opened from disk (file://), the browser blocks fetching the .wasm: read the base64 copy instead
+  function wasmSource() {
+    if (location.protocol !== "file:") return Promise.resolve("pkg/tikra_wasm_bg.wasm");
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "pkg/tikra_wasm_bytes.js";
+      s.onload = () => resolve(Uint8Array.from(atob(TIKRA_WASM_BASE64), (c) => c.charCodeAt(0)));
+      s.onerror = () => reject(new Error("pkg/tikra_wasm_bytes.js not found: run site/build.sh"));
+      document.head.append(s);
+    });
+  }
+
+  readHash();
+  highlight();
+  if (typeof wasm_bindgen === "undefined") {
+    preview.innerHTML = '<span class="status">pkg/tikra_wasm.js not found: run <code>site/build.sh</code>.</span>';
+    return;
+  }
+  wasmSource()
+    .then((module_or_path) => wasm_bindgen({ module_or_path }))
+    .then(() => {
+      api = wasm_bindgen;
+      drawStatic();
+      update();
+    })
+    .catch((e) => { preview.innerHTML = `<span class="status">Could not load WebAssembly: ${escape(String(e.message ?? e))}</span>`; });
+})();
+</script>
+</body>
+</html>

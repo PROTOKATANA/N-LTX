@@ -1,0 +1,25 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[scale=1.3]
+  \def\R{2}
+  % sector
+  \begin{scope}
+    \draw[gray!60] (0,0) circle (\R);
+    \filldraw[fill=orange!35, draw=orange!70!black, thick] (0,0) -- (20:\R) arc (20:110:\R) -- cycle;
+    \draw[orange!70!black] (20:0.5) arc (20:110:0.5);
+    \node[orange!70!black] at (65:0.75) {$\theta$};
+    \node[orange!70!black, font=\small] at (65:\R+0.35) {$s = r\theta$};
+    \draw (0,0) -- node[below right, font=\small] {$r$} (20:\R);
+    \fill (0,0) circle (1.2pt);
+    \node[font=\small] at (0,-\R-0.4) {sector: $A = \tfrac12 r^2\theta$};
+  \end{scope}
+  % segment
+  \begin{scope}[xshift=5.2cm]
+    \draw[gray!60] (0,0) circle (\R);
+    \filldraw[fill=teal!35, draw=teal!70!black, thick] (30:\R) arc (30:150:\R) -- cycle;
+    \draw[dashed] (30:\R) -- (0,0) -- (150:\R);
+    \draw[teal!70!black] (30:0.45) arc (30:150:0.45);
+    \node[teal!70!black] at (90:0.7) {$\theta$};
+    \fill (0,0) circle (1.2pt);
+    \node[font=\small] at (0,-\R-0.4) {segment: $A = \tfrac12 r^2(\theta - \sin\theta)$};
+  \end{scope}
+\end{tikzpicture}

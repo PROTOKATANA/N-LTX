@@ -1,0 +1,15 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[x=2.4cm, y=1cm, >=Stealth,
+    neuron/.style={circle, draw=#1!60!black, fill=#1!20, thick, minimum size=7mm, inner sep=0pt},
+    syn/.style={->, black!30, shorten >=1pt}]
+  \foreach \i in {1,...,4} \node[neuron=green] (I\i) at (0,-\i+0.5) {$x_\i$};
+  \foreach \i in {1,...,5} \node[neuron=blue] (H\i) at (1,-\i+1) {};
+  \foreach \i in {1,...,5} \node[neuron=blue] (G\i) at (2,-\i+1) {};
+  \foreach \i in {1,...,2} \node[neuron=red] (O\i) at (3,-\i-0.5) {$y_\i$};
+  \foreach \i in {1,...,4} \foreach \j in {1,...,5} \draw[syn] (I\i) -- (H\j);
+  \foreach \i in {1,...,5} \foreach \j in {1,...,5} \draw[syn] (H\i) -- (G\j);
+  \foreach \i in {1,...,5} \foreach \j in {1,...,2} \draw[syn] (G\i) -- (O\j);
+  \foreach \x/\t in {0/input, 1/hidden 1, 2/hidden 2, 3/output}
+    \node[font=\sffamily\small, text=black!70] at (\x,1.1) {\t};
+  \node[font=\footnotesize, text=black!60] at (1.5,-4.6) {$h = \sigma(W x + b)$};
+\end{tikzpicture}

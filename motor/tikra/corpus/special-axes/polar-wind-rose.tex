@@ -1,0 +1,23 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{polaraxis}[ymax=12, xtick={0,45,...,315},
+    xticklabels={E,NE,N,NW,W,SW,S,SE}, ytick={4,8,12},
+    yticklabel={\pgfmathprintnumber{\tick}\%}, yticklabel style={font=\tiny}]
+  \addplot[fill=cyan!40, draw=cyan!50!black, thick] coordinates {
+    (0,0) (-10,6) (10,6) (0,0)};
+  \addplot[fill=cyan!40, draw=cyan!50!black, thick] coordinates {
+    (0,0) (35,9) (55,9) (0,0)};
+  \addplot[fill=cyan!40, draw=cyan!50!black, thick] coordinates {
+    (0,0) (80,4) (100,4) (0,0)};
+  \addplot[fill=cyan!40, draw=cyan!50!black, thick] coordinates {
+    (0,0) (125,3) (145,3) (0,0)};
+  \addplot[fill=cyan!40, draw=cyan!50!black, thick] coordinates {
+    (0,0) (170,5) (190,5) (0,0)};
+  \addplot[fill=orange!50, draw=orange!60!black, thick] coordinates {
+    (0,0) (215,11) (235,11) (0,0)};
+  \addplot[fill=cyan!40, draw=cyan!50!black, thick] coordinates {
+    (0,0) (260,7) (280,7) (0,0)};
+  \addplot[fill=cyan!40, draw=cyan!50!black, thick] coordinates {
+    (0,0) (305,2) (325,2) (0,0)};
+\end{polaraxis}
+\end{tikzpicture}

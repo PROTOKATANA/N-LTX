@@ -1,0 +1,16 @@
+% Made up for the tikra gallery: one animation, three snapshots (make snapshot of).
+\documentclass[border=4pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{animations}
+\newcommand\clock[1]{%
+  \tikz[make snapshot of=#1] {
+    \draw[thick] (0,0) circle (1);
+    \foreach \h in {0,30,...,330} \draw (\h:0.85) -- (\h:1);
+    \draw[very thick, red, line cap=round] (0,0) -- (0,0.8)
+      :rotate = {0s = "0", 12s = "-360"};
+    \fill (0,0) circle (1.5pt);
+    \node[below] at (0,-1.1) {#1};
+  }}
+\begin{document}
+\clock{1s}\quad\clock{3s}\quad\clock{7s}
+\end{document}

@@ -1,0 +1,13 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{decorations.markings, arrows.meta}
+\begin{tikzpicture}[thick]
+  \draw[postaction={decorate}, decoration={markings,
+      mark=between positions 0 and 1 step 1cm with {\fill[red] circle (1.5pt);},
+      mark=at position 2cm with {\node[above left, font=\small] {2 cm};},
+      mark=at position 0.5 with {\arrow{Latex[length=3mm]}},
+      mark=at position -1cm with {\node[below right, font=\small] {1 cm to go};}}]
+    (0,0) .. controls (1,3) and (4,3) .. (5,1) .. controls (6,-1) and (8,0) .. (8,2);
+  \draw[postaction={decorate}, decoration={markings,
+      mark=between positions 0.05 and 1 step 0.1 with {\node[circle, fill=blue!20, draw=blue!60!black, inner sep=1pt, font=\tiny] {\pgfkeysvalueof{/pgf/decoration/mark info/sequence number}};}}]
+    (0,-1.5) arc (180:360:4 and 1);
+\end{tikzpicture}

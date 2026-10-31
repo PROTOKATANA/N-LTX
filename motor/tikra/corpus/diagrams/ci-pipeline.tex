@@ -1,0 +1,24 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{chains, shapes.symbols, positioning}
+\begin{tikzpicture}[start chain=main going right, node distance=7mm, >=Stealth, font=\sffamily\scriptsize,
+    stage/.style={signal, signal to=east, signal from=west, draw=#1!60!black, fill=#1!25, thick, minimum height=1cm, minimum width=2cm, on chain=main},
+    job/.style={rectangle, rounded corners=2pt, draw=black!50, fill=white, minimum width=1.6cm, minimum height=5mm},
+    ok/.style={job, fill=green!20, draw=green!50!black},
+    bad/.style={job, fill=red!20, draw=red!60!black}]
+  \node[stage=gray, signal from=nowhere] (push) {push};
+  \node[stage=blue] (build) {build};
+  \node[stage=teal] (test) {test};
+  \node[stage=orange] (pack) {package};
+  \node[stage=green] (deploy) {deploy};
+  \node[ok, below=5mm of build] (b1) {linux};
+  \node[ok, below=2mm of b1] (b2) {macos};
+  \node[ok, below=2mm of b2] (b3) {windows};
+  \node[ok, below=5mm of test] (t1) {unit};
+  \node[bad, below=2mm of t1] (t2) {corpus};
+  \node[ok, below=2mm of t2] (t3) {clippy};
+  \node[job, below=5mm of pack, dashed] (p1) {wheel};
+  \node[job, below=2mm of p1, dashed] (p2) {npm};
+  \node[job, below=5mm of deploy, dashed] (d1) {site};
+  \draw[->, red!60!black, thick] (t2.east) -- ++(0.3,0) |- node[pos=0.25, right] {retry} (t1.east);
+  \node[text=red!60!black, below=3mm of t3, font=\sffamily\bfseries\scriptsize] {1 job failed};
+\end{tikzpicture}

@@ -1,0 +1,16 @@
+% Made up for the tikra benchmark.
+% The normal distribution and the 68-95-99.7 rule.
+\begin{tikzpicture}
+\begin{axis}[width=13cm, height=7cm, axis lines=bottom, ymin=0, ymax=0.47, xmin=-4, xmax=4,
+    xtick={-3,-2,-1,0,1,2,3}, xticklabels={$-3\sigma$,$-2\sigma$,$-\sigma$,$\mu$,$\sigma$,$2\sigma$,$3\sigma$},
+    ytick=\empty, samples=200, domain=-4:4, title={The bell curve}, title style={font=\large}]
+  \addplot[fill=blue!10, draw=none, domain=-3:3] {exp(-x^2/2)/sqrt(2*pi)} \closedcycle;
+  \addplot[fill=blue!25, draw=none, domain=-2:2] {exp(-x^2/2)/sqrt(2*pi)} \closedcycle;
+  \addplot[fill=blue!45, draw=none, domain=-1:1] {exp(-x^2/2)/sqrt(2*pi)} \closedcycle;
+  \addplot[very thick, blue!60!black] {exp(-x^2/2)/sqrt(2*pi)};
+  \node at (axis cs:0,0.18) {$68.3\%$};
+  \node at (axis cs:-1.5,0.05) {$13.6\%$}; \node at (axis cs:1.5,0.05) {$13.6\%$};
+  \node at (axis cs:-2.5,0.012) {\small $2.1\%$}; \node at (axis cs:2.5,0.012) {\small $2.1\%$};
+  \node at (axis cs:2.7,0.33) {$\displaystyle f(x)=\frac{1}{\sigma\sqrt{2\pi}}\,e^{-\frac{(x-\mu)^2}{2\sigma^2}}$};
+\end{axis}
+\end{tikzpicture}

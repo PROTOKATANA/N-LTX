@@ -1,0 +1,12 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \foreach \s [count=\i from 0] in {tiny, scriptsize, footnotesize, small, normalsize, large, Large, LARGE, huge, Huge}
+    \node[anchor=base west] at (0,-\i*0.75) {\csname \s\endcsname Size \texttt{\textbackslash\s}};
+  \node[anchor=west] at (7,0) {\bfseries bold series};
+  \node[anchor=west] at (7,-0.75) {\itshape italic shape};
+  \node[anchor=west] at (7,-1.5) {\ttfamily typewriter family};
+  \node[anchor=west] at (7,-2.25) {\sffamily sans serif family};
+  \node[anchor=west] at (7,-3) {\textcolor{red}{red}, \textcolor{blue!70!black}{blue} and \textcolor{green!50!black}{green}};
+  \node[anchor=west] at (7,-3.75) {\textbf{bold} \textit{italic} \emph{emphasis} \textsf{sans}};
+  \node[anchor=west, font=\Large\bfseries, text=orange!80!black] at (7,-4.75) {large and bold};
+\end{tikzpicture}

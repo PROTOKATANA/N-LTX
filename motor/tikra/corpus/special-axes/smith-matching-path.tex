@@ -1,0 +1,17 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{smithchart}[title={Series-stub match of $z_L=0.5+0.8j$}]
+  % along the line: |Gamma| = 0.555 from 94 to 56.3 degrees
+  \addplot[very thick, red!70!black, -latex, domain=0:37.7, samples=80]
+    ({(1-0.308)/((1-0.555*cos(94-x))^2+(0.555*sin(94-x))^2)},
+     {2*0.555*sin(94-x)/((1-0.555*cos(94-x))^2+(0.555*sin(94-x))^2)});
+  % the stub cancels the reactance along r = 1
+  \addplot[very thick, blue!70!black, -latex, domain=0:1.334, samples=60]
+    ({1}, {1.334-x});
+  \addplot[only marks, mark=*, mark size=2.2pt, black]
+    coordinates {(0.5,0.8) (1,1.334) (1,0)};
+  \node[font=\footnotesize, left] at (axis cs:0.5,0.8) {$z_L$};
+  \node[font=\footnotesize, above right] at (axis cs:1,1.334) {$1+1.33j$};
+  \node[font=\footnotesize, below right] at (axis cs:1,0) {matched};
+\end{smithchart}
+\end{tikzpicture}

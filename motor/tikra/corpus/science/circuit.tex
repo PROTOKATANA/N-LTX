@@ -1,0 +1,10 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[circuit ee IEC, thick, every info/.style={font=\footnotesize}]
+  \node[contact] (a) at (0,0) {};
+  \node[contact] (b) at (5,0) {};
+  \draw (a) to [resistor={info=$R_1$}] ++(2.5,0) coordinate (m)
+            to [capacitor={info=$C$}] (b);
+  \draw (a) -- ++(0,2) to [inductor={info=$L$}] ++(5,0) -- (b);
+  \draw (m) -- ++(0,-1.5) to [resistor={info'=$R_2$}] ++(2.5,0) -| (b);
+  \draw (a) -- ++(-1,0) to [battery={info=$U$}] ++(0,-1.5) -- ++(3.5,0) -- (2.5,-1.5);
+\end{tikzpicture}

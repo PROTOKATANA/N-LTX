@@ -1,0 +1,10 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{lindenmayersystems}
+\begin{tikzpicture}
+  \pgfdeclarelindenmayersystem{sierpinski arrowhead}{
+    \symbol{X}{\pgflsystemdrawforward}
+    \symbol{Y}{\pgflsystemdrawforward}
+    \rule{X -> Y-X-Y}
+    \rule{Y -> X+Y+X}}
+  \draw[red!70!black, thin] [l-system={sierpinski arrowhead, axiom=X, order=6, step=1.2mm, angle=60}] lindenmayer system;
+\end{tikzpicture}

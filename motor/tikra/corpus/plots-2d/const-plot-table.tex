@@ -1,0 +1,28 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[width=12cm, height=6.5cm, xmin=0, xmax=24, ymin=0, ymax=5.5, xtick={0,3,...,24},
+    xlabel={hour of day}, ylabel={price (\$/kWh)}, ymajorgrids, grid style={gray!25},
+    legend pos=north west, legend cell align=left, title={Tariff steps, inline \texttt{table}}]
+  \addplot[const plot, very thick, teal!80!black, fill=teal!15] table[x=h, y=p] {
+    h  p
+    0  1.2
+    6  2.0
+    9  4.1
+    12 3.2
+    17 5.0
+    21 2.6
+    24 2.6
+  } \closedcycle;
+  \addlegendentry{peak tariff}
+  \addplot[const plot mark right, thick, orange!90!black, mark=*, mark options={fill=white}]
+    table[x=h, y=p] {
+    h  p
+    0  1.5
+    8  1.5
+    14 2.8
+    20 2.2
+    24 1.0
+  };
+  \addlegendentry{flat tariff (mark right)}
+\end{axis}
+\end{tikzpicture}

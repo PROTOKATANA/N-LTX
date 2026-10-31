@@ -1,0 +1,10 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{graphs, quotes}
+\begin{tikzpicture}[>=Stealth]
+  \graph[grow down=1.5cm, branch right=2.6cm,
+      nodes={draw=black!60, fill=yellow!20, rounded corners=2pt, font=\ttfamily\small, minimum width=1.9cm, minimum height=6mm},
+      edges={->, thick, black!60}] {
+    app -> {cli, wasm, python} -> core -> {mathra, fonts, svg};
+    cli ->[bend left=20, dashed, "dev" {font=\sffamily\scriptsize}] svg;
+  };
+\end{tikzpicture}

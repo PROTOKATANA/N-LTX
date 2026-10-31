@@ -1,0 +1,11 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[edge from parent fork down, sibling distance=3.2cm, level distance=1.5cm,
+    every node/.style={draw, rounded corners, fill=yellow!15, align=center, font=\small}]
+  \node {Ada\\1815}
+    child { node {Byron\\1836}
+      child { node {Judith\\1873} }
+      child { node {Ralph\\1874} } }
+    child { node {Annabella\\1837} }
+    child { node {Ralph\\1839}
+      child[sibling distance=2.4cm] { node {Mary\\1864} } };
+\end{tikzpicture}

@@ -1,0 +1,8 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[view={0}{90}, z buffer=sort, hide axis, colormap/viridis, width=8cm, height=8cm,
+    title={Trefoil knot, colored by height}, colorbar, clip=false]
+  \addplot3[mesh, line width=3pt, point meta=z, samples=200, domain=0:360, samples y=0]
+    ({sin(x) + 2*sin(2*x)}, {cos(x) - 2*cos(2*x)}, {-sin(3*x)});
+\end{axis}
+\end{tikzpicture}

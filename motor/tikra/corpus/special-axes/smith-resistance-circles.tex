@@ -1,0 +1,20 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{smithchart}[major grid style={gray!40},
+    legend style={at={(1.05,1)}, anchor=north west, font=\footnotesize}]
+  \addplot[very thick, orange!80!black, domain=-89.5:89.5, samples=300]
+    ({0.5}, {tan(x)});
+  \addlegendentry{$r=0.5$}
+  \addplot[very thick, teal!70!black, domain=-89.5:89.5, samples=300]
+    ({1}, {tan(x)});
+  \addlegendentry{$r=1$}
+  \addplot[very thick, violet, domain=-89.5:89.5, samples=300]
+    ({2}, {tan(x)});
+  \addlegendentry{$r=2$}
+  \addplot[very thick, black, densely dashed, domain=0:89.5, samples=300]
+    ({tan(x)}, {1});
+  \addlegendentry{$x=1$}
+  \addplot[only marks, mark=*, mark size=2pt, red, forget plot]
+    coordinates {(0.5,1) (1,1) (2,1)};
+\end{smithchart}
+\end{tikzpicture}

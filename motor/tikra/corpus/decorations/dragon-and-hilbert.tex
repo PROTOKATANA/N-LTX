@@ -1,0 +1,14 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{lindenmayersystems}
+\begin{tikzpicture}
+  \pgfdeclarelindenmayersystem{dragon}{
+    \symbol{X}{\pgflsystemdrawforward}
+    \symbol{Y}{\pgflsystemdrawforward}
+    \rule{X -> X+Y}
+    \rule{Y -> X-Y}}
+  \pgfdeclarelindenmayersystem{hilbert}{
+    \rule{L -> +RF-LFL-FR+}
+    \rule{R -> -LF+RFR+FL-}}
+  \draw[blue!70!black, line join=round] [l-system={dragon, axiom=X, order=10, step=1.6mm, angle=90}] lindenmayer system;
+  \draw[green!50!black, line join=round, shift={(5,-2)}] [l-system={hilbert, axiom=L, order=5, step=1.2mm, angle=90}] lindenmayer system;
+\end{tikzpicture}

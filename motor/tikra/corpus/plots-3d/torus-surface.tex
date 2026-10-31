@@ -1,0 +1,9 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[axis equal, view={35}{40}, colormap/cool, hide axis,
+    title={A torus, $R=2$, $r=0.8$}, z buffer=sort]
+  \addplot3[surf, shader=faceted, faceted color=black!40, samples=36, samples y=18,
+      domain=0:360, y domain=0:360]
+    ({(2+0.8*cos(y))*cos(x)}, {(2+0.8*cos(y))*sin(x)}, {0.8*sin(y)});
+\end{axis}
+\end{tikzpicture}

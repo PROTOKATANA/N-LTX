@@ -1,0 +1,11 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{arrows.meta}
+\begin{tikzpicture}[thick, every node/.style={anchor=east, font=\ttfamily\scriptsize}]
+  \foreach \t [count=\i] in {Stealth, Latex, Kite, Circle, Square, Bar, Triangle, To, Diamond, Ellipse} {
+    \node at (-0.2,-\i*0.5) {\t};
+    \draw[-{\t}] (0,-\i*0.5) -- (2,-\i*0.5);
+    \draw[-{\t[open]}, blue!70!black] (2.6,-\i*0.5) -- (4.6,-\i*0.5);
+    \draw[-{\t[length=4mm, width=3mm]}, red!70!black] (5.2,-\i*0.5) -- (7.2,-\i*0.5);
+  }
+  \foreach \x/\h in {1/plain, 3.6/open, 6.2/large} \node[anchor=south, font=\sffamily\small] at (\x,-0.25) {\h};
+\end{tikzpicture}

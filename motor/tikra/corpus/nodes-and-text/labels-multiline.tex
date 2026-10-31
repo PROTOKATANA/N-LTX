@@ -1,0 +1,7 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \node[draw, text width=4cm, align=center, rounded corners, fill=yellow!10] (n) at (0,0) {A node with a long text that wraps inside its width};
+  \node[draw, align=left, below=1cm of n] {first line \\ second line \\ $E = mc^2$};
+  \node[draw, circle, right=1.5cm of n, font=\Large] {$\Sigma$};
+  \node[draw, ellipse, left=1.5cm of n, font=\small] {small};
+\end{tikzpicture}

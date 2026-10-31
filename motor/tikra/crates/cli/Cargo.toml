@@ -1,0 +1,18 @@
+[package]
+name = "tikra-cli"
+description = "Command line for tikra: TikZ to SVG and PNG."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+keywords = ["tikz", "pgfplots", "svg", "png", "cli"]
+categories = ["command-line-utilities", "rendering", "graphics"]
+
+[[bin]]
+name = "tikra"
+path = "src/main.rs"
+
+[dependencies]
+tikra.workspace = true

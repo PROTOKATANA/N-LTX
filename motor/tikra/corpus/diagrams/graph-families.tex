@@ -1,0 +1,14 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{graphs, graphs.standard}
+\begin{tikzpicture}[every node/.style={circle, inner sep=1.6pt, fill=black}]
+  \graph[clockwise, radius=1.2cm, empty nodes, edges={thick, blue!60!black}] { subgraph C_n [n=8, name=c] };
+  \begin{scope}[xshift=3.2cm]
+    \graph[clockwise, radius=1.2cm, empty nodes, edges={red!60!black}] { subgraph K_n [n=6, name=k] };
+  \end{scope}
+  \begin{scope}[xshift=5.6cm, yshift=1.1cm]
+    \graph[grid placement, empty nodes, nodes={fill=green!40!black}, edges={thick, green!50!black}] { subgraph Grid_n [n=16, wrap after=4, name=g] };
+  \end{scope}
+  \begin{scope}[xshift=9.6cm, yshift=1cm]
+    \graph[empty nodes, branch right=1cm, grow down=2cm, edges={orange!80!black, thick}] { subgraph K_nm [n=3, m=4, name=b] };
+  \end{scope}
+\end{tikzpicture}

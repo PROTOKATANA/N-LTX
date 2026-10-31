@@ -1,0 +1,18 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[line cap=round]
+  \fill[black!80] (0,0) circle (3.3);
+  \fill[yellow!5] (0,0) circle (3.05);
+  \foreach \m in {0,...,59} { \draw[thin] (90-6*\m:2.9) -- (90-6*\m:2.75); }
+  \foreach \h in {1,...,12} {
+    \draw[very thick] (90-30*\h:2.9) -- (90-30*\h:2.55);
+    \node[font=\Large\bfseries] at (90-30*\h:2.15) {\h};
+  }
+  % 10:08:37
+  \pgfmathsetmacro\hour{90 - 30*(10 + 8.6/60)}
+  \pgfmathsetmacro\minute{90 - 6*(8 + 37/60)}
+  \draw[line width=4pt] (\hour:-0.3) -- (\hour:1.45);
+  \draw[line width=2.5pt] (\minute:-0.4) -- (\minute:2.4);
+  \draw[red!80!black, thick] (90-6*37:-0.6) -- (90-6*37:2.6);
+  \fill[red!80!black] (0,0) circle (0.12);
+  \node[font=\scriptsize\scshape, gray] at (0,-1.1) {tikra};
+\end{tikzpicture}

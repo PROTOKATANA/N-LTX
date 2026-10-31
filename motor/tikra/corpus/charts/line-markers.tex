@@ -1,0 +1,16 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[width=10cm, height=6.5cm, xlabel={month}, ylabel={visitors (thousands)},
+    title={Museum visitors}, xtick={1,...,12},
+    xticklabels={J,F,M,A,M,J,J,A,S,O,N,D}, ymin=0, grid=both, grid style={gray!15},
+    major grid style={gray!30}, minor y tick num=1,
+    legend style={at={(0.5,-0.2)}, anchor=north, legend columns=-1, draw=none}]
+  \addplot[thick, mark=*, color=blue!70!black] coordinates
+    {(1,12) (2,14) (3,19) (4,24) (5,28) (6,35) (7,41) (8,43) (9,31) (10,23) (11,16) (12,18)};
+  \addplot[thick, mark=square*, color=orange!90!black, dashed, mark options={solid}] coordinates
+    {(1,9) (2,10) (3,13) (4,17) (5,22) (6,26) (7,30) (8,32) (9,24) (10,18) (11,12) (12,15)};
+  \addplot[thick, mark=diamond*, mark size=3pt, color=green!50!black, densely dotted, mark options={solid}] coordinates
+    {(1,20) (2,19) (3,21) (4,22) (5,23) (6,22) (7,24) (8,25) (9,23) (10,22) (11,21) (12,26)};
+  \legend{Natural history, Modern art, Science}
+\end{axis}
+\end{tikzpicture}

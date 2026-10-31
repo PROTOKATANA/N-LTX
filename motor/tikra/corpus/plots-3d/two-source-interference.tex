@@ -1,0 +1,8 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[view={0}{90}, colormap/RdPu, colorbar horizontal, enlargelimits=false,
+    axis equal image, width=8cm, title={Interference of two point sources}, xlabel=$x$, ylabel=$y$]
+  \addplot3[surf, shader=interp, samples=40, domain=-4:4, y domain=-4:4]
+    {cos(deg(3*sqrt((x-1.2)^2+y^2))) + cos(deg(3*sqrt((x+1.2)^2+y^2)))};
+\end{axis}
+\end{tikzpicture}

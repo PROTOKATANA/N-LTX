@@ -1,0 +1,9 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{decorations.text}
+\begin{tikzpicture}
+  \path[decorate, decoration={text effects along path, text={riding the sine wave},
+      text effects/.cd, text along path, character count=\i, character total=\n,
+      characters={text=red!\i0!blue, scale=0.8+\i/20}}]
+    (0,0) sin (1.5,1) cos (3,0) sin (4.5,-1) cos (6,0);
+  \draw[help lines, dashed] (0,0) sin (1.5,1) cos (3,0) sin (4.5,-1) cos (6,0);
+\end{tikzpicture}

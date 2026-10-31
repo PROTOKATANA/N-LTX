@@ -1,0 +1,9 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \graph[nodes={circle, draw, fill=blue!10, minimum size=6mm}, edges={thick}, clockwise, radius=1.6cm, n=7]
+    { subgraph K_n [V={1,...,7}] };
+  \begin{scope}[xshift=4.5cm]
+    \graph[nodes={draw, rounded corners, fill=green!15}, grow right=2cm, branch down=1cm]
+      { parse -> {lex, check} -> typeset -> draw -> svg };
+  \end{scope}
+\end{tikzpicture}

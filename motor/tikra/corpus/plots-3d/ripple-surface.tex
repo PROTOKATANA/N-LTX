@@ -1,0 +1,8 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[view={25}{45}, colormap/hot, xlabel=$x$, ylabel=$y$,
+    title={Ripple $\sin(r)/r$}, zmin=-0.4, zmax=1]
+  \addplot3[surf, shader=interp, samples=40, domain=-10:10, y domain=-10:10]
+    {sin(deg(sqrt(x^2+y^2)+0.001))/(sqrt(x^2+y^2)+0.001)};
+\end{axis}
+\end{tikzpicture}

@@ -1,0 +1,17 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[stack plots=y, area style, enlarge x limits=false, ymin=0, xmin=2016, xmax=2026,
+    xlabel={year}, ylabel={TWh}, title={Electricity by source},
+    xtick={2016,2018,...,2026}, x tick label style={/pgf/number format/1000 sep={}},
+    legend style={at={(1.03,0.5)}, anchor=west, font=\small}, reverse legend]
+  \addplot[fill=gray!55, draw=gray!70!black] coordinates
+    {(2016,52) (2018,50) (2020,45) (2022,41) (2024,35) (2026,28)} \closedcycle;
+  \addplot[fill=blue!40, draw=blue!60!black] coordinates
+    {(2016,18) (2018,19) (2020,19) (2022,20) (2024,20) (2026,21)} \closedcycle;
+  \addplot[fill=green!50!black!60, draw=green!40!black] coordinates
+    {(2016,6) (2018,10) (2020,15) (2022,19) (2024,24) (2026,30)} \closedcycle;
+  \addplot[fill=yellow!70!orange, draw=orange!80!black] coordinates
+    {(2016,2) (2018,4) (2020,8) (2022,13) (2024,19) (2026,26)} \closedcycle;
+  \legend{coal \& gas, hydro, wind, solar}
+\end{axis}
+\end{tikzpicture}

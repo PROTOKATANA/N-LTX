@@ -1,0 +1,13 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[mindmap, grow cyclic, every node/.style=concept, concept color=orange!40,
+    level 1/.append style={level distance=4.2cm, sibling angle=90},
+    level 2/.append style={level distance=2.4cm, sibling angle=45}]
+  \node {tikra}
+    child[concept color=blue!30] { node {paths}
+      child { node {arcs} } child { node {curves} } }
+    child[concept color=green!30] { node {nodes}
+      child { node {shapes} } child { node {labels} } }
+    child[concept color=red!30] { node {plots}
+      child { node {2D} } child { node {3D} } }
+    child[concept color=purple!30] { node {libraries} };
+\end{tikzpicture}

@@ -1,0 +1,10 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{quotes}
+\begin{tikzpicture}[dot/.style={circle, fill=blue!60!black, inner sep=1.8pt}]
+  \node[dot, label=above:$A$, label=below:{\small start}] (a) at (0,0) {};
+  \node[dot, label={[red]right:$B$}, pin={[pin edge={thick, gray}]above right:peak}] (b) at (3,1.5) {};
+  \node[dot, label=-45:$C$, pin=below:{\itshape valley}] (c) at (6,-0.5) {};
+  \node[dot, label={[font=\footnotesize, fill=yellow!40, rounded corners]above:$D$}] (d) at (9,1) {};
+  \draw[thick, blue!60!black] (a) to["rise"] (b) to["fall"'] (c) to["climb", sloped] (d);
+  \draw[->, gray] (a) to[bend right=30, "$\Delta x = 9$"', near end] (d);
+\end{tikzpicture}

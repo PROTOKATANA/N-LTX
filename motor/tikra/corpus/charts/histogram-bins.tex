@@ -1,0 +1,59 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[ybar interval, ymin=0, xlabel={reaction time (ms)}, ylabel={count},
+    title={Reaction times of 48 trials}, x tick label as interval=false,
+    xtick={180,200,...,340}, axis x line*=bottom, axis y line*=left]
+  \addplot+[hist={bins=8, data min=180, data max=340}, fill=violet!35, draw=violet!70!black]
+    table[y index=0] {
+      t
+      212
+      231
+      244
+      198
+      265
+      223
+      251
+      239
+      284
+      207
+      219
+      247
+      262
+      228
+      236
+      301
+      189
+      242
+      255
+      233
+      271
+      216
+      249
+      226
+      238
+      293
+      204
+      258
+      245
+      221
+      267
+      235
+      312
+      229
+      253
+      241
+      196
+      277
+      248
+      230
+      260
+      214
+      243
+      286
+      237
+      225
+      252
+      327
+    };
+\end{axis}
+\end{tikzpicture}

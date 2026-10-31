@@ -1,0 +1,10 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \foreach \az/\el [count=\i] in {0/90, 30/30, 90/0} {
+    \begin{axis}[at={(\i*4.6cm,0)}, width=5cm, height=5cm, view={\az}{\el},
+        colormap/viridis, title={azimuth \az, elevation \el}, ticks=none]
+      \addplot3[surf, shader=interp, samples=21, domain=-2:2, y domain=-2:2]
+        {x*exp(-x^2-y^2)};
+    \end{axis}
+  }
+\end{tikzpicture}

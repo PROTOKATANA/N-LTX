@@ -1,0 +1,10 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[vertex/.style={circle, draw, thick, minimum size=0.8cm, fill=green!10}]
+  \foreach \name/\angle in {a/90, b/162, c/234, d/306, e/18} {
+    \node[vertex] (\name) at (\angle:2.2) {$\name$};
+  }
+  \foreach \u/\v in {a/b, b/c, c/d, d/e, e/a, a/c, b/d} {
+    \draw[thick] (\u) -- (\v);
+  }
+  \draw[->, red, thick, bend left=30] (a) to (d);
+\end{tikzpicture}

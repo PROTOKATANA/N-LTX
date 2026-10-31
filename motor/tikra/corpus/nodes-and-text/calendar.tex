@@ -1,0 +1,7 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[every day/.style={anchor=mid}]
+  \calendar[dates=2026-10-01 to 2026-10-last, week list, month label above centered,
+      month text=\textbf{\%mt} \%y0]
+    if (Sunday) [red]
+    if (equals=2026-10-22) [nodes={draw, circle, fill=yellow!40}];
+\end{tikzpicture}

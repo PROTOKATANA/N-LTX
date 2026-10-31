@@ -1,0 +1,13 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[view={60}{30}, colormap/jet, hide axis, title={A tetrahedron from triangle patches},
+    z buffer=sort]
+  \addplot3[patch, patch type=triangle, shader=interp, draw=black, line width=0.8pt]
+    coordinates {
+      (0,0,0) (2,0,0) (1,1.7,0)
+      (0,0,0) (2,0,0) (1,0.6,1.6)
+      (2,0,0) (1,1.7,0) (1,0.6,1.6)
+      (1,1.7,0) (0,0,0) (1,0.6,1.6)
+    };
+\end{axis}
+\end{tikzpicture}

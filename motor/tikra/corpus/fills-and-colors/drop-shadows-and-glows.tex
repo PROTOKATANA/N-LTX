@@ -1,0 +1,19 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{shadows}
+\begin{tikzpicture}[card/.style={rounded corners=4pt, minimum width=2.4cm, minimum height=1.4cm, font=\bfseries}]
+  \node[card, fill=white, draw=gray, drop shadow] at (0,0) {drop shadow};
+  \node[card, fill=yellow!30, draw=orange, drop shadow={shadow xshift=3pt, shadow yshift=-3pt, fill=orange!60!black, opacity=0.6}] at (3.2,0) {custom};
+  \node[circle, fill=cyan!20, draw=cyan!50!black, minimum size=1.6cm, circular drop shadow] at (6.4,0) {round};
+  \node[card, fill=green!20, draw=green!50!black, copy shadow={shadow xshift=4pt, shadow yshift=-4pt},
+    double copy shadow] at (9.6,0) {copies};
+  % glows made with preactions: wide, faint strokes drawn first
+  \draw[preaction={draw=yellow, line width=12pt, opacity=0.25},
+        preaction={draw=yellow, line width=6pt, opacity=0.4},
+        line width=1.5pt, orange!80!black]
+    (-1,-2.5) sin (0.5,-1.8) cos (2,-2.5) sin (3.5,-3.2) cos (5,-2.5);
+  \node[draw=blue, thick, fill=white, circle, minimum size=1.2cm,
+        preaction={draw=blue, line width=14pt, opacity=0.1},
+        preaction={draw=blue, line width=7pt, opacity=0.2},
+        postaction={draw=white, densely dotted, line width=0.4pt}] at (7,-2.5) {glow};
+  \fill[purple!60, postaction={pattern=north east lines, pattern color=white}] (8.6,-3.2) rectangle (10.6,-1.8);
+\end{tikzpicture}

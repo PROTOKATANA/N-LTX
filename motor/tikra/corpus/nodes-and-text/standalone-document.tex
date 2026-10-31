@@ -1,0 +1,11 @@
+% Made up for the tikra benchmark.
+\documentclass[tikz, border=5pt]{standalone}
+\usetikzlibrary{arrows.meta, positioning}
+\begin{document}
+\begin{tikzpicture}[>=Stealth]
+  \node[draw, minimum size=1cm] (s) {S};
+  \node[draw, circle, right=2cm of s] (t) {T};
+  \draw[->, thick] (s) -- node[above] {$\lambda$} (t);
+  \draw[->, thick] (t) to[bend left=40] node[below] {$\mu$} (s);
+\end{tikzpicture}
+\end{document}

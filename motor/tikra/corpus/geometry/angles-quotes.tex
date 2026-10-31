@@ -1,0 +1,11 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[thick]
+  \coordinate (A) at (0,0); \coordinate (B) at (5,0); \coordinate (C) at (1.5,3);
+  \draw (A) -- node[below] {$c$} (B) -- node[above right] {$a$} (C) -- node[above left] {$b$} cycle;
+  \pic[draw, fill=red!20, angle radius=8mm, "$\alpha$"] {angle=B--A--C};
+  \pic[draw, fill=blue!20, angle radius=8mm, "$\beta$"] {angle=C--B--A};
+  \pic[draw, fill=green!20, angle radius=6mm, "$\gamma$"] {angle=A--C--B};
+  \coordinate (H) at (C |- A);
+  \draw[dashed] (C) -- (H) node[below] {$H$};
+  \pic[draw, angle radius=3mm] {right angle=C--H--B};
+\end{tikzpicture}

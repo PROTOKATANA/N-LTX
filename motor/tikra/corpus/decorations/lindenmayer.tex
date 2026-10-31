@@ -1,0 +1,8 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \pgfdeclarelindenmayersystem{fern}{
+    \rule{X -> F-[[X]+X]+F[+FX]-X}
+    \rule{F -> FF}}
+  \draw[green!50!black, rotate=80]
+    [l-system={fern, axiom=X, order=5, step=2pt, angle=25}] lindenmayer system;
+\end{tikzpicture}

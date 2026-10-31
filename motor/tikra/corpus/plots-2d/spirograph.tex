@@ -1,0 +1,11 @@
+% Made up for the tikra benchmark.
+% A spirograph: hypotrochoids, the curves a pen in a gear rolling inside a ring traces.
+\begin{tikzpicture}[scale=0.85, line width=0.6pt]
+  \draw[purple!80!black, domain=0:9*360, samples=1800, smooth, variable=\t]
+    plot ({3.2*cos(\t) + 1.5*cos(16/9*\t)}, {3.2*sin(\t) - 1.5*sin(16/9*\t)});
+  \draw[blue!70!black, opacity=0.75, domain=0:7*360, samples=1400, smooth, variable=\t]
+    plot ({2.6*cos(\t) + 1.2*cos(13/7*\t)}, {2.6*sin(\t) - 1.2*sin(13/7*\t)});
+  \draw[orange!90!black, opacity=0.8, domain=0:5*360, samples=1000, smooth, variable=\t]
+    plot ({1.6*cos(\t) + 0.7*cos(8/5*\t)}, {1.6*sin(\t) - 0.7*sin(8/5*\t)});
+  \node[font=\large] at (0,-5.3) {Spirograph};
+\end{tikzpicture}

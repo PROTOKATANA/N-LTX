@@ -1,0 +1,19 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{calc}
+\begin{tikzpicture}
+  \coordinate (O) at (0,0); \coordinate (P) at (5,1);
+  \node[circle, minimum size=4cm] (c) at (O) {};
+  \coordinate (T1) at (tangent cs:node=c, point={(P)}, solution=1);
+  \coordinate (T2) at (tangent cs:node=c, point={(P)}, solution=2);
+  \fill[orange!15] (O) -- (T1) -- (P) -- (T2) -- cycle;
+  \draw[blue!70!black, thick, fill=blue!8, fill opacity=0.8] (O) circle (2cm);
+  \draw[red!70!black, thick, shorten >=-1.2cm] (P) -- (T1);
+  \draw[red!70!black, thick, shorten >=-1.2cm] (P) -- (T2);
+  \draw[densely dashed] (O) -- (T1) (O) -- (T2) (O) -- (P);
+  \pic[draw, angle radius=2.5mm] {right angle=O--T1--P};
+  \pic[draw, angle radius=2.5mm] {right angle=P--T2--O};
+  \foreach \p/\l/\pos in {O/O/below left, P/P/right, T1/T_1/above, T2/T_2/below} {
+    \fill (\p) circle (1.5pt) node[\pos] {$\l$};
+  }
+  \node[blue!70!black, below left] at (-135:2cm) {$\Gamma$};
+\end{tikzpicture}

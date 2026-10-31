@@ -1,0 +1,10 @@
+% Made up for the tikra gallery: a regular polygon in its circle, with as many sides as you like.
+\begin{tikzpicture}
+  \def\n{6}   % the sides, 3..16
+  \draw[gray!50] (0,0) circle (2);
+  \foreach \i in {1,...,\n} {
+    \draw[teal, thick, fill=teal!10] (0,0) -- ({\i*360/\n}:2) -- ({(\i+1)*360/\n}:2) -- cycle;
+    \fill[teal!60!black] ({\i*360/\n}:2) circle (1.6pt);
+  }
+  \node[below] at (0,-2.2) {$n = \n$};
+\end{tikzpicture}

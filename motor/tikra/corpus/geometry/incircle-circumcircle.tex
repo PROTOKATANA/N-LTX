@@ -1,0 +1,17 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[scale=1.1, line join=round]
+  \coordinate (A) at (0,0); \coordinate (B) at (6,0); \coordinate (C) at (2,4);
+  \coordinate (O) at (3,1);          % circumcenter
+  \coordinate (I) at (2.4076,1.4880); % incenter
+  \draw[blue!70!black, thick, fill=blue!5] (O) circle ({sqrt(10)});
+  \draw[thick, fill=yellow!25] (A) -- (B) -- (C) -- cycle;
+  \draw[red!70!black, thick, fill=red!10] (I) circle (1.488);
+  \draw[blue!70!black, densely dashed] (O) -- (A) (O) -- (B) (O) -- (C);
+  \draw[red!70!black] (I) -- node[right, font=\small] {$r$} (2.4076,0);
+  \draw[blue!70!black] (O) -- node[left, font=\small, pos=0.4] {$R$} (C);
+  \fill[blue!70!black] (O) circle (1.5pt) node[below right] {$O$};
+  \fill[red!70!black] (I) circle (1.5pt) node[above left] {$I$};
+  \node[below left] at (A) {$A$};
+  \node[below right] at (B) {$B$};
+  \node[above] at (C) {$C$};
+\end{tikzpicture}

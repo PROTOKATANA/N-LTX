@@ -1,0 +1,12 @@
+% Made up for the tikra benchmark.
+\definecolor{brand}{HTML}{3A6EA5}
+\begin{tikzpicture}
+  \tikzset{card/.style={draw=brand, thick, fill=brand!15, rounded corners=3pt, minimum width=2.4cm, minimum height=1cm},
+           tag/.style={card, fill=orange!30, draw=orange}}
+  \node[card] (a) at (0,0) {Input};
+  \node[tag] (b) at (3.5,0) {Filter};
+  \node[card] (c) at (7,0) {Output};
+  \draw[->, thick, brand] (a) -- (b);
+  \draw[->, thick, brand!60!black] (b) -- (c);
+  \node[text=brand!70!black, below=0.4cm of b] {colors mix like xcolor};
+\end{tikzpicture}

@@ -1,0 +1,8 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[view={55}{30}, colormap/viridis, colorbar, xlabel=$x$, ylabel=$y$,
+    title={$z = \sin(x)\cos(y)$}]
+  \addplot3[surf, shader=interp, domain=-3:3, y domain=-3:3, samples=25]
+    {sin(deg(x))*cos(deg(y))};
+\end{axis}
+\end{tikzpicture}

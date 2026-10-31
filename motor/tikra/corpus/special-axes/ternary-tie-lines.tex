@@ -1,0 +1,22 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{ternaryaxis}[xlabel=Water, ylabel=Acetone, zlabel=Toluene,
+    tick label style={font=\scriptsize}, major grid style={gray!30}]
+  \addplot3[smooth, very thick, blue!70!black, fill=blue!10] coordinates {
+    (0.98,0,0.02) (0.9,0.08,0.02) (0.8,0.17,0.03) (0.68,0.27,0.05)
+    (0.55,0.36,0.09) (0.42,0.42,0.16) (0.3,0.45,0.25) (0.18,0.43,0.39)
+    (0.1,0.36,0.54) (0.05,0.25,0.7) (0.02,0.12,0.86) (0.01,0,0.99)};
+  \addplot3[thick, red!70!black, mark=*, mark size=1.6pt] coordinates {
+    (0.9,0.08,0.02) (0.02,0.12,0.86)};
+  \addplot3[thick, red!70!black, mark=*, mark size=1.6pt] coordinates {
+    (0.8,0.17,0.03) (0.05,0.25,0.7)};
+  \addplot3[thick, red!70!black, mark=*, mark size=1.6pt] coordinates {
+    (0.68,0.27,0.05) (0.1,0.36,0.54)};
+  \addplot3[thick, red!70!black, mark=*, mark size=1.6pt] coordinates {
+    (0.55,0.36,0.09) (0.18,0.43,0.39)};
+  \addplot3[only marks, mark=diamond*, mark size=3pt, black] coordinates {
+    (0.3,0.45,0.25)};
+  \node[pin={[font=\footnotesize]-100:plait point}] at (axis cs:0.3,0.45,0.25) {};
+  \node[font=\footnotesize, blue!50!black, rotate=-60] at (axis cs:0.3,0.04,0.66) {two phases};
+\end{ternaryaxis}
+\end{tikzpicture}

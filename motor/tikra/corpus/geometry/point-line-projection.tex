@@ -1,0 +1,26 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{calc}
+\begin{tikzpicture}[scale=1.2, dot/.style={circle, fill, inner sep=1.4pt}]
+  \coordinate (A) at (0,0.4); \coordinate (B) at (7,2.2); \coordinate (P) at (5.2,3.8);
+  \draw[thick, shorten <=-0.6cm, shorten >=-0.6cm] (A) -- (B);
+  \coordinate (H) at ($(A)!(P)!(B)$);
+  \coordinate (M) at ($(A)!0.5!(B)$);
+  \coordinate (T) at ($(A)!1/3!(B)$);
+  \coordinate (K) at ($(A)!2cm!(B)$);
+  \coordinate (N) at ($(M)!1.5cm!90:(B)$);
+  \draw[red!70!black, thick] (P) -- node[left, pos=0.45] {$d$} (H);
+  \pic[draw=red!70!black, angle radius=2.5mm] {right angle=P--H--B};
+  \draw[blue!70!black, densely dashed] (M) -- (N);
+  \pic[draw=blue!70!black, angle radius=2.5mm] {right angle=B--M--N};
+  \draw[orange!80!black, line width=2pt, opacity=0.6] (A) -- (K);
+  \node[dot, label=below:$A$] at (A) {};
+  \node[dot, label=below:$B$] at (B) {};
+  \node[dot, red!70!black, label=above:$P$] at (P) {};
+  \node[dot, red!70!black, label=below right:$H$] at (H) {};
+  \node[dot, blue!70!black, label=below right:{$M = (A)!0.5!(B)$}] at (M) {};
+  \node[dot, blue!70!black, label=right:$N$] at (N) {};
+  \node[dot, teal!70!black, label={[teal!70!black]below:$\frac13$}] at (T) {};
+  \node[dot, orange!80!black, label={[orange!80!black]above left:{2\,cm}}] at (K) {};
+  \node[font=\small, align=left, anchor=north west] at (-0.3,4.4)
+    {$H = (A)!(P)!(B)$\\$N = (M)!1.5\,\mathrm{cm}!90{:}(B)$};
+\end{tikzpicture}

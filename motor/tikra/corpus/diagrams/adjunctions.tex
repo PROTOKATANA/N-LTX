@@ -1,0 +1,43 @@
+% Made up for the tikra gallery: chemistry and commutative diagrams inside the drawing, which TikZ
+% cannot nest (chemfig and tikz-cd are tikzpictures of their own); mathra sets them as math.
+\documentclass[border=0pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{backgrounds, arrows.meta, shadows}
+\definecolor{ink}{HTML}{0D1226}
+\definecolor{sea}{HTML}{4FD1C5}
+\definecolor{amber}{HTML}{F6AD55}
+\definecolor{chalk}{HTML}{E8EDF7}
+\begin{document}
+\begin{tikzpicture}[
+    background rectangle/.style={fill=ink, draw=none}, show background rectangle, inner frame sep=24pt,
+    category/.style={circle, minimum size=5.4cm, draw=#1, line width=1.4pt, inner color=#1!22!ink, outer color=ink,
+      text=chalk, font=\LARGE},
+    functor/.style={-{Latex[length=9pt]}, line width=1.8pt, #1},
+    card/.style={rounded corners=10pt, draw=chalk!22!ink, fill=chalk!6!ink, inner sep=12pt, text=chalk, font=\large},
+  ]
+  \node[category=sea] (C) at (0,0) {$\begin{tikzcd} X \arrow[r, "f"] \arrow[dr, "h"'] & Y \arrow[d, "g"] \\ & Z \end{tikzcd}$};
+  \node[category=amber] (D) at (9,0) {$\begin{tikzcd} FX \arrow[r, "Ff"] \arrow[dr, "Fh"'] & FY \arrow[d, "Fg"] \\ & FZ \end{tikzcd}$};
+  \node[text=sea, font=\LARGE] at ([yshift=-3mm]C.north) {$\mathcal{C}$};
+  \node[text=amber, font=\LARGE] at ([yshift=-3mm]D.north) {$\mathcal{D}$};
+  % the functors, and the adjunction between them
+  \draw[functor=amber] (C.30) to[bend left=28] node[above, text=amber, font=\Large] {$F$} (D.150);
+  \draw[functor=sea] (D.210) to[bend left=28] node[below, text=sea, font=\Large] {$G$} (C.330);
+  \node[text=chalk, font=\Huge] at (4.5,0) {$\dashv$};
+  \node[text=chalk!60, font=\small] at (4.5,-0.75) {left adjoint to};
+  % the natural bijection
+  \node[card, anchor=north] at (4.5,-3.6)
+    {$\mathrm{Hom}_{\mathcal{D}}(F X,\, Y) \;\cong\; \mathrm{Hom}_{\mathcal{C}}(X,\, G Y)$};
+  % the triangle identities
+  \node[card, anchor=north] (t1) at (1.2,-5.6) {$\begin{tikzcd}
+      F \arrow[r, "F\eta"] \arrow[dr, equal] & FGF \arrow[d, "\varepsilon F"] \\ & F
+    \end{tikzcd}$};
+  \node[card, anchor=north] (t2) at (7.8,-5.6) {$\begin{tikzcd}
+      G \arrow[r, "\eta G"] \arrow[dr, equal] & GFG \arrow[d, "G\varepsilon"] \\ & G
+    \end{tikzcd}$};
+  \node[text=chalk!60, font=\small, below=4pt of t1] {unit $\eta$, then counit $\varepsilon$: nothing happened};
+  \node[text=chalk!60, font=\small, below=4pt of t2] {the other way round, the same};
+  % title
+  \node[anchor=south west, text=chalk, font=\LARGE] at (-2.9,3.6) {Adjunctions};
+  \node[anchor=north west, text=chalk!55] at (-2.9,3.55) {The most important idea in category theory, drawn with diagrams inside the drawing.};
+\end{tikzpicture}
+\end{document}

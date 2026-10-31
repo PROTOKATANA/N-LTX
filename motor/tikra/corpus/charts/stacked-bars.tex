@@ -1,0 +1,12 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[ybar stacked, bar width=14pt, ymin=0, enlarge x limits=0.15,
+    symbolic x coords={2022, 2023, 2024, 2025, 2026}, xtick=data,
+    legend style={at={(0.5,-0.15)}, anchor=north, legend columns=-1},
+    ylabel={figures}, nodes near coords, nodes near coords style={font=\tiny}]
+  \addplot+[fill=blue!40, draw=blue!70!black] coordinates {(2022,8) (2023,12) (2024,15) (2025,20) (2026,26)};
+  \addplot+[fill=orange!50, draw=orange!70!black] coordinates {(2022,4) (2023,6) (2024,9) (2025,11) (2026,14)};
+  \addplot+[fill=green!40, draw=green!50!black] coordinates {(2022,2) (2023,3) (2024,5) (2025,6) (2026,10)};
+  \legend{TikZ, pgfplots, other}
+\end{axis}
+\end{tikzpicture}

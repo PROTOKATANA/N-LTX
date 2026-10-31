@@ -1,0 +1,8 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[view={-35}{35}, colormap/greenyellow, xlabel=$x$, ylabel=$y$,
+    title={Mesh of $\cos(x)\,\cos(y)\,e^{-r/4}$}]
+  \addplot3[mesh, samples=30, domain=-6:6, y domain=-6:6, thin]
+    {cos(deg(x))*cos(deg(y))*exp(-sqrt(x^2+y^2)/4)};
+\end{axis}
+\end{tikzpicture}

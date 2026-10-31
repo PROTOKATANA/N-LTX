@@ -1,0 +1,21 @@
+% Made up for the tikra gallery: a cubic Bezier curve and its two control points. In the
+% playground, drag a control point and watch the curve follow it.
+\begin{tikzpicture}
+  \def\ax{1}   % first control point, x, -1..7
+  \def\ay{3}   % first control point, y, -1..4
+  \def\bx{5}   % second control point, x, -1..7
+  \def\by{-0.5} % second control point, y, -1..4
+  \useasboundingbox (-1.4,-1.4) rectangle (7.4,4.4);
+  \coordinate (P0) at (0,0);
+  \coordinate (P3) at (6,1.5);
+  \coordinate (C1) at (\ax,\ay);
+  \coordinate (C2) at (\bx,\by);
+  \draw[gray, dashed] (P0) -- (C1) -- (C2) -- (P3);
+  \draw[ultra thick, violet] (P0) .. controls (C1) and (C2) .. (P3);
+  \foreach \p in {P0, P3} \fill (\p) circle (2.2pt);
+  \foreach \p in {C1, C2} \draw[fill=white] (\p) circle (2pt);
+  \node[below left] at (P0) {$P_0$};
+  \node[below right] at (P3) {$P_3$};
+  \node[above left] at (C1) {$P_1$};
+  \node[below right] at (C2) {$P_2$};
+\end{tikzpicture}

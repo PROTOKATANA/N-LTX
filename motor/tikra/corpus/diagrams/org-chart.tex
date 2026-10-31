@@ -1,0 +1,18 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{trees}
+\begin{tikzpicture}[edge from parent fork down, level distance=1.6cm, thick,
+    every node/.style={draw=black!60, rounded corners=2pt, align=center, font=\sffamily\scriptsize, minimum height=9mm, text width=1.7cm},
+    edge from parent/.style={draw, black!50},
+    level 1/.style={sibling distance=4.2cm, every node/.append style={fill=blue!15}},
+    level 2/.style={sibling distance=2.1cm, every node/.append style={fill=blue!5}}]
+  \node[fill=blue!35] {Director\\Lena Park}
+    child { node {Engineering\\Omar Diaz}
+      child { node {Parser\\team} }
+      child { node {Renderer\\team} } }
+    child { node {Design\\Mei Chen}
+      child { node {Fonts} }
+      child { node {Gallery} } }
+    child { node {Operations\\Ravi Iyer}
+      child { node {Release} }
+      child { node {Support} } };
+\end{tikzpicture}

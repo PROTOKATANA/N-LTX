@@ -1,0 +1,11 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \begin{scope}
+    \clip (0,0) circle (1.5);
+    \fill[blue!30] (-2,-2) rectangle (0,2);
+    \fill[red!30] (0,-2) rectangle (2,2);
+  \end{scope}
+  \draw[thick] (0,0) circle (1.5);
+  \fill[green, opacity=0.4] (2.5,-1) rectangle (4.5,1);
+  \fill[orange, fill opacity=0.5] (3.5,0) circle (1);
+\end{tikzpicture}

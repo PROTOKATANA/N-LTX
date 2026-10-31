@@ -1,0 +1,40 @@
+# How far tikra is from TikZ (tools/conformance): every example of the TikZ and pgfplots manuals drawn
+# by pdflatex and by tikra, compared. Runs on demand and once a week; the summary and the side-by-side
+# report are uploaded as an artifact, and docs/conformance.md is updated by hand from it.
+name: conformance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install numpy scipy pillow
+      # TeX's drawings depend only on the documents, which depend on the extractor and the pinned versions
+      - uses: actions/cache@v4
+        with:
+          path: target/conformance/ref
+          key: conformance-ref-${{ hashFiles('tools/conformance/extract.py', 'tools/conformance/reference.py', 'tools/conformance/run.sh') }}
+      - run: tools/conformance/run.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: conformance
+          path: |
+            docs/conformance.md
+            target/conformance/report.html
+            target/conformance/results.json
+            target/conformance/ref/*.png
+            target/conformance/tikra/*.png

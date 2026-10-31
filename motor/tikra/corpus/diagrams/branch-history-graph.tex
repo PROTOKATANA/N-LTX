@@ -1,0 +1,20 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[x=1.1cm, y=1cm, font=\sffamily\scriptsize,
+    commit/.style={circle, draw=#1!60!black, fill=#1!40, thick, minimum size=4mm, inner sep=0pt},
+    branch/.style={very thick, #1!60!black},
+    tag/.style={rectangle, rounded corners=1pt, fill=#1!15, draw=#1!60!black, inner sep=2pt}]
+  \draw[branch=blue] (0,0) -- (10,0);
+  \draw[branch=green, rounded corners=6pt] (1,0) -- (2,1) -- (5,1) -- (6,0);
+  \draw[branch=orange, rounded corners=6pt] (3,1) -- (4,2) -- (7,2) -- (8,0);
+  \draw[branch=red, rounded corners=6pt] (6,0) -- (7,-1) -- (9,-1) -- (10,0);
+  \foreach \x in {0,1,3.5,6,8,10} \node[commit=blue] at (\x,0) {};
+  \foreach \x in {2,3,4,5} \node[commit=green] at (\x,1) {};
+  \foreach \x in {4,5,6,7} \node[commit=orange] at (\x,2) {};
+  \foreach \x in {7,8,9} \node[commit=red] at (\x,-1) {};
+  \node[tag=blue, anchor=east] at (-0.3,0) {main};
+  \node[tag=green, anchor=east] at (1.7,1) {feat/parser};
+  \node[tag=orange, anchor=east] at (3.7,2) {feat/fonts};
+  \node[tag=red, anchor=north] at (8,-1.3) {hotfix};
+  \node[tag=black, anchor=south] at (10,0.3) {v1.2};
+  \node[tag=black, anchor=north] at (3.5,-0.3) {v1.1};
+\end{tikzpicture}

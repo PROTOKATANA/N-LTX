@@ -1,0 +1,34 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{patterns.meta}
+\tikzdeclarepattern{
+  name=waves,
+  parameters={\pgfkeysvalueof{/pgf/pattern keys/size}},
+  bottom left={(0,-2pt)},
+  top right={(\pgfkeysvalueof{/pgf/pattern keys/size},2pt)},
+  tile size={(\pgfkeysvalueof{/pgf/pattern keys/size},6pt)},
+  tile transformation={rotate=\pgfkeysvalueof{/pgf/pattern keys/angle}},
+  defaults={size/.initial=8pt, angle/.initial=0},
+  code={
+    \draw[line width=0.6pt] (0,0) sin (\pgfkeysvalueof{/pgf/pattern keys/size}/4,1.5pt)
+      cos (\pgfkeysvalueof{/pgf/pattern keys/size}/2,0)
+      sin (3*\pgfkeysvalueof{/pgf/pattern keys/size}/4,-1.5pt)
+      cos (\pgfkeysvalueof{/pgf/pattern keys/size},0);
+  }
+}
+\tikzdeclarepattern{
+  name=rings,
+  type=uncolored,
+  bottom left={(-4pt,-4pt)},
+  top right={(4pt,4pt)},
+  tile size={(9pt,9pt)},
+  code={\draw[line width=0.5pt] (0,0) circle (2.5pt); \fill (0,0) circle (0.8pt);}
+}
+\begin{tikzpicture}
+  \draw[pattern=waves, pattern color=blue] (0,0) rectangle (3,2);
+  \draw[pattern={waves[size=14pt]}, pattern color=teal] (3.5,0) rectangle (6.5,2);
+  \draw[pattern={waves[angle=45]}, pattern color=purple] (7,0) rectangle (10,2);
+  \draw[pattern=rings, pattern color=red!70!black] (1.5,-1.8) circle (1.3);
+  \draw[pattern=rings, pattern color=orange] (3.5,-3) -- (6.5,-3) -- (5,-0.5) -- cycle;
+  \draw[pattern={Lines[angle=-30, distance=6pt, line width=2pt]}, pattern color=green!50!black]
+    (7,-3) rectangle (10,-0.5);
+\end{tikzpicture}

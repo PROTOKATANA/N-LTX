@@ -1,0 +1,15 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \datavisualization [school book axes, visualize as smooth line/.list={sin, cos},
+      sin={style={red, thick}, label in legend={text=$\sin x$}},
+      cos={style={blue, thick, dashed}, label in legend={text=$\cos x$}},
+      x axis={label=$x$}, y axis={label=$y$}]
+    data [set=sin, format=function] {
+      var x : interval [-pi:pi];
+      func y = sin(\value x r);
+    }
+    data [set=cos, format=function] {
+      var x : interval [-pi:pi];
+      func y = cos(\value x r);
+    };
+\end{tikzpicture}

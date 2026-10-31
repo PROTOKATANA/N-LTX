@@ -1,0 +1,22 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{automata, positioning, arrows.meta}
+\begin{tikzpicture}[->, >={Stealth[round]}, semithick, initial text={\sffamily start}, node distance=2.2cm and 2.6cm, auto,
+    every state/.style={thick, minimum size=1.3cm, font=\sffamily\footnotesize, align=center}]
+  \node[state, initial, fill=red!30] (red) {red};
+  \node[state, fill=orange!30, right=of red] (redamber) {red +\\amber};
+  \node[state, fill=green!30, right=of redamber] (green) {green};
+  \node[state, fill=yellow!40, below=of green] (amber) {amber};
+  \node[state, fill=gray!20, below=of redamber] (flash) {flashing};
+  \node[state, accepting, fill=black!10, below=of red] (off) {off};
+  \path[every node/.style={font=\sffamily\scriptsize}]
+        (red) edge node {30 s} (redamber)
+        (redamber) edge node {2 s} (green)
+        (green) edge node {25 s} (amber)
+        (green) edge[loop above] node {no car} ()
+        (amber) edge node {fault} (flash)
+        (red) edge node[swap, pos=0.6] {fault} (flash)
+        (flash) edge[loop below] node {0.5 s} ()
+        (flash) edge node {power off} (off)
+        (off) edge[bend left] node {power on} (red);
+  \draw[rounded corners=8mm] (amber.south) -- ++(0,-1.6) -| node[pos=0.2, above, font=\sffamily\scriptsize] {3 s} ([xshift=-3mm]off.south west) |- (red.west);
+\end{tikzpicture}

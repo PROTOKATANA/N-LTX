@@ -1,0 +1,19 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[x=0.55cm, y=0.6cm, font=\small]
+  % weeks
+  \foreach \w in {0,...,16} { \draw[gray!25] (\w,0.4) -- (\w,-8.4); }
+  \foreach \w in {1,...,16} { \node[gray, font=\scriptsize] at (\w-0.5,0.8) {\w}; }
+  \node[anchor=east, gray, font=\scriptsize] at (-0.2,0.8) {week};
+  \foreach \row/\task/\start/\len/\col in {1/Research/0/3/blue, 2/Design/2/4/blue, 3/Prototype/5/4/orange,
+      4/Testing/8/3/orange, 5/Revisions/10/3/orange, 6/Documentation/9/6/teal, 7/Launch/14/2/red} {
+    \node[anchor=east] at (-0.2,-\row) {\task};
+    \fill[\col!55, rounded corners=2pt] (\start,-\row-0.32) rectangle ++(\len,0.64);
+    \draw[\col!60!black, rounded corners=2pt] (\start,-\row-0.32) rectangle ++(\len,0.64);
+  }
+  % milestones and dependencies
+  \foreach \x/\y in {5/3, 13/5, 16/7} { \fill[black] (\x,-\y) ++(0,0.3) -- ++(0.3,-0.3) -- ++(-0.3,-0.3) -- ++(-0.3,0.3) -- cycle; }
+  \draw[->, >=stealth, gray!70!black] (3,-1) -| (3.5,-2.32);
+  \draw[->, >=stealth, gray!70!black] (6,-2) -| (6.5,-3.32);
+  \draw[->, >=stealth, gray!70!black] (12,-4) -| (12.5,-5.32);
+  \draw[very thick, red!70!black] (7.3,0.4) -- (7.3,-8.4) node[below, font=\scriptsize] {today};
+\end{tikzpicture}

@@ -1,0 +1,19 @@
+% Made up for the tikra gallery: rounded corners where lines meet arcs and curves, and corners
+% with a longer way in than out (\pgfsetcornersarced).
+\begin{tikzpicture}
+  \draw[help lines] (0,0) grid (7.5,2.5);
+  \draw[very thick, blue, rounded corners=4mm, fill=blue!10]
+    (0,0) -- (3.2,0) -- (3.2,1.2) arc (0:90:1.2) -- (0.8,2.4)
+    .. controls (0.2,2.4) and (0,2) .. (0,1.4) -- cycle;
+  \begin{scope}[xshift=4.3cm]
+    \pgfsetcornersarced{\pgfpoint{12mm}{3mm}}
+    \pgfsetlinewidth{1.2pt}
+    \pgfsetstrokecolor{red}
+    \pgfpathmoveto{\pgfpoint{0cm}{0cm}}
+    \pgfpathlineto{\pgfpoint{0cm}{2.4cm}}
+    \pgfpathlineto{\pgfpoint{3cm}{2.4cm}}
+    \pgfpathlineto{\pgfpoint{3cm}{0cm}}
+    \pgfpathclose
+    \pgfusepath{stroke}
+  \end{scope}
+\end{tikzpicture}

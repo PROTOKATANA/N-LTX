@@ -1,0 +1,7 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[view={0}{90}, colormap/hot, colorbar, xlabel=$x$, ylabel=$y$,
+    title={$e^{-(x^2+y^2)}\cos(2x)$}, enlargelimits=false, axis on top]
+  \addplot3[surf, shader=flat, domain=-2:2, y domain=-2:2, samples=31] {exp(-(x^2+y^2))*cos(deg(2*x))};
+\end{axis}
+\end{tikzpicture}

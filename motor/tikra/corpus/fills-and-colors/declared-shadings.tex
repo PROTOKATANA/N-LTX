@@ -1,0 +1,18 @@
+% Made up for the tikra benchmark.
+\pgfdeclarehorizontalshading{rainbow}{100bp}{
+  color(25bp)=(red); color(35bp)=(orange); color(45bp)=(yellow);
+  color(55bp)=(green); color(65bp)=(blue); color(75bp)=(violet)}
+\pgfdeclareradialshading{target}{\pgfpoint{0cm}{0cm}}{
+  color(0bp)=(red); color(8bp)=(red); color(9bp)=(white); color(16bp)=(white);
+  color(17bp)=(red); color(24bp)=(red); color(25bp)=(white); color(32bp)=(white);
+  color(33bp)=(red); color(50bp)=(red)}
+\pgfdeclareverticalshading{dusk}{100bp}{
+  color(0bp)=(black!80); color(50bp)=(blue!50!black); color(100bp)=(cyan!30)}
+\begin{tikzpicture}
+  \shade[shading=rainbow] (0,0) rectangle (7,1);
+  \shade[shading=rainbow, shading angle=90] (0,1.5) rectangle (1,4.5);
+  \shade[shading=target] (3,3) circle (1.5);
+  \shade[shading=dusk, rounded corners=6pt] (5,1.5) rectangle (7,4.5);
+  \foreach \x/\y in {5.4/3.9, 6.5/4.1, 5.9/3.4, 6.7/3.0, 5.3/2.8}
+    \fill[white] (\x,\y) circle (0.8pt);
+\end{tikzpicture}

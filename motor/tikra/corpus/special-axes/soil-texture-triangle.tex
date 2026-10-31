@@ -1,0 +1,27 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{ternaryaxis}[xlabel={Sand (\%)}, ylabel={Clay (\%)}, zlabel={Silt (\%)},
+    xmin=0, xmax=100, ymin=0, ymax=100, zmin=0, zmax=100,
+    xtick={0,20,...,100}, ytick={0,20,...,100}, ztick={0,20,...,100},
+    minor tick num=1, every axis label/.append style={font=\small},
+    tick label style={font=\scriptsize}, major grid style={gray!30}]
+  \addplot3[fill=orange!35, draw=brown!70!black] coordinates {
+    (0,100,0) (60,40,0) (0,40,60) (0,100,0)};
+  \addplot3[fill=yellow!40, draw=brown!70!black] coordinates {
+    (60,40,0) (73,27,0) (0,27,73) (0,40,60) (60,40,0)};
+  \addplot3[fill=red!20, draw=brown!70!black] coordinates {
+    (55,27,18) (30,27,43) (30,0,70) (55,0,45) (55,27,18)};
+  \addplot3[fill=cyan!20, draw=brown!70!black] coordinates {
+    (30,27,43) (0,27,73) (0,0,100) (30,0,70) (30,27,43)};
+  \addplot3[fill=lime!35, draw=brown!70!black] coordinates {
+    (55,27,18) (73,27,0) (80,20,0) (80,0,20) (55,0,45) (55,27,18)};
+  \addplot3[fill=gray!25, draw=brown!70!black] coordinates {
+    (80,20,0) (100,0,0) (80,0,20) (80,20,0)};
+  \node[font=\footnotesize] at (axis cs:20,60,20) {clay};
+  \node[font=\scriptsize, rotate=-60] at (axis cs:40,33.5,26.5) {clay loam};
+  \node[font=\footnotesize] at (axis cs:42,13,45) {loam};
+  \node[font=\footnotesize] at (axis cs:12,12,76) {silt loam};
+  \node[font=\scriptsize, align=center] at (axis cs:66,10,24) {sandy\\loam};
+  \node[font=\footnotesize] at (axis cs:87,6,7) {sand};
+\end{ternaryaxis}
+\end{tikzpicture}

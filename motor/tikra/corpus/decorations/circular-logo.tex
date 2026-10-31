@@ -1,0 +1,12 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{decorations.text}
+\begin{tikzpicture}
+  \fill[blue!15] (0,0) circle (2.4);
+  \draw[blue!60!black, very thick] (0,0) circle (2.4) (0,0) circle (1.5);
+  \path[decorate, decoration={text along path, text align=center, text={|\sffamily\bfseries\color{blue!60!black}|VECTOR GRAPHICS WORKSHOP}}]
+    (-1.85,0) arc (180:0:1.85);
+  \path[decorate, decoration={text along path, text align=center, text={|\sffamily\small|since 2024}}]
+    (-2.05,0) arc (180:360:2.05);
+  \fill[red!70!black] (0,0) circle (0.9);
+  \node[white, font=\sffamily\bfseries\Large] {SVG};
+\end{tikzpicture}

@@ -1,0 +1,7 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[view={-40}{30}, colormap/bluered, colorbar,
+    xlabel=$x$, ylabel=$y$, zlabel=$z$, title={Saddle $z = x^2 - y^2$}, grid=major]
+  \addplot3[surf, shader=faceted, samples=17, domain=-2:2, y domain=-2:2] {x^2 - y^2};
+\end{axis}
+\end{tikzpicture}

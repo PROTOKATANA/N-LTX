@@ -1,0 +1,7 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{polaraxis}[ymax=1.1, xtick={0,45,...,315}]
+  \addplot[domain=0:360, samples=300, thick, red!70!black] {abs(cos(3*x))};
+  \addplot[domain=0:360, samples=300, thick, blue!70!black, dashed] {abs(sin(2*x))*0.8};
+\end{polaraxis}
+\end{tikzpicture}

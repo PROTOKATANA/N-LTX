@@ -1,0 +1,9 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[view={-25}{35}, colormap/redyellow, hide axis, axis equal,
+    title={M\"obius band}, z buffer=sort]
+  \addplot3[surf, shader=faceted interp, samples=40, samples y=6,
+      domain=0:360, y domain=-0.5:0.5, point meta=x]
+    ({(1+y*cos(x/2))*cos(x)}, {(1+y*cos(x/2))*sin(x)}, {y*sin(x/2)});
+\end{axis}
+\end{tikzpicture}

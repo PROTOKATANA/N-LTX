@@ -1,0 +1,12 @@
+% Made up for the tikra gallery: TeX's moustache delimiters and indices in their script forms.
+\begin{tikzpicture}
+  \matrix (m) [matrix of math nodes, left delimiter=\lmoustache, right delimiter=\rmoustache,
+               row sep=4pt, column sep=8pt]
+  {
+    a_{1,1} & a_{1,2} & \cdots & a_{1,n} \\
+    a_{2,1} & a_{2,2} & \cdots & a_{2,n} \\
+    \vdots  & \vdots  & \ddots & \vdots  \\
+    a_{m,1} & a_{m,2} & \cdots & a_{m,n} \\
+  };
+  \node[right=6pt of m] {$\displaystyle = \sum_{i=1}^{m} \sum_{j=1}^{n} a_{i,j}\, e_{i}^{\top} e_{j}$};
+\end{tikzpicture}

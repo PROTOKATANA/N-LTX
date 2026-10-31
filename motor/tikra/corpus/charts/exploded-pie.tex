@@ -1,0 +1,14 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[font=\small]
+  \foreach \from/\to/\col/\name/\shift in {0/130/cyan!60!blue/Email/0, 130/205/magenta!60/Chat/0.35,
+      205/290/lime!60!green/Calls/0, 290/360/yellow!80!orange/Meetings/0} {
+    \pgfmathsetmacro\mid{(\from+\to)/2}\pgfmathsetmacro\opp{\mid+180}
+    \pgfmathsetmacro\pct{round((\to-\from)/3.6)}
+    \begin{scope}[shift={(\mid:\shift)}]
+      \fill[\col, draw=white, very thick] (0,0) -- (\from:2) arc[start angle=\from, end angle=\to, radius=2] -- cycle;
+      \node at (\mid:1.25) {\pgfmathprintnumber{\pct}\%};
+      \node[anchor=\opp] at (\mid:2.15) {\name};
+    \end{scope}
+  }
+  \node[font=\bfseries] at (0,2.8) {Where the workday goes};
+\end{tikzpicture}

@@ -1,0 +1,13 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \matrix (m) [matrix of math nodes, left delimiter=(, right delimiter=),
+      row sep=4mm, column sep=6mm] {
+    a_{11} & a_{12} & \cdots & a_{1n} \\
+    a_{21} & a_{22} & \cdots & a_{2n} \\
+    \vdots & \vdots & \ddots & \vdots \\
+    a_{m1} & a_{m2} & \cdots & a_{mn} \\
+  };
+  \draw[red, thick, rounded corners] (m-1-1.north west) rectangle (m-4-1.south east);
+  \draw[blue, thick, rounded corners] (m-2-1.north west) rectangle (m-2-4.south east);
+  \node[right=8mm of m] {$A \in \mathbb{R}^{m\times n}$};
+\end{tikzpicture}

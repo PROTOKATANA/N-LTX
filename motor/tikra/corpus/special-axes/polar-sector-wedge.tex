@@ -1,0 +1,11 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{polaraxis}[xmin=0, xmax=120, ymin=1, ymax=3,
+    xtick={0,20,...,120}, xticklabel={$\pgfmathprintnumber{\tick}^\circ$},
+    ytick={1,1.5,...,3}, minor x tick num=1]
+  \addplot[domain=0:120, samples=100, very thick, purple] {2+0.8*sin(6*x)};
+  \addplot[domain=0:120, samples=100, thick, gray, dashed] {2};
+  \addplot[only marks, mark=square*, mark size=2pt, purple!60!black]
+    coordinates {(15,2.8) (45,1.2) (75,2.8) (105,1.2)};
+\end{polaraxis}
+\end{tikzpicture}

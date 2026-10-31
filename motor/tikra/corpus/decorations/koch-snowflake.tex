@@ -1,0 +1,6 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{decorations.fractals}
+\begin{tikzpicture}[decoration=Koch snowflake]
+  \filldraw[fill=cyan!15, draw=blue!70!black, thin]
+    decorate { decorate { decorate { (0,0) -- (60:4) -- (4,0) -- cycle } } };
+\end{tikzpicture}

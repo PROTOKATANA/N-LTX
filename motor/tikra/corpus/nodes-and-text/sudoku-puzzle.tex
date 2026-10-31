@@ -1,0 +1,26 @@
+% Made up for the tikra benchmark.
+% A solved sudoku: the given digits dark, the found ones blue, one cell highlighted.
+\begin{tikzpicture}[scale=0.75]
+  \fill[yellow!25] (4,4) rectangle (5,5);
+  \fill[blue!6] (0,4) rectangle (9,5) (4,0) rectangle (5,9);
+  \fill[yellow!35] (4,4) rectangle (5,5);
+  \draw[gray!45] (0,0) grid (9,9);
+  \draw[blue!50!black, line width=1.6pt] (0,0) grid[step=3] (9,9);
+  \draw[blue!50!black, line width=2.4pt, rounded corners=3pt] (0,0) rectangle (9,9);
+  \foreach \row [count=\y] in {
+      534678912, 672195348, 198342567, 859761423, 426853791, 713924856, 961537284, 287419635, 345286179} {
+    \foreach \x in {1,...,9} {
+      \pgfmathsetmacro\d{int(mod(floor(\row/10^(9-\x)),10))}
+      \node[font=\large, text=blue!60] at (\x-0.5, 9.5-\y) {\d};
+    }
+  }
+  % the givens, over the blue
+  \foreach \x/\y/\d in {1/1/5, 2/1/3, 5/1/7, 1/2/6, 4/2/1, 5/2/9, 6/2/5, 2/3/9, 3/3/8, 8/3/6,
+      1/4/8, 5/4/6, 9/4/3, 1/5/4, 4/5/8, 6/5/3, 9/5/1, 1/6/7, 5/6/2, 9/6/6, 2/7/6, 7/7/2, 8/7/8,
+      4/8/4, 5/8/1, 6/8/9, 9/8/5, 5/9/8, 8/9/7, 9/9/9} {
+    \fill[white] (\x-0.92, 9.08-\y) rectangle (\x-0.08, 9.92-\y);
+    \ifnum\x=5 \ifnum\y=5 \fill[yellow!35] (\x-0.92, 9.08-\y) rectangle (\x-0.08, 9.92-\y); \fi\fi
+    \node[font=\large\bfseries, text=blue!20!black] at (\x-0.5, 9.5-\y) {\d};
+  }
+  \node[font=\Large\bfseries, blue!50!black] at (4.5,10) {Sudoku};
+\end{tikzpicture}

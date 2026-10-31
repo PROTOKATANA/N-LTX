@@ -1,0 +1,9 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{decorations.pathreplacing, decorations.shapes}
+\begin{tikzpicture}[thick]
+  \draw[decorate, decoration={ticks, segment length=3mm, amplitude=2mm}, blue!70!black] (0,0) arc (180:0:2);
+  \draw[blue!70!black] (0,0) arc (180:0:2);
+  \fill[red] (7,0.6) circle (2pt);
+  \draw[red!70!black, decorate, decoration={expanding waves, angle=30, segment length=4mm}] (7,0.6) -- (10,0.6);
+  \draw[red!70!black, decorate, decoration={expanding waves, angle=30, segment length=4mm}] (7,0.6) -- (4.6,0.6);
+\end{tikzpicture}

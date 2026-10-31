@@ -1,0 +1,18 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[width=11cm, height=6.5cm, xmin=0.3, xmax=12.7, ymin=88, ymax=122,
+    xtick={1,...,12}, xlabel={trading day}, ylabel={price}, title={Two weeks of a made-up stock},
+    ymajorgrids, grid style={gray!20}]
+  \foreach \d/\o/\h/\l/\c in {1/100/104/98/103, 2/103/107/101/106, 3/106/108/102/103,
+      4/103/105/97/98, 5/98/101/93/95, 6/95/99/92/98, 7/98/104/97/103, 8/103/111/102/110,
+      9/110/114/107/108, 10/108/112/104/111, 11/111/118/110/116, 12/116/119/112/113} {
+    \pgfmathsetmacro\up{\c >= \o}
+    \ifdim\up pt>0.5pt \def\col{green!55!black}\else\def\col{red!75!black}\fi
+    \edef\temp{\noexpand\draw[\col, thick] (axis cs:\d,\l) -- (axis cs:\d,\h);
+      \noexpand\filldraw[draw=\col, fill=\col!70] (axis cs:\d-0.28,\o) rectangle (axis cs:\d+0.28,\c);}
+    \temp
+  }
+  \addplot[blue!60, thick, smooth, domain=1:12, samples=12] coordinates
+    {(1,101) (2,103) (3,104) (4,103.3) (5,101.1) (6,99.5) (7,99.7) (8,102) (9,104.8) (10,107.5) (11,110) (12,112.2)};
+\end{axis}
+\end{tikzpicture}

@@ -1,0 +1,9 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \fill[pattern=north east lines] (-0.3,-0.8) rectangle (0,0.8);
+  \draw[thick] (0,-0.8) -- (0,0.8);
+  \draw[decoration={zigzag, amplitude=4pt, segment length=6pt}, decorate, thick] (0,0) -- (3,0);
+  \draw[thick, fill=gray!30] (3,-0.5) rectangle (4,0.5);
+  \draw[decoration={snake, amplitude=2pt, segment length=8pt}, decorate, blue] (0,-1.5) -- (4,-1.5);
+  \draw[decoration={random steps, segment length=4pt, amplitude=1.5pt}, decorate, brown] (0,-2.2) -- (4,-2.2);
+\end{tikzpicture}

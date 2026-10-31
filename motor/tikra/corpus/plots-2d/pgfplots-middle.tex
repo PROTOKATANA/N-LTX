@@ -1,0 +1,7 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[axis lines=middle, xmin=-4, xmax=4, ymin=-2, ymax=2, width=9cm, height=5cm, samples=100, title={Two waves}]
+  \addplot[domain=-4:4, thick, teal] {sin(deg(x))};
+  \addplot[domain=-4:4, thick, orange] {0.5*cos(deg(2*x))};
+\end{axis}
+\end{tikzpicture}

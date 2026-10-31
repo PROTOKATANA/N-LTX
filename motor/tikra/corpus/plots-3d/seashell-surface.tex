@@ -1,0 +1,10 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[width=9cm, height=9cm, view={30}{15}, hide axis, axis equal, title={Seashell},
+    colormap={sand}{rgb255=(255,244,214) rgb255=(230,160,80) rgb255=(140,60,30)}, z buffer=sort]
+  \addplot3[surf, shader=faceted, faceted color=black!45, line width=0.2pt,
+      samples=40, samples y=16, domain=0:1000, y domain=0:360, point meta=y]
+    ({x/1000*(1.1+cos(y))*cos(x)}, {x/1000*(1.1+cos(y))*sin(x)},
+     {x/1000*(sin(y) - 3.2) + 3});
+\end{axis}
+\end{tikzpicture}

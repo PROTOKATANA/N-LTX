@@ -1,0 +1,30 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \datavisualization [scientific axes={outer ticks},
+      all axes={grid},
+      x axis={label=voltage (V)},
+      y axis={label=current (mA)},
+      visualize as line/.list={silicon, germanium},
+      silicon={style={thick, mark=*, mark size=1.5pt, orange!80!black},
+        label in legend={text=Si diode}},
+      germanium={style={thick, mark=square*, mark size=1.5pt, violet},
+        label in legend={text=Ge diode}}]
+    data [set=silicon] {
+      x, y
+      0.0, 0
+      0.4, 0.1
+      0.5, 0.6
+      0.6, 3.5
+      0.65, 9
+      0.7, 20
+    }
+    data [set=germanium] {
+      x, y
+      0.0, 0
+      0.1, 0.4
+      0.2, 2.2
+      0.25, 5.5
+      0.3, 12
+      0.33, 20
+    };
+\end{tikzpicture}

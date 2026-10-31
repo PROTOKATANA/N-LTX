@@ -1,0 +1,10 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{decorations.shapes, shapes.geometric}
+\begin{tikzpicture}
+  \fill[decorate, decoration={shape backgrounds, shape=star, shape size=4mm, shape sep=6mm}, yellow!70!orange]
+    (0,0) -- (7,0);
+  \draw[decorate, decoration={shape backgrounds, shape=circle, shape size=3mm, shape sep=4mm}, blue!70!black, fill=blue!20]
+    (0,-1) .. controls (2,0) and (5,-2) .. (7,-1);
+  \draw[decorate, decoration={shape backgrounds, shape=diamond, shape size=5mm, shape sep=6mm, shape evenly spread=10}, green!50!black, fill=green!15]
+    (3.5,-3.2) circle (1.2);
+\end{tikzpicture}

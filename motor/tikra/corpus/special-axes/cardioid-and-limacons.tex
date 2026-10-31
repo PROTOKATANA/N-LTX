@@ -1,0 +1,12 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{polaraxis}[ymax=3.2, xtick={0,45,...,315}, ytick={1,2,3},
+    legend style={at={(1.05,1)}, anchor=north west, font=\footnotesize}]
+  \addplot[domain=0:360, samples=240, very thick, red!75!black] {1+cos(x)};
+  \addlegendentry{$r=1+\cos\theta$}
+  \addplot[domain=0:360, samples=240, thick, blue!70!black] {1+2*cos(x)};
+  \addlegendentry{$r=1+2\cos\theta$}
+  \addplot[domain=0:360, samples=240, thick, green!50!black, densely dashed] {2+cos(x)};
+  \addlegendentry{$r=2+\cos\theta$}
+\end{polaraxis}
+\end{tikzpicture}

@@ -1,0 +1,9 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{decorations.fractals}
+\begin{tikzpicture}[decoration=Cantor set, line width=3pt, orange!80!black]
+  \draw (0,0) -- (8,0);
+  \draw decorate { (0,-0.4) -- (8,-0.4) };
+  \draw decorate { decorate { (0,-0.8) -- (8,-0.8) } };
+  \draw decorate { decorate { decorate { (0,-1.2) -- (8,-1.2) } } };
+  \draw decorate { decorate { decorate { decorate { (0,-1.6) -- (8,-1.6) } } } };
+\end{tikzpicture}

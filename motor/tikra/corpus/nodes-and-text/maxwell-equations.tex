@@ -1,0 +1,15 @@
+% Made up for the tikra benchmark.
+% Maxwell's equations, set as a poster.
+\begin{tikzpicture}[eq/.style={draw=blue!50!black, thick, rounded corners=4pt, fill=white, minimum width=6.2cm, minimum height=1.6cm, font=\Large},
+    name/.style={font=\small\itshape, text=blue!50!black}]
+  \fill[blue!8, rounded corners=10pt] (-7,-4.6) rectangle (7,4.4);
+  \node[font=\huge\bfseries, blue!50!black] at (0,3.5) {Maxwell's equations};
+  \node[eq] (g) at (-3.4,1.6) {$\nabla \cdot \mathbf{E} = \dfrac{\rho}{\varepsilon_0}$};
+  \node[name, below=1mm of g] {Gauss's law};
+  \node[eq] (m) at (3.4,1.6) {$\nabla \cdot \mathbf{B} = 0$};
+  \node[name, below=1mm of m] {no magnetic monopoles};
+  \node[eq] (f) at (-3.4,-1.9) {$\nabla \times \mathbf{E} = -\dfrac{\partial \mathbf{B}}{\partial t}$};
+  \node[name, below=1mm of f] {Faraday's law};
+  \node[eq] (a) at (3.4,-1.9) {$\nabla \times \mathbf{B} = \mu_0\mathbf{J} + \mu_0\varepsilon_0\dfrac{\partial \mathbf{E}}{\partial t}$};
+  \node[name, below=1mm of a] {Ampère–Maxwell law};
+\end{tikzpicture}

@@ -1,0 +1,11 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{polaraxis}[ymax=4.2, xtick={0,30,...,330},
+    xticklabel={$\pgfmathprintnumber{\tick}^\circ$},
+    ytick={1,2,3,4}, grid style={gray!40}]
+  \addplot[domain=0:720, samples=400, very thick, teal!70!black] {x/180};
+  \addplot[domain=0:720, samples=400, thick, orange!80!black, dashed] {0.5 + x/240};
+  \addplot[only marks, mark=*, mark size=1.8pt, teal!70!black]
+    coordinates {(90,0.5) (180,1) (270,1.5) (360,2) (450,2.5) (540,3) (630,3.5)};
+\end{polaraxis}
+\end{tikzpicture}

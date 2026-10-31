@@ -1,0 +1,9 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+  \coordinate (P0) at (0,0); \coordinate (P1) at (1,2.5);
+  \coordinate (P2) at (3.5,2.5); \coordinate (P3) at (4.5,0);
+  \draw[thick, blue] (P0) .. controls (P1) and (P2) .. (P3);
+  \draw[dashed, gray] (P0) -- (P1) -- (P2) -- (P3);
+  \foreach \p in {P0, P1, P2, P3} { \fill (\p) circle (1.5pt) node[above] {\p}; }
+  \draw[red, thick] (0,-1) to[out=60, in=120] (4.5,-1);
+\end{tikzpicture}

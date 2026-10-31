@@ -1,0 +1,101 @@
+# Builds the Python wheels (Linux, macOS, Windows) and the sdist, tests each one installed, and on a
+# Python version tag (py-v1.2.3) publishes them to PyPI with trusted publishing: no token, and PyPI
+# attaches the provenance of this run. A push to main that touches the Python package builds and tests only.
+#
+# Set up once on pypi.org: Publishing → trusted publisher, repository matheusmota-dev-br/tikra,
+# workflow pypi.yml, environment pypi.
+name: pypi
+
+on:
+  # tags publish; main builds the wheels when the Python module changes (paths do not apply to tags)
+  push:
+    tags: ["py-v*"]
+    branches: [main]
+    paths: ["crates/python/**", ".github/workflows/pypi.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wheels:
+    name: wheel ${{ matrix.os }} ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: linux, runner: ubuntu-latest, target: x86_64, test: true }
+          - { os: linux, runner: ubuntu-24.04-arm, target: aarch64, test: true }
+          - { os: macos, runner: macos-latest, target: aarch64, test: true }
+          # built on Apple Silicon for Intel Macs; the runner cannot import it
+          - { os: macos, runner: macos-latest, target: x86_64, test: false }
+          - { os: windows, runner: windows-latest, target: x64, test: true }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: crates/python
+          target: ${{ matrix.target }}
+          manylinux: auto
+          args: --release --out dist
+      - name: test the installed wheel
+        if: matrix.test
+        shell: bash
+        run: |
+          python -m pip install --no-index --find-links crates/python/dist tikra
+          python -m pip install pytest
+          python -m pytest crates/python/tests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.target }}
+          path: crates/python/dist
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: crates/python
+          command: sdist
+          args: --out dist
+      # building from the sdist proves it carries everything: the core and mathra with its font
+      - name: build and test from the sdist
+        run: |
+          python -m pip install crates/python/dist/*.tar.gz pytest
+          python -m pytest crates/python/tests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: crates/python/dist
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/py-v')
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/tikra
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: the tag matches the version in crates/python/Cargo.toml
+        run: test "py-v$(sed -n 's/^version = "\(.*\)"/\1/p' crates/python/Cargo.toml)" = "$GITHUB_REF_NAME"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist
+      - run: ls -l dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # files already on PyPI are skipped, so rerunning the workflow never fails on them
+          skip-existing: true

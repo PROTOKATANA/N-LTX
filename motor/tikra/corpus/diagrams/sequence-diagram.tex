@@ -1,0 +1,25 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[>=Stealth, font=\sffamily\small,
+    actor/.style={draw=blue!60!black, fill=blue!10, thick, rounded corners=2pt, minimum width=2.2cm, minimum height=8mm},
+    life/.style={dashed, black!50},
+    act/.style={fill=white, draw=black!70},
+    msg/.style={->, thick},
+    reply/.style={->, dashed, thick, black!60},
+    note/.style={right, font=\sffamily\scriptsize, black!70}]
+  \foreach \x/\n/\t in {0/c/Browser, 4/s/Server, 8/d/Database} {
+    \node[actor] (\n) at (\x,0) {\t};
+    \draw[life] (\n.south) -- (\x,-7);
+    \node[actor] at (\x,-7.4) {\t};
+  }
+  \draw[act] (-0.12,-1) rectangle (0.12,-6.4);
+  \draw[act] (3.88,-1.4) rectangle (4.12,-5.8);
+  \draw[act] (7.88,-2.6) rectangle (8.12,-3.6);
+  \draw[msg] (0.12,-1.4) -- node[above] {GET /figure} (3.88,-1.4);
+  \draw[msg] (4.12,-1.8) -- ++(0.8,0) -- ++(0,-0.4) -- (4.12,-2.2);
+  \node[note] at (4.95,-2) {parse};
+  \draw[msg] (4.12,-2.6) -- node[above] {query fonts} (7.88,-2.6);
+  \draw[reply] (7.88,-3.6) -- node[above] {glyphs} (4.12,-3.6);
+  \draw[msg] (4.12,-4.2) -- ++(0.8,0) -- ++(0,-0.4) -- (4.12,-4.6);
+  \node[note] at (4.95,-4.4) {render SVG};
+  \draw[reply] (3.88,-5.8) -- node[above] {200 OK, image/svg} (0.12,-5.8);
+\end{tikzpicture}

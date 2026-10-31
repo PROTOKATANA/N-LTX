@@ -1,0 +1,11 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[node distance=1.6cm, >=Stealth, bend angle=40, auto,
+    place/.style={circle, thick, draw=blue!75, fill=blue!15, minimum size=7mm},
+    transition/.style={rectangle, thick, draw=black!75, fill=black!20, minimum size=5mm}]
+  \node[place, tokens=2] (waiting) {};
+  \node[place] (critical) [below=of waiting] {};
+  \node[place, tokens=1] (semaphore) [below=of critical, label=below:semaphore] {};
+  \node[transition] (leave) [right=of critical] {} edge[pre] (critical) edge[post, bend right] (waiting) edge[pre, bend left] (semaphore);
+  \node[transition] (enter) [left=of critical] {} edge[pre] (waiting) edge[post] (critical) edge[pre, bend right] (semaphore);
+  \node[left=2mm of enter] {enter}; \node[right=2mm of leave] {leave};
+\end{tikzpicture}

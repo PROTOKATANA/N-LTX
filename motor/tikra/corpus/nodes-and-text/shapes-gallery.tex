@@ -1,0 +1,13 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[every node/.style={draw, thick, minimum size=1.4cm, font=\small}, node distance=3mm]
+  \node[star, star points=7, fill=yellow!40] (a) {star};
+  \node[cloud, cloud puffs=11, right=of a, fill=blue!15] (b) {cloud};
+  \node[regular polygon, regular polygon sides=6, right=of b, fill=green!20] (c) {hexagon};
+  \node[signal, signal to=east, right=of c, fill=orange!30] (d) {signal};
+  \node[ellipse callout, callout relative pointer={(0.4,-0.8)}, right=of d, fill=red!15] (e) {callout};
+  \node[cylinder, shape border rotate=90, aspect=0.3, below=of a, fill=gray!20] {cylinder};
+  \node[circle split, below=of b, fill=purple!15] {top \nodepart{lower} bottom};
+  \node[rectangle split, rectangle split parts=3, below=of c, fill=cyan!15] {one \nodepart{two} two \nodepart{three} three};
+  \node[double arrow, below=of d, fill=teal!20, minimum size=0pt, minimum height=1.6cm] {both};
+  \node[starburst, below=of e, fill=magenta!20] {burst};
+\end{tikzpicture}

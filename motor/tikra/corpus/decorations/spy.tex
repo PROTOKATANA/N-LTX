@@ -1,0 +1,6 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[spy using outlines={circle, magnification=4, size=2.2cm, connect spies}]
+  \draw[decoration={Koch curve type 1}, thick, blue!70!black]
+    decorate { decorate { decorate { (0,0) -- (4,0) } } };
+  \spy[red] on (0.45,0.2) in node at (6,1.5);
+\end{tikzpicture}

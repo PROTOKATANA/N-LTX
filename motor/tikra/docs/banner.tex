@@ -1,0 +1,32 @@
+% README banner, drawn by tikra itself: `tikra docs/banner.tex -o docs/banner.svg`.
+% The same version always writes the same bytes (crates/core/tests/banner.rs checks the committed file).
+\documentclass[tikz,border=0pt]{standalone}
+\begin{document}
+\begin{tikzpicture}
+  \definecolor{ink}{HTML}{0E1726}
+  \definecolor{paper}{HTML}{EEF2F8}
+  \definecolor{muted}{HTML}{8796AD}
+  \definecolor{rule}{HTML}{1F2D45}
+  \definecolor{major}{HTML}{2E4060}
+  \definecolor{accent}{HTML}{4FD1C5}
+  \definecolor{warm}{HTML}{F2B544}
+
+  % paper: the canvas, a fine grid and a coarse one
+  \fill[ink, rounded corners=8pt] (0,0) rectangle (16,4);
+  \draw[rule, step=0.25, line width=0.3pt] (8.5,0.25) grid (15.75,3.75);
+  \draw[major, step=1, line width=0.5pt] (8.5,0.25) grid (15.75,3.75);
+
+  % name and tagline
+  \node[anchor=base west, text=paper, font=\Huge\bfseries, scale=2.2] at (0.9,1.75) {tikra};
+  \node[anchor=base west, text=muted, font=\large] at (0.95,0.85) {TikZ to SVG and PNG, no TeX install};
+
+  % axes and two curves, sampled like any \plot
+  \draw[->, muted, line width=0.6pt] (9,2) -- (15.5,2) node[right, text=muted] {$x$};
+  \draw[->, muted, line width=0.6pt] (9.25,0.4) -- (9.25,3.35) node[above, text=muted] {$y$};
+  \draw[accent, line width=1.4pt, domain=0:6, samples=120, variable=\t] plot ({9.25+\t}, {2+1.1*sin(\t*90)});
+  \draw[warm, line width=1pt, dashed, domain=0:6, samples=60, variable=\t] plot ({9.25+\t}, {2+1.1*cos(\t*90)});
+  \foreach \t in {0,1,...,6} { \fill[accent] ({9.25+\t}, {2+1.1*sin(\t*90)}) circle (1.6pt); }
+  \node[text=accent, anchor=south] at (10.25,3.2) {$\sin\frac{\pi x}{2}$};
+  \node[text=warm, anchor=north] at (11.25,0.8) {$\cos\frac{\pi x}{2}$};
+\end{tikzpicture}
+\end{document}

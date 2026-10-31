@@ -1,0 +1,9 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}
+\begin{axis}[axis equal, view={120}{25}, colormap/jet, xlabel=$x$, ylabel=$y$, zlabel=$z$,
+    title={Unit sphere as a mesh}, z buffer=sort]
+  \addplot3[mesh, line width=0.6pt, samples=24, samples y=13,
+      domain=0:360, y domain=-90:90]
+    ({cos(y)*cos(x)}, {cos(y)*sin(x)}, {sin(y)});
+\end{axis}
+\end{tikzpicture}

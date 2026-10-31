@@ -1,0 +1,18 @@
+% Made up for the tikra benchmark.
+% A seal: text set along two arcs around a ring. The letters placed along a path do not count
+% in the picture's size (as in pgf), so the picture reserves room for them.
+\begin{tikzpicture}
+  \path (-3.3,-3.3) rectangle (3.3,3.3);
+  \fill[blue!6] (0,0) circle (3.2);
+  \draw[blue!60!black, line width=1.6pt] (0,0) circle (3.2);
+  \draw[blue!60!black, line width=0.6pt] (0,0) circle (2.15);
+  \fill[blue!60!black] (0,0) circle (1.75);
+  \path[decorate, decoration={text along path, text align=center,
+      text={|\large\bfseries|TikZ WITHOUT TEX}}]
+    (-2.45,0) arc (180:0:2.45);
+  \path[decorate, decoration={text along path, text align=center, text color=red!70!black,
+      text={|\large\itshape|drawn by tikra}}]
+    (-2.85,0) arc (180:360:2.85);
+  \foreach \a in {0,180} \fill[red!70!black] (\a:2.65) circle (2.5pt);
+  \node[white, font=\Huge] {$\oint$};
+\end{tikzpicture}

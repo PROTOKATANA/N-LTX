@@ -1,0 +1,8 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{spy}
+\begin{tikzpicture}[spy using outlines={rectangle, magnification=5, width=3cm, height=2.2cm, connect spies}]
+  \draw[->] (0,0) -- (6.2,0); \draw[->] (0,-1.2) -- (0,1.4);
+  \draw[thick, blue!70!black, domain=0:6, samples=200] plot (\x, {sin(\x r)*exp(-\x/3) + 0.03*sin(40*\x r)});
+  \spy[red!70!black] on (4.8,-0.3) in node at (3.2,2.6);
+  \spy[green!50!black, circle, size=1.8cm, magnification=3] on (0.3,0.3) in node at (7.6,1);
+\end{tikzpicture}

@@ -1,0 +1,26 @@
+% Made up for the tikra benchmark.
+\usetikzlibrary{positioning, shapes.geometric, shapes.misc}
+\begin{tikzpicture}[node distance=8mm and 14mm, >=Stealth,
+    every node/.style={font=\sffamily\small},
+    term/.style={rounded rectangle, draw=teal!70!black, fill=teal!15, thick, minimum width=2.4cm, minimum height=7mm},
+    proc/.style={rectangle, draw=blue!60!black, fill=blue!8, thick, minimum width=3cm, minimum height=8mm, align=center},
+    io/.style={trapezium, trapezium left angle=70, trapezium right angle=110, draw=violet!70!black, fill=violet!10, thick, minimum height=8mm},
+    test/.style={diamond, aspect=2.2, draw=orange!80!black, fill=orange!15, thick, inner sep=1pt},
+    flow/.style={->, thick, draw=black!70}]
+  \node[term] (start) {begin};
+  \node[io, below=of start] (in) {read $n$};
+  \node[proc, below=of in] (init) {$s \gets 0$, $i \gets 1$};
+  \node[test, below=of init] (cond) {$i \le n$?};
+  \node[proc, below=of cond] (body) {$s \gets s + i^2$};
+  \node[proc, below=of body] (inc) {$i \gets i + 1$};
+  \node[io, right=of cond] (out) {print $s$};
+  \node[term, below=of out] (stop) {end};
+  \draw[flow] (start) -- (in);
+  \draw[flow] (in) -- (init);
+  \draw[flow] (init) -- (cond);
+  \draw[flow] (cond) -- node[right] {yes} (body);
+  \draw[flow] (body) -- (inc);
+  \draw[flow] (inc.west) -- ++(-0.8,0) |- (cond.west);
+  \draw[flow] (cond) -- node[above] {no} (out);
+  \draw[flow] (out) -- (stop);
+\end{tikzpicture}

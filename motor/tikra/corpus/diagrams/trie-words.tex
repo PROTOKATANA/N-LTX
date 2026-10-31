@@ -1,0 +1,21 @@
+% Made up for the tikra benchmark.
+\begin{tikzpicture}[level distance=1.1cm, >=Stealth,
+    every node/.style={circle, draw=black!60, fill=white, minimum size=6mm, inner sep=0pt, font=\ttfamily\small},
+    word/.style={fill=green!25, draw=green!50!black, thick},
+    edge from parent/.style={draw, ->, black!60},
+    level 1/.style={sibling distance=3.4cm},
+    level 2/.style={sibling distance=1.2cm},
+    level 3/.style={sibling distance=1cm}]
+  \node[fill=black!10] {}
+    child { node {t}
+      child { node {o} child { node[word] {p} } }
+      child { node {r} child { node {e} child { node[word] {e} } } }
+      child { node[word] {e} child { node[word] {a} } } }
+    child { node {i}
+      child { node[word] {n} child { node {k} child { node[word] {s} } } } }
+    child { node {a}
+      child { node[word] {t} }
+      child { node {r} child { node[word] {c} } } };
+  \node[draw=none, fill=none, align=left, font=\sffamily\footnotesize, anchor=north west] at (4.6,0.2)
+    {words:\\ top, tree, te, tea,\\ in, inks, at, arc};
+\end{tikzpicture}
