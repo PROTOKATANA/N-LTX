@@ -113,7 +113,7 @@ pub fn seven_segment_shape(cx: &mut Context, input: &ShapeInput) -> Result<NodeS
         ("f", p(-hw, 0.0), p(-hw, w)),
         ("g", p(-hw, 0.0), p(hw, 0.0)),
     ];
-    let mut anchors = super::compass(left, right, -top, top);
+    let mut anchors = super::compass(super::Edges { left, right, bottom: -top, top });
     anchors.push(("center".into(), p(0.0, 0.0)));
     anchors.push(("text".into(), p(0.0, 0.0)));
     for (i, (name, a, b)) in segments.iter().enumerate() {

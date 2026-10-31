@@ -16,33 +16,21 @@ use tikra::extension::{Context, Error, NodeShape, PathSegment, Point, ShapeBorde
 use super::chips::drawn_pins;
 use crate::bipole::{number, setting};
 
-/// `muxdemux`.
-pub fn muxdemux_shape(cx: &mut Context, input: &ShapeInput) -> Result<NodeShape, Error> {
-    let length = setting(cx, "bipoles/length")?;
-    let unit = cx.length(Tokens::text(&length)).unwrap_or(1.4) * number(cx, "muxdemuxes/scale", 1.0);
-    let b = number(cx, "multipoles/muxdemux/base len", 0.4) * unit;
-    let def = |cx: &mut Context, key: &str, default: f64| number(cx, &format!("multipoles/muxdemux/{key}"), default);
-    let count = |cx: &mut Context, key: &str, default: f64| def(cx, key, default).round().max(0.0) as usize;
-    let x = def(cx, "w", 3.0) * b / 2.0;
-    let left = def(cx, "Lh", 8.0) * b / 2.0;
-    let right = def(cx, "Rh", 6.0) * b / 2.0;
-    let iw = def(cx, "inset w", 0.0) * b;
-    let il = def(cx, "inset Lh", 0.0) * b / 2.0;
-    let ir = def(cx, "inset Rh", 0.0) * b / 2.0;
-    let (nl, nr, nb, nt) = (count(cx, "NL", 8.0), count(cx, "NR", 1.0), count(cx, "NB", 3.0), count(cx, "NT", 0.0));
-    let square = def(cx, "square pins", 0.0) != 0.0;
-    let lw = input.line_width;
-    let thick = number(cx, "muxdemuxes/thickness", 2.0) * lw;
-    let thin = number(cx, "multipoles/external pins thickness", 1.0) * lw;
-    let lead = number(cx, "multipoles/external pins width", 0.2) * unit;
-    let leads = setting(cx, "tr/no input leads")? != "true";
+struct MuxBody {
+    x: f64,
+    left: f64,
+    right: f64,
+    reach: f64,
+    inset_w: f64,
+    inset_l: f64,
+    inset_r: f64,
+}
+
+/// The compass of the box and the mux's own anchors. The list is the measured set.
+fn mux_anchors(body: &MuxBody) -> Vec<(String, Point)> {
+    let MuxBody { x, left, right, reach, inset_w: iw, inset_l: il, inset_r: ir } = *body;
     let p = Point::new;
-
-    // the top and bottom sides, as lines from the left to the right
-    let top_at = |px: f64| left + (right - left) * (px + x) / (2.0 * x);
-    let reach = left.max(right);
-
-    let mut anchors = super::compass(-x, x, -reach, reach);
+    let mut anchors = super::compass(super::Edges { left: -x, right: x, bottom: -reach, top: reach });
     for (name, at) in [
         ("center", p(0.0, 0.0)),
         ("text", p(iw / 2.0, 0.0)),
@@ -69,9 +57,13 @@ pub fn muxdemux_shape(cx: &mut Context, input: &ShapeInput) -> Result<NodeShape,
     ] {
         anchors.push((name.to_string(), at));
     }
+    anchors
+}
 
-    // the pins of each side: where on the border, and which way out
-    let mut sides: Vec<(&str, Vec<Point>, Point)> = Vec::new();
+/// The left pins: above and below the inset, with an odd one at its tip.
+fn left_pins(body: &MuxBody, nl: usize) -> Vec<Point> {
+    let MuxBody { x, left, inset_w: iw, inset_l: il, .. } = *body;
+    let p = Point::new;
     let mut lefts = Vec::with_capacity(nl);
     if il > 0.0 {
         let k = nl / 2;
@@ -89,17 +81,55 @@ pub fn muxdemux_shape(cx: &mut Context, input: &ShapeInput) -> Result<NodeShape,
         let step = 2.0 * left / nl.max(1) as f64;
         lefts.extend((0..nl).map(|j| p(-x, left - (j as f64 + 0.5) * step)));
     }
-    sides.push(("l", lefts, p(-1.0, 0.0)));
-    let step = 2.0 * right / nr.max(1) as f64;
-    sides.push(("r", (0..nr).map(|j| p(x, right - (j as f64 + 0.5) * step)).collect(), p(1.0, 0.0)));
-    let across = |n: usize| (0..n).map(move |j| -x + (j as f64 + 0.5) * 2.0 * x / n as f64);
-    sides.push(("b", across(nb).map(|px| p(px, -top_at(px))).collect(), p(0.0, -1.0)));
-    sides.push(("t", across(nt).map(|px| p(px, top_at(px))).collect(), p(0.0, 1.0)));
+    lefts
+}
 
+/// The trapezoid, with the inset cut into the left side when it has one.
+fn mux_outline(body: &MuxBody) -> Vec<PathSegment> {
+    let MuxBody { x, left, right, inset_w: iw, inset_l: il, inset_r: ir, .. } = *body;
+    let p = Point::new;
+    let mut outline = vec![PathSegment::MoveTo(p(-x, left)), PathSegment::LineTo(p(x, right)), PathSegment::LineTo(p(x, -right)), PathSegment::LineTo(p(-x, -left))];
+    if il > 0.0 || iw > 0.0 {
+        outline.extend([PathSegment::LineTo(p(-x, -il)), PathSegment::LineTo(p(-x + iw, -ir)), PathSegment::LineTo(p(-x + iw, ir)), PathSegment::LineTo(p(-x, il))]);
+    }
+    outline.push(PathSegment::Close);
+    outline
+}
+
+/// How a side's pins leave the box.
+struct SideLeads {
+    lead: f64,
+    reach: f64,
+    square: bool,
+    draw: bool,
+}
+
+struct SidePlan<'a> {
+    sides: Vec<(&'a str, Vec<Point>, Point)>,
+    leads: SideLeads,
+}
+
+/// One side of the box: the letter of its pins, where they meet the border, and which way they leave.
+struct SideBorder {
+    side: char,
+    points: Vec<Point>,
+    out: Point,
+}
+
+/// The anchors of every side, and the leads that are drawn.
+struct DrawnSides {
+    borders: Vec<SideBorder>,
+    pins: Vec<PathSegment>,
+}
+
+/// The pins of every side: their anchors, and the leads that are drawn.
+fn place_sides(cx: &mut Context, plan: SidePlan, anchors: &mut Vec<(String, Point)>) -> Result<DrawnSides, Error> {
+    let p = Point::new;
+    let leads = plan.leads;
     let mut pins = Vec::new();
-    let mut borders: Vec<(char, Vec<Point>, Point)> = Vec::new();
-    for (side, points, out) in sides {
-        borders.push((side.chars().next().unwrap_or('l'), points.clone(), out));
+    let mut borders = Vec::new();
+    for (side, points, out) in plan.sides {
+        borders.push(SideBorder { side: side.chars().next().unwrap_or('l'), points: points.clone(), out });
         let name = match side {
             "l" => "left",
             "r" => "right",
@@ -110,9 +140,9 @@ pub fn muxdemux_shape(cx: &mut Context, input: &ShapeInput) -> Result<NodeShape,
         for (i, at) in points.into_iter().enumerate() {
             let k = i + 1;
             // straight out by the lead, or down (up) to the same line with square pins
-            let end = if square && out.x == 0.0 { p(at.x, out.y * (reach + lead)) } else { p(at.x + out.x * lead, at.y + out.y * lead) };
-            let drawn = leads && lead > 0.0 && only.as_ref().is_none_or(|set| set.contains(&k));
-            let pin = if drawn || !leads { end } else { at };
+            let end = if leads.square && out.x == 0.0 { p(at.x, out.y * (leads.reach + leads.lead)) } else { p(at.x + out.x * leads.lead, at.y + out.y * leads.lead) };
+            let drawn = leads.draw && leads.lead > 0.0 && only.as_ref().is_none_or(|set| set.contains(&k));
+            let pin = if drawn || !leads.draw { end } else { at };
             anchors.push((format!("{side}pin {k}"), pin));
             anchors.push((format!("b{side}pin {k}"), at));
             if drawn {
@@ -120,12 +150,49 @@ pub fn muxdemux_shape(cx: &mut Context, input: &ShapeInput) -> Result<NodeShape,
             }
         }
     }
+    Ok(DrawnSides { borders, pins })
+}
 
-    let mut outline = vec![PathSegment::MoveTo(p(-x, left)), PathSegment::LineTo(p(x, right)), PathSegment::LineTo(p(x, -right)), PathSegment::LineTo(p(-x, -left))];
-    if il > 0.0 || iw > 0.0 {
-        outline.extend([PathSegment::LineTo(p(-x, -il)), PathSegment::LineTo(p(-x + iw, -ir)), PathSegment::LineTo(p(-x + iw, ir)), PathSegment::LineTo(p(-x, il))]);
-    }
-    outline.push(PathSegment::Close);
+/// `muxdemux`.
+pub fn muxdemux_shape(cx: &mut Context, input: &ShapeInput) -> Result<NodeShape, Error> {
+    let length = setting(cx, "bipoles/length")?;
+    let unit = cx.length(Tokens::text(&length)).unwrap_or(1.4) * number(cx, "muxdemuxes/scale", 1.0);
+    let b = number(cx, "multipoles/muxdemux/base len", 0.4) * unit;
+    let def = |cx: &mut Context, key: &str, default: f64| number(cx, &format!("multipoles/muxdemux/{key}"), default);
+    let count = |cx: &mut Context, key: &str, default: f64| def(cx, key, default).round().max(0.0) as usize;
+    let x = def(cx, "w", 3.0) * b / 2.0;
+    let left = def(cx, "Lh", 8.0) * b / 2.0;
+    let right = def(cx, "Rh", 6.0) * b / 2.0;
+    let iw = def(cx, "inset w", 0.0) * b;
+    let il = def(cx, "inset Lh", 0.0) * b / 2.0;
+    let ir = def(cx, "inset Rh", 0.0) * b / 2.0;
+    let (nl, nr, nb, nt) = (count(cx, "NL", 8.0), count(cx, "NR", 1.0), count(cx, "NB", 3.0), count(cx, "NT", 0.0));
+    let square = def(cx, "square pins", 0.0) != 0.0;
+    let lw = input.line_width;
+    let thick = number(cx, "muxdemuxes/thickness", 2.0) * lw;
+    let thin = number(cx, "multipoles/external pins thickness", 1.0) * lw;
+    let lead = number(cx, "multipoles/external pins width", 0.2) * unit;
+    let leads = setting(cx, "tr/no input leads")? != "true";
+    let p = Point::new;
+
+    // the top and bottom sides, as lines from the left to the right
+    let top_at = |px: f64| left + (right - left) * (px + x) / (2.0 * x);
+    let reach = left.max(right);
+    let body = MuxBody { x, left, right, reach, inset_w: iw, inset_l: il, inset_r: ir };
+    let mut anchors = mux_anchors(&body);
+
+    // the pins of each side: where on the border, and which way out
+    let mut sides: Vec<(&str, Vec<Point>, Point)> = Vec::new();
+    sides.push(("l", left_pins(&body, nl), p(-1.0, 0.0)));
+    let step = 2.0 * right / nr.max(1) as f64;
+    sides.push(("r", (0..nr).map(|j| p(x, right - (j as f64 + 0.5) * step)).collect(), p(1.0, 0.0)));
+    let across = |n: usize| (0..n).map(move |j| -x + (j as f64 + 0.5) * 2.0 * x / n as f64);
+    sides.push(("b", across(nb).map(|px| p(px, -top_at(px))).collect(), p(0.0, -1.0)));
+    sides.push(("t", across(nt).map(|px| p(px, top_at(px))).collect(), p(0.0, 1.0)));
+
+    let DrawnSides { borders, pins } = place_sides(cx, SidePlan { sides, leads: SideLeads { lead, reach, square, draw: leads } }, &mut anchors)?;
+
+    let outline = mux_outline(&body);
     let mut paths = vec![
         ShapePath { segments: outline.clone(), paint: ShapePaint::Fill, ..Default::default() },
         ShapePath { segments: outline, paint: ShapePaint::Stroke(thick), ..Default::default() },
@@ -135,7 +202,8 @@ pub fn muxdemux_shape(cx: &mut Context, input: &ShapeInput) -> Result<NodeShape,
     }
     let t = input.transform;
     let angle = if t.a * t.d - t.b * t.c > 0.0 { t.b.atan2(t.a) } else { 0.0 };
-    let mut texts = labels(cx, &borders, x, reach, b, unit, thin, angle, &mut paths, &mut anchors)?;
+    let mut texts =
+        labels(cx, &MuxSpec { borders: &borders, body: MuxBox { width: x, reach, base: b, unit, thin, angle } }, &mut MuxMarks { paths: &mut paths, anchors: &mut anchors })?;
     for text in texts.iter_mut() {
         // a color among the font commands (`\tiny\color{blue}`) is the text's
         if let Some(font) = &text.font {
@@ -175,22 +243,168 @@ fn sep(cx: &mut Context, key: &str) -> f64 {
     cx.length(Tokens::text(&v)).unwrap_or(0.0703)
 }
 
-/// The texts, clock wedges, negation circles and wedges of `muxdemux label` (`\voltik@mdl`, the
-/// later of a key winning), drawn by the pins of `borders` and by the box `width` by `reach` (halves); the
-/// circles' nodes are made after the shape, by `\voltik@md`.
-#[allow(clippy::too_many_arguments)]
-fn labels(
-    cx: &mut Context,
-    borders: &[(char, Vec<Point>, Point)],
+/// The box a mux label is placed on.
+struct MuxBox {
     width: f64,
     reach: f64,
-    b: f64,
+    base: f64,
     unit: f64,
     thin: f64,
     angle: f64,
-    paths: &mut Vec<ShapePath>,
-    anchors: &mut Vec<(String, Point)>,
-) -> Result<Vec<ShapeText>, Error> {
+}
+
+struct MuxMarks<'a> {
+    paths: &'a mut Vec<ShapePath>,
+    anchors: &'a mut Vec<(String, Point)>,
+}
+
+struct MuxSpec<'a> {
+    borders: &'a [SideBorder],
+    body: MuxBox,
+}
+
+/// Fonts, separations and sizes shared by every mark of one mux.
+struct LabelStyle<'a> {
+    fonts: &'a [String; 3],
+    seps: &'a [(f64, f64); 3],
+    upright: bool,
+    angle: f64,
+    clock: f64,
+    wedge: (f64, f64),
+    radius: f64,
+}
+
+/// One `muxdemux label` key, at the pin it names.
+struct Marked<'a> {
+    at: Point,
+    out: Point,
+    side: char,
+    index: usize,
+    kind: &'a str,
+    value: &'a str,
+    key: &'a str,
+}
+
+/// An inner label (`L1`), inset past a clock wedge when that pin has one.
+fn inner_label(pin: &Marked, style: &LabelStyle, clocked: bool) -> ShapeText {
+    let (sx, sy) = style.seps[0];
+    let c = if clocked { style.clock } else { 0.0 };
+    let p = Point::new;
+    let at = pin.at;
+    let (at, anchor) = match pin.side {
+        'l' => (p(at.x + sx + c, at.y), TextAnchor::West),
+        'r' => (p(at.x - sx - c, at.y), TextAnchor::East),
+        'b' => (p(at.x, at.y + sy + c), TextAnchor::South),
+        _ => (p(at.x, at.y - sy - c), TextAnchor::North),
+    };
+    // upright in a turned box, the side of the text at the point turns with it
+    let anchor = if style.upright { turned(anchor, style.angle) } else { anchor };
+    ShapeText { text: pin.value.to_string(), at, anchor, font: Some(style.fonts[0].clone()), upright: style.upright, ..Default::default() }
+}
+
+/// An outer label kept upright on the page when the box is turned.
+fn upright_outer(pin: &Marked, style: &LabelStyle) -> ShapeText {
+    // upright in a turned box, as on the page: the first (`U`, `L`) above a pin that
+    // goes out sideways and left of one that goes up or down, the other below or right
+    let (sx, sy) = style.seps[1];
+    let (sin, cos) = style.angle.sin_cos();
+    let p = Point::new;
+    let out = pin.out;
+    let o = p(out.x * cos - out.y * sin, out.x * sin + out.y * cos);
+    let first = if matches!(pin.kind, "U" | "L") { 1.0 } else { -1.0 };
+    let (dx, dy) = if o.x.abs() > o.y.abs() { (o.x.signum(), first) } else { (-first, o.y.signum()) };
+    let anchor = match (dx > 0.0, dy > 0.0) {
+        (true, true) => TextAnchor::SouthWest,
+        (true, false) => TextAnchor::NorthWest,
+        (false, true) => TextAnchor::SouthEast,
+        (false, false) => TextAnchor::NorthEast,
+    };
+    // the point, back in the box's own turn
+    let (px, py) = (dx * sx, dy * sy);
+    let at0 = pin.at;
+    let at = p(at0.x + px * cos + py * sin, at0.y - px * sin + py * cos);
+    ShapeText { text: pin.value.to_string(), at, anchor, font: Some(style.fonts[1].clone()), upright: style.upright, ..Default::default() }
+}
+
+/// An outer label in the box's own orientation.
+fn outer_label(pin: &Marked, style: &LabelStyle) -> ShapeText {
+    let (sx, sy) = style.seps[1];
+    let p = Point::new;
+    let at = pin.at;
+    let (at, anchor) = match (pin.side, pin.kind) {
+        ('l', "U") => (p(at.x - sx, at.y + sy), TextAnchor::SouthEast),
+        ('l', _) => (p(at.x - sx, at.y - sy), TextAnchor::NorthEast),
+        ('r', "U") => (p(at.x + sx, at.y + sy), TextAnchor::SouthWest),
+        ('r', _) => (p(at.x + sx, at.y - sy), TextAnchor::NorthWest),
+        ('b', "L") => (p(at.x - sx, at.y - sy), TextAnchor::NorthEast),
+        ('b', _) => (p(at.x + sx, at.y - sy), TextAnchor::NorthWest),
+        ('t', "L") => (p(at.x - sx, at.y + sy), TextAnchor::SouthEast),
+        _ => (p(at.x + sx, at.y + sy), TextAnchor::SouthWest),
+    };
+    ShapeText { text: pin.value.to_string(), at, anchor, font: Some(style.fonts[1].clone()), upright: style.upright, ..Default::default() }
+}
+
+/// The clock wedge at a pin, pointing out of the box.
+fn clock_wedge_segs(pin: &Marked, style: &LabelStyle) -> [PathSegment; 3] {
+    let at = pin.at;
+    let out = pin.out;
+    let clock = style.clock;
+    let turn = Point::new(-out.y, out.x);
+    let p = Point::new;
+    let q = |a: f64, t: f64| p(at.x + out.x * a + turn.x * t, at.y + out.y * a + turn.y * t);
+    [PathSegment::MoveTo(q(0.0, clock)), PathSegment::LineTo(q(-clock, 0.0)), PathSegment::LineTo(q(0.0, -clock))]
+}
+
+/// A negation circle on a pin: its anchor, the circle, and the pole node drawn after the shape.
+struct NegationMark {
+    name: String,
+    center: Point,
+    circle: Vec<PathSegment>,
+    node: String,
+}
+
+fn negation_mark(pin: &Marked, style: &LabelStyle) -> NegationMark {
+    let at = pin.at;
+    let out = pin.out;
+    let radius = style.radius;
+    let p = Point::new;
+    let c = p(at.x + out.x * radius, at.y + out.y * radius);
+    let name = format!("voltik n{}{}", pin.side.to_ascii_uppercase(), pin.index);
+    let k = 0.5523 * radius;
+    let circle = vec![
+        PathSegment::MoveTo(p(c.x + radius, c.y)),
+        PathSegment::CurveTo(p(c.x + radius, c.y + k), p(c.x + k, c.y + radius), p(c.x, c.y + radius)),
+        PathSegment::CurveTo(p(c.x - k, c.y + radius), p(c.x - radius, c.y + k), p(c.x - radius, c.y)),
+        PathSegment::CurveTo(p(c.x - radius, c.y - k), p(c.x - k, c.y - radius), p(c.x, c.y - radius)),
+        PathSegment::CurveTo(p(c.x + k, c.y - radius), p(c.x + radius, c.y - k), p(c.x + radius, c.y)),
+        PathSegment::Close,
+    ];
+    let node = format!("(\\voltik@tn.{name}) node[shape=voltik pole, voltik/pole shape=ocirc, name=\\voltik@tn-{}] {{}} ", pin.key);
+    NegationMark { name, center: c, circle, node }
+}
+
+/// An inversion wedge (`wi`, `wo`) at a pin. A value that starts with `-` flips it.
+fn inversion_wedge(pin: &Marked, style: &LabelStyle) -> Vec<PathSegment> {
+    let sign: f64 = if pin.value.trim().starts_with('-') { -1.0 } else { 1.0 };
+    let out = pin.out;
+    let at = pin.at;
+    let p = Point::new;
+    // up from the pin: the y axis on the left and right, turned with the pin below and above
+    let up = if out.x != 0.0 { p(0.0, 1.0) } else { p(-out.y, 0.0) };
+    let (w, h) = (style.wedge.0, style.wedge.1 * sign);
+    let q = |a: f64, t: f64| p(at.x + out.x * a + up.x * t, at.y + out.y * a + up.y * t);
+    let tri = if pin.kind == "wo" { [q(0.0, 0.0), q(0.0, h), q(w, 0.0)] } else { [q(w, 0.0), q(w, h), q(0.0, 0.0)] };
+    vec![PathSegment::MoveTo(tri[0]), PathSegment::LineTo(tri[1]), PathSegment::LineTo(tri[2]), PathSegment::Close]
+}
+
+/// The texts, clock wedges, negation circles and wedges of `muxdemux label` (`\voltik@mdl`, the
+/// later of a key winning), drawn by the pins of `borders` and by the box `width` by `reach` (halves); the
+/// circles' nodes are made after the shape, by `\voltik@md`.
+fn labels(cx: &mut Context, spec: &MuxSpec, marks: &mut MuxMarks) -> Result<Vec<ShapeText>, Error> {
+    let borders = spec.borders;
+    let MuxBox { width, reach, base: b, unit, thin, angle } = spec.body;
+    let paths = &mut *marks.paths;
+    let anchors = &mut *marks.anchors;
     let mut keys: Vec<(String, String)> = Vec::new();
     for (k, v) in cx.macro_body("voltik@mdl").key_list() {
         let v = v.map(|t| t.trim().to_text()).unwrap_or_default();
@@ -201,8 +415,8 @@ fn labels(
     let mut texts = Vec::new();
     let p = Point::new;
     let pin = |side: char, i: usize| -> Option<(Point, Point)> {
-        let (_, points, out) = borders.iter().find(|(s, _, _)| *s == side)?;
-        Some((*points.get(i.checked_sub(1)?)?, *out))
+        let border = borders.iter().find(|b| b.side == side)?;
+        Some((*border.points.get(i.checked_sub(1)?)?, border.out))
     };
     // where a key points: its kind (`L`, `LU`, `c`…), side and pin
     let parse = |key: &str| -> Option<(String, char, usize)> {
@@ -253,88 +467,22 @@ fn labels(
         let Some((kind, side, n)) = parse(key) else { continue };
         let Some((at, out)) = pin(side, n) else { continue };
         let on = value.trim() != "0";
-        // across the pin, a quarter turn from its way out
-        let turn = p(-out.y, out.x);
+        let marked = Marked { at, out, side, index: n, kind: &kind, value, key };
+        let style = LabelStyle { fonts: &fonts, seps: &seps, upright, angle, clock, wedge, radius };
         match kind.as_str() {
-            "" => {
-                let (sx, sy) = seps[0];
-                let c = if clocked(side, n) { clock } else { 0.0 };
-                let (at, anchor) = match side {
-                    'l' => (p(at.x + sx + c, at.y), TextAnchor::West),
-                    'r' => (p(at.x - sx - c, at.y), TextAnchor::East),
-                    'b' => (p(at.x, at.y + sy + c), TextAnchor::South),
-                    _ => (p(at.x, at.y - sy - c), TextAnchor::North),
-                };
-                // upright in a turned box, the side of the text at the point turns with it
-                let anchor = if upright { turned(anchor, angle) } else { anchor };
-                texts.push(ShapeText { text: value.clone(), at, anchor, font: Some(fonts[0].clone()), upright, ..Default::default() });
-            }
-            "U" | "D" | "L" | "R" if upright && angle.abs() > 1e-9 => {
-                // upright in a turned box, as on the page: the first (`U`, `L`) above a pin that
-                // goes out sideways and left of one that goes up or down, the other below or right
-                let (sx, sy) = seps[1];
-                let (sin, cos) = angle.sin_cos();
-                let o = p(out.x * cos - out.y * sin, out.x * sin + out.y * cos);
-                let first = if matches!(kind.as_str(), "U" | "L") { 1.0 } else { -1.0 };
-                let (dx, dy) = if o.x.abs() > o.y.abs() { (o.x.signum(), first) } else { (-first, o.y.signum()) };
-                let anchor = match (dx > 0.0, dy > 0.0) {
-                    (true, true) => TextAnchor::SouthWest,
-                    (true, false) => TextAnchor::NorthWest,
-                    (false, true) => TextAnchor::SouthEast,
-                    (false, false) => TextAnchor::NorthEast,
-                };
-                // the point, back in the box's own turn
-                let (px, py) = (dx * sx, dy * sy);
-                let at = p(at.x + px * cos + py * sin, at.y - px * sin + py * cos);
-                texts.push(ShapeText { text: value.clone(), at, anchor, font: Some(fonts[1].clone()), upright, ..Default::default() });
-            }
-            "U" | "D" | "L" | "R" => {
-                let (sx, sy) = seps[1];
-                let (at, anchor) = match (side, kind.as_str()) {
-                    ('l', "U") => (p(at.x - sx, at.y + sy), TextAnchor::SouthEast),
-                    ('l', _) => (p(at.x - sx, at.y - sy), TextAnchor::NorthEast),
-                    ('r', "U") => (p(at.x + sx, at.y + sy), TextAnchor::SouthWest),
-                    ('r', _) => (p(at.x + sx, at.y - sy), TextAnchor::NorthWest),
-                    ('b', "L") => (p(at.x - sx, at.y - sy), TextAnchor::NorthEast),
-                    ('b', _) => (p(at.x + sx, at.y - sy), TextAnchor::NorthWest),
-                    ('t', "L") => (p(at.x - sx, at.y + sy), TextAnchor::SouthEast),
-                    _ => (p(at.x + sx, at.y + sy), TextAnchor::SouthWest),
-                };
-                texts.push(ShapeText { text: value.clone(), at, anchor, font: Some(fonts[1].clone()), upright, ..Default::default() });
-            }
-            "c" if on => {
-                let q = |a: f64, t: f64| p(at.x + out.x * a + turn.x * t, at.y + out.y * a + turn.y * t);
-                wedges.extend([PathSegment::MoveTo(q(0.0, clock)), PathSegment::LineTo(q(-clock, 0.0)), PathSegment::LineTo(q(0.0, -clock))]);
-            }
+            "" => texts.push(inner_label(&marked, &style, clocked(side, n))),
+            "U" | "D" | "L" | "R" if upright && angle.abs() > 1e-9 => texts.push(upright_outer(&marked, &style)),
+            "U" | "D" | "L" | "R" => texts.push(outer_label(&marked, &style)),
+            "c" if on => wedges.extend(clock_wedge_segs(&marked, &style)),
             "n" if on => {
-                let c = p(at.x + out.x * radius, at.y + out.y * radius);
-                let name = format!("voltik n{}{n}", side.to_ascii_uppercase());
-                anchors.push((name.clone(), c));
-                let k = 0.5523 * radius;
-                let circle = vec![
-                    PathSegment::MoveTo(p(c.x + radius, c.y)),
-                    PathSegment::CurveTo(p(c.x + radius, c.y + k), p(c.x + k, c.y + radius), p(c.x, c.y + radius)),
-                    PathSegment::CurveTo(p(c.x - k, c.y + radius), p(c.x - radius, c.y + k), p(c.x - radius, c.y)),
-                    PathSegment::CurveTo(p(c.x - radius, c.y - k), p(c.x - k, c.y - radius), p(c.x, c.y - radius)),
-                    PathSegment::CurveTo(p(c.x + k, c.y - radius), p(c.x + radius, c.y - k), p(c.x + radius, c.y)),
-                    PathSegment::Close,
-                ];
-                paths.push(ShapePath { segments: circle.clone(), paint: ShapePaint::Background, ..Default::default() });
-                paths.push(ShapePath { segments: circle, paint: ShapePaint::Stroke(thin), ..Default::default() });
-                circles.push_str(&format!("(\\voltik@tn.{name}) node[shape=voltik pole, voltik/pole shape=ocirc, name=\\voltik@tn-{key}] {{}} "));
+                let mark = negation_mark(&marked, &style);
+                anchors.push((mark.name, mark.center));
+                paths.push(ShapePath { segments: mark.circle.clone(), paint: ShapePaint::Background, ..Default::default() });
+                paths.push(ShapePath { segments: mark.circle, paint: ShapePaint::Stroke(thin), ..Default::default() });
+                circles.push_str(&mark.node);
             }
             "wi" | "wo" if on => {
-                let sign: f64 = if value.trim().starts_with('-') { -1.0 } else { 1.0 };
-                // up from the pin: the y axis on the left and right, turned with the pin below and above
-                let up = if out.x != 0.0 { p(0.0, 1.0) } else { p(-out.y, 0.0) };
-                let (w, h) = (wedge.0, wedge.1 * sign);
-                let q = |a: f64, t: f64| p(at.x + out.x * a + up.x * t, at.y + out.y * a + up.y * t);
-                let tri = if kind == "wo" { [q(0.0, 0.0), q(0.0, h), q(w, 0.0)] } else { [q(w, 0.0), q(w, h), q(0.0, 0.0)] };
-                paths.push(ShapePath {
-                    segments: vec![PathSegment::MoveTo(tri[0]), PathSegment::LineTo(tri[1]), PathSegment::LineTo(tri[2]), PathSegment::Close],
-                    paint: ShapePaint::Stroke(thin),
-                    ..Default::default()
-                });
+                paths.push(ShapePath { segments: inversion_wedge(&marked, &style), paint: ShapePaint::Stroke(thin), ..Default::default() });
             }
             _ => {}
         }

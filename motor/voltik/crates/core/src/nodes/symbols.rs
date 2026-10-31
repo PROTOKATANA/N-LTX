@@ -58,7 +58,7 @@ pub fn symbol_shape(cx: &mut Context, input: &ShapeInput) -> Result<NodeShape, E
         }
         paths.push(ShapePath { segments: wave, paint: ShapePaint::Stroke(thick), ..Default::default() });
     }
-    let mut anchors = super::compass(-x, x, -y, y);
+    let mut anchors = super::compass(super::Edges { left: -x, right: x, bottom: -y, top: y });
     anchors.push(("center".into(), p(0.0, 0.0)));
     anchors.push(("text".into(), p(0.0, h + offset)));
     Ok(NodeShape {

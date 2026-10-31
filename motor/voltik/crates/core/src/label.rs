@@ -43,9 +43,36 @@ pub fn k_label(cx: &mut Context, v: Option<Tokens>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Where a path component sits, for its label and its annotation.
+pub struct LabelSite<'a> {
+    pub placed: &'a Placed,
+    pub frame: &'a Frame,
+}
+
+/// One label or annotation being placed on a component.
+struct LabelJob<'a> {
+    placed: &'a Placed,
+    frame: &'a Frame,
+    options: &'a str,
+    text: &'a str,
+    which: &'a str,
+    side: f64,
+    extra: f64,
+    outward: f64,
+    local: f64,
+}
+
+/// A label turned along the line, and the angle it is drawn at.
+struct TurnedLabel {
+    node: String,
+    turn: f64,
+}
+
 /// The nodes of the label and the annotation, if any, as path operations.
-pub fn nodes(cx: &mut Context, placed: &Placed, frame: &Frame, unit: f64) -> Result<String, Error> {
+pub fn nodes(cx: &mut Context, site: &LabelSite, unit: f64) -> Result<String, Error> {
     let _ = unit;
+    let placed = site.placed;
+    let frame = site.frame;
     let align = setting(cx, "label/align")?;
     let name = cx.macro_text("voltik@name");
     let mut s = String::new();
@@ -95,69 +122,105 @@ pub fn nodes(cx: &mut Context, placed: &Placed, frame: &Frame, unit: f64) -> Res
                 m > 20.0 && m < 70.0
             }
         };
+        let job = LabelJob { placed, frame, options: &options, text: &text, which, side, extra, outward, local };
         if stacked && !rotate {
-            // two lines, as the manual's `tabular` (`l2 halign`, l, c or r, aligns them): `l2 valign`
-            // (b, c, t) puts the first one's baseline above, around or at the label's (measured)
-            let valign = setting(cx, &format!("{which}2 valign"))?;
-            // (below the line, TeX sets them the same whatever `valign` says)
-            let below = (225.0..315.0).contains(&outward.rem_euclid(360.0));
-            // (from the `tabular`'s baseline, half a line under the first one's)
-            let lift = match valign.as_str() {
-                _ if below => 0.0,
-                "b" => 5.9,
-                "t" => -6.1,
-                _ => 0.0,
-            } * tikra::extension::PT;
-            let reach = placed.reach(side) * MARGIN + extra;
-            let (anchor, at) = match outward.rem_euclid(360.0) {
-                a if (45.0..135.0).contains(&a) => ("base", placed.mid.plus(Point::new(0.0, reach + 3.2 * tikra::extension::PT + lift))),
-                a if (225.0..315.0).contains(&a) => ("base", placed.mid.plus(Point::new(0.0, -reach - 16.1 * tikra::extension::PT + lift))),
-                a if (135.0..225.0).contains(&a) => ("base east", placed.mid.plus(Point::new(-reach - 3.6 * tikra::extension::PT + INNER_SEP, lift - 2.1 * tikra::extension::PT))),
-                _ => ("base west", placed.mid.plus(Point::new(reach + 3.6 * tikra::extension::PT - INNER_SEP, lift - 2.1 * tikra::extension::PT))),
-            };
-            s.push_str(&format!(" node[{options}anchor={anchor}] at {} {{{text}}}", frame.coordinate(at)));
+            s.push_str(&stacked_label(cx, &job)?);
             record(cx, &name, node, &tex_anchor(local, side), 0.0);
             continue;
         }
         if rotate {
-            // along the line, read left to right; `mid` sits on the line through the label's middle,
-            // further out below the line than above it
-            // from 0 to 360, upside down (and turned round) only strictly between 90 and 270
-            let a = local.rem_euclid(360.0);
-            let flipped = a > 90.5 && a < 269.5;
-            let turn = if flipped { a - 180.0 } else { a };
-            let below = (side < 0.0) != flipped;
-            let space = if below { 2.25 } else { 1.5 } * LABEL_SPACE;
-            let reach = placed.reach(side) * MARGIN + space + extra;
-            let at = placed.mid.plus(placed.normal.scale(side * reach));
-            s.push_str(&format!(" node[{options}anchor=mid,rotate={}] at {} {{{text}}}", round(turn), frame.coordinate(at)));
-            record(cx, &name, node, "mid", turn);
+            let turned = rotated_label(&job);
+            s.push_str(&turned.node);
+            record(cx, &name, node, "mid", turned.turn);
         } else {
-            // the text keeps its baseline (above and below) or the middle of its x-height (at the
-            // sides) at a fixed distance from the component's band, whatever its letters
-            let border = placed.mid.plus(placed.normal.scale(side * (placed.reach(side) * MARGIN + extra)));
-            // the node keeps TikZ's inner sep, as CircuiTikZ's do (it counts in the picture's size):
-            // at the sides, its anchor is that much nearer, so that the text stays where it was
-            let level = (local / 90.0 - (local / 90.0).round()).abs() < 1e-4;
-            // (under `transform shape` the text turns with the picture: its own frame decides)
-            let shaped = cx.macro_text("voltik@ts") == "1";
-            let side_angle = if shaped { local + 90.0 * side } else { outward };
-            let (anchor, shift) = match side_angle.rem_euclid(360.0) {
-                // a slanted line: the label's border point that faces the line, as TeX anchors it
-                _ if !level => (tex_anchor(local, side), Point::new(0.0, 0.0)),
-                a if (45.0..135.0).contains(&a) => ("base".into(), Point::new(0.0, ABOVE)),
-                a if (225.0..315.0).contains(&a) => ("base".into(), Point::new(0.0, -BELOW)),
-                a if (135.0..225.0).contains(&a) => ("mid east".into(), Point::new(-SIDE + INNER_SEP, 0.0)),
-                _ => ("mid west".into(), Point::new(SIDE - INNER_SEP, 0.0)),
-            };
-            // (turned with the picture under `rotate` and `transform shape`, as the text is)
-            let turn = if shaped { (placed.angle - local).to_radians() } else { 0.0 };
-            let at = border.plus(Point::new(shift.x * turn.cos() - shift.y * turn.sin(), shift.x * turn.sin() + shift.y * turn.cos()));
-            s.push_str(&format!(" node[{options}anchor={anchor}] at {} {{{text}}}", frame.coordinate(at)));
+            s.push_str(&straight_label(cx, &job));
             record(cx, &name, node, &tex_anchor(local, side), 0.0);
         }
     }
     Ok(s)
+}
+
+/// Two lines, as the manual's `tabular` (`l2 halign` aligns them): `l2 valign` (b, c, t) puts the
+/// first one's baseline above, around or at the label's (measured). Below the line, TeX sets them
+/// the same whatever `valign` says.
+fn stacked_label(cx: &mut Context, job: &LabelJob) -> Result<String, Error> {
+    let placed = job.placed;
+    let frame = job.frame;
+    let options = job.options;
+    let text = job.text;
+    let side = job.side;
+    let extra = job.extra;
+    let outward = job.outward;
+    let valign = setting(cx, &format!("{}2 valign", job.which))?;
+    // (from the `tabular`'s baseline, half a line under the first one's)
+    let below = (225.0..315.0).contains(&outward.rem_euclid(360.0));
+    let lift = match valign.as_str() {
+        _ if below => 0.0,
+        "b" => 5.9,
+        "t" => -6.1,
+        _ => 0.0,
+    } * tikra::extension::PT;
+    let reach = placed.reach(side) * MARGIN + extra;
+    let (anchor, at) = match outward.rem_euclid(360.0) {
+        a if (45.0..135.0).contains(&a) => ("base", placed.mid.plus(Point::new(0.0, reach + 3.2 * tikra::extension::PT + lift))),
+        a if (225.0..315.0).contains(&a) => ("base", placed.mid.plus(Point::new(0.0, -reach - 16.1 * tikra::extension::PT + lift))),
+        a if (135.0..225.0).contains(&a) => ("base east", placed.mid.plus(Point::new(-reach - 3.6 * tikra::extension::PT + INNER_SEP, lift - 2.1 * tikra::extension::PT))),
+        _ => ("base west", placed.mid.plus(Point::new(reach + 3.6 * tikra::extension::PT - INNER_SEP, lift - 2.1 * tikra::extension::PT))),
+    };
+    Ok(format!(" node[{options}anchor={anchor}] at {} {{{text}}}", frame.coordinate(at)))
+}
+
+/// Along the line, read left to right. `mid` sits on the line through the label's middle, further
+/// out below the line than above it. From 0 to 360, upside down (and turned round) only strictly
+/// between 90 and 270.
+fn rotated_label(job: &LabelJob) -> TurnedLabel {
+    let placed = job.placed;
+    let frame = job.frame;
+    let options = job.options;
+    let text = job.text;
+    let side = job.side;
+    let extra = job.extra;
+    let local = job.local;
+    let a = local.rem_euclid(360.0);
+    let flipped = a > 90.5 && a < 269.5;
+    let turn = if flipped { a - 180.0 } else { a };
+    let below = (side < 0.0) != flipped;
+    let space = if below { 2.25 } else { 1.5 } * LABEL_SPACE;
+    let reach = placed.reach(side) * MARGIN + space + extra;
+    let at = placed.mid.plus(placed.normal.scale(side * reach));
+    TurnedLabel { node: format!(" node[{options}anchor=mid,rotate={}] at {} {{{text}}}", round(turn), frame.coordinate(at)), turn }
+}
+
+/// The text keeps its baseline (above and below) or the middle of its x-height (at the sides) at a
+/// fixed distance from the component's band, whatever its letters.
+fn straight_label(cx: &mut Context, job: &LabelJob) -> String {
+    let placed = job.placed;
+    let frame = job.frame;
+    let options = job.options;
+    let text = job.text;
+    let side = job.side;
+    let extra = job.extra;
+    let outward = job.outward;
+    let local = job.local;
+    let border = placed.mid.plus(placed.normal.scale(side * (placed.reach(side) * MARGIN + extra)));
+    // the node keeps TikZ's inner sep, as CircuiTikZ's do (it counts in the picture's size):
+    // at the sides, its anchor is that much nearer, so that the text stays where it was
+    let level = (local / 90.0 - (local / 90.0).round()).abs() < 1e-4;
+    // (under `transform shape` the text turns with the picture: its own frame decides)
+    let shaped = cx.macro_text("voltik@ts") == "1";
+    let side_angle = if shaped { local + 90.0 * side } else { outward };
+    let (anchor, shift) = match side_angle.rem_euclid(360.0) {
+        // a slanted line: the label's border point that faces the line, as TeX anchors it
+        _ if !level => (tex_anchor(local, side), Point::new(0.0, 0.0)),
+        a if (45.0..135.0).contains(&a) => ("base".into(), Point::new(0.0, ABOVE)),
+        a if (225.0..315.0).contains(&a) => ("base".into(), Point::new(0.0, -BELOW)),
+        a if (135.0..225.0).contains(&a) => ("mid east".into(), Point::new(-SIDE + INNER_SEP, 0.0)),
+        _ => ("mid west".into(), Point::new(SIDE - INNER_SEP, 0.0)),
+    };
+    // (turned with the picture under `rotate` and `transform shape`, as the text is)
+    let turn = if shaped { (placed.angle - local).to_radians() } else { 0.0 };
+    let at = border.plus(Point::new(shift.x * turn.cos() - shift.y * turn.sin(), shift.x * turn.sin() + shift.y * turn.cos()));
+    format!(" node[{options}anchor={anchor}] at {} {{{text}}}", frame.coordinate(at))
 }
 
 /// What `\ctikzgetanchor{R1}{label}` and `\ctikzgetdirection{R1label}` answer.
