@@ -1,6 +1,7 @@
 //! La frontera entre Rust y la prueba masiva, en C++.
 
 use crate::elementos;
+use crate::medidas::anotar_masiva;
 
 #[cxx::bridge(namespace = "ltx")]
 pub mod ffi {
@@ -18,11 +19,21 @@ pub mod ffi {
         pub rgba: u32,
     }
 
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct MedidasMasiva {
+        pub elementos: u64,
+        pub fotogramas_por_segundo: f64,
+        /// Lo que gasta el carril en un fotograma, sin esperar a la GPU.
+        pub ms_carril: f64,
+    }
+
     extern "Rust" {
         /// Cuántos elementos pinta la prueba masiva.
         fn elementos_pedidos() -> u32;
         /// Escribe los elementos directamente en la memoria que da C++, sin copias.
         fn llenar_elementos(destino: &mut [Elemento]);
+        /// Hilo del carril de la prueba, una vez por segundo.
+        fn anotar_masiva(medidas: MedidasMasiva);
     }
 }
 

@@ -5,13 +5,30 @@ C++ sobre DiligentCore y Vulkan, unido a Rust por `cxx`. Es una familia más de 
 Flutter.
 
 ```
-src/lista.rs       de `Escena` a una lista de dibujo: triángulos, tintas y comandos
-src/atlas.rs       las máscaras de los glifos y las rampas de los degradados
-src/lienzo.rs      la escena publicada y lo que se pinta en cada fotograma
-src/puente.rs      la frontera cxx: tipos compartidos y funciones de Rust que llama C++
-src/elementos.rs   la prueba masiva
-linux/             los renderizadores (gpu_lienzo, gpu_masiva) y sus familias de texturas
+src/compilador.rs     de `Escena` a una lista de dibujo: recorre y reparte
+src/teselado.rs       triángulos: lo único que conoce lyon
+src/glifos.rs         máscaras de los glifos: lo único que conoce zeno
+src/tintas.rs         lo que le dice al pixel shader cómo colorear
+src/lista.rs          vértices, índices, tintas y comandos
+src/atlas.rs          las máscaras de los glifos
+src/rampas.rs         los colores de los degradados
+src/lienzo.rs         qué se compila en cada fotograma
+src/taller.rs         el hilo que lo hace y lleva el ritmo
+src/almacen.rs        lo hecho, hasta que C++ lo copia
+src/puente_lienzo.rs  la frontera cxx del lienzo
+src/puente_masiva.rs  la frontera cxx de la prueba masiva
+linux/                los renderizadores en C++, sus recursos y sus familias de texturas
 ```
+
+## Quién hace qué
+
+Rust lleva el ritmo. El **taller**, en su propio hilo, compila lo publicado y compone las animaciones a
+la vista; lo que produce son valores ya hechos, que deja en el **almacén**. El candado del almacén solo
+cubre copiar esos valores, nunca un cálculo: C++ jamás espera a que se compile nada.
+
+C++ solo copia lo que cambió, por generaciones: desplazar el documento copia la vista y nada más. Un
+hilo vigía espera en Rust a que haya algo nuevo y pide el fotograma. Lo que se publica entra por `rinf`
+en la aplicación; este crate no depende de `rinf`, y `Taller` y `Animador` son su interfaz.
 
 ## Cómo pinta
 
@@ -47,10 +64,10 @@ su color, lisos) y los mosaicos. `Capa::BordesNitidos` se ignora: esos bordes sa
 La base está en CORTEX: por defecto en `../CORTEX/N-CNX`, u otra ruta con `NLTX_CNX`. Sacarla a su
 propio repositorio está pendiente de decidir.
 
-`cargo build --release -p ejemplo_nativo` deja lo que genera `cxx` en `target/release/cxx-pintor`, y
-`flutter build linux --release` lo compila en el runner. El ejecutable enlaza con la biblioteca Rust:
-C++ llama a Rust directamente, sin `dlopen`.
+El `build.rs` deja lo que genera `cxx` en `pintor/cxx`, que se ignora a sí misma (u otra carpeta con
+`NLTX_CXX`), y el runner lo compila después del hub. `cxx` y `cxx-build` van fijados a una versión
+exacta. El ejecutable enlaza la biblioteca de Rust: C++ la llama directamente, sin `dlopen`.
 
 Se puede medir con `NODOS_BANCO_GPU=1`, cambiar la carga de la prueba masiva con `NLTX_ELEMENTOS=<n>`,
-volcar su textura con `NLTX_VOLCAR_GPU=<archivo.ppm>` y pedir otro MSAA con `NLTX_MSAA=2|4|8`. El canal
-`ltx/lienzo` tiene el método `volcar`, que escribe el próximo fotograma del documento en un PPM.
+pedir otro MSAA con `NLTX_MSAA=2|4|8` y volcar cada fotograma a un PPM con `NLTX_VOLCAR_LIENZO=<archivo>`
+o, en la prueba masiva, `NLTX_VOLCAR_GPU=<archivo>`.

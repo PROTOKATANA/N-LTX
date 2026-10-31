@@ -267,14 +267,6 @@ struct GpuMasiva :: Impl {
 
 	std :: unique_ptr<BancoGpu> banco ;
 
-	// Lo que sigue se lee desde el hilo de plataforma
-
-	std :: atomic<std :: int64_t> elementos{ 0 } ;
-
-	std :: atomic<double> fps{ 0 } ;
-
-	std :: atomic<double> ms_carril{ 0 } ;
-
 	// Del carril
 
 	std :: uint32_t fotogramas = 0 ;
@@ -363,17 +355,13 @@ struct GpuMasiva :: Impl {
 
 	void apuntar(std :: uint32_t cuenta , double gastado) {
 
-		elementos = cuenta ;
-
-		ms_carril = gastado ;
-
 		fotogramas++ ;
 
 		const std :: chrono :: duration<double> tramo = Reloj :: now() - ventana ;
 
 		if (tramo.count() >= 1.0) {
 
-			fps = fotogramas / tramo.count() ;
+			ltx :: anotar_masiva(ltx :: MedidasMasiva{ cuenta , fotogramas / tramo.count() , gastado }) ;
 
 			fotogramas = 0 ;
 
@@ -430,5 +418,3 @@ bool GpuMasiva :: texture_info(
 	return true ;
 
 }
-
-MedidasMasiva GpuMasiva :: medidas() const { return { impl_->elementos , impl_->fps , impl_->ms_carril } ; }

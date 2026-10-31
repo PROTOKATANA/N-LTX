@@ -63,7 +63,8 @@ impl Lector<'_> {
             .unwrap_or(self.resto.len());
         let (numero, resto) = self.resto.split_at(fin);
         self.resto = resto;
-        numero.parse().expect("número de contorno")
+        // lo escribe el driver de tikra: un número mal formado no llega, y si llegara no debe tumbar nada
+        numero.parse().unwrap_or_default()
     }
 
     fn punto(&mut self) -> Punto {

@@ -55,14 +55,8 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
 pkg_check_modules(EPOXY REQUIRED IMPORTED_TARGET epoxy)
 
-# La biblioteca Rust del ejemplo, compilada aparte con cargo (ver README.md).
-if(DEFINED ENV{NLTX_NATIVO})
-  set(NLTX_NATIVO "$ENV{NLTX_NATIVO}")
-else()
-  set(NLTX_NATIVO "${CMAKE_CURRENT_SOURCE_DIR}/../../target/release/libejemplo_nativo.so")
-endif()
-get_filename_component(NLTX_RUST "${NLTX_NATIVO}" DIRECTORY)
-set(NLTX_CXX "${NLTX_RUST}/cxx-pintor")
+# Lo que genera cxx para el pintor: lo deja ahí el build.rs de pintor.
+set(NLTX_CXX "${CMAKE_CURRENT_SOURCE_DIR}/../../pintor/cxx")
 # La base GPU de CORTEX (ver pintor/README.md).
 if(DEFINED ENV{NLTX_CNX})
   set(NLTX_CNX "$ENV{NLTX_CNX}")
@@ -89,6 +83,13 @@ set_target_properties(${BINARY_NAME}
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
+
+# El pintor compila lo que genera cxx al correr el build.rs de pintor dentro de
+# cargo: va después de cargokit, que compila el hub (rinf).
+if(NOT TARGET ${BINARY_NAME}_cargokit)
+  message(FATAL_ERROR "Falta ${BINARY_NAME}_cargokit, el objetivo con que cargokit compila el hub")
+endif()
+add_dependencies(cnx_ltx ${BINARY_NAME}_cargokit)
 
 
 # === Installation ===
@@ -142,6 +143,3 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
-
-install(FILES "${NLTX_NATIVO}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-  COMPONENT Runtime)

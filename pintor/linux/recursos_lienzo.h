@@ -149,7 +149,9 @@ struct Recursos {
 
 	Malla vivos ;
 
-	std :: uint64_t generacion = 0 ;
+	std :: uint64_t generacion_base = 0 ;
+
+	std :: uint64_t generacion_vivos = 0 ;
 
 	bool listos = false ;
 

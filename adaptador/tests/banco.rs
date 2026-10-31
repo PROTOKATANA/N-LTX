@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Comparaciones lentas contra datos reales que no viven en el repositorio.
 
 mod comun;

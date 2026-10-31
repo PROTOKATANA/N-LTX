@@ -6,15 +6,18 @@ lista neutra de primitivas (glifos, trazados, recortes, grupos) que un pintor co
 **Estado:** el motor produce la lista para texto, fórmulas, química, física y TikZ, y `ejemplo/` la
 pinta en Flutter sobre Vulkan (`pintor/`), con animaciones por parámetro.
 
+**Requisito que hoy limita compilar la app:** el pintor en C++ se apoya en `N-CNX/gpu`, que aún no es
+público. Los crates de Rust compilan y se prueban sin él; `pintor/linux` y `ejemplo/` lo necesitan.
+
 ```
 primitivas/   el contrato: la lista neutra y el trait `Compositor`. Sin dependencias.
 documento/    modo texto: LaTeX en flujo continuo, con fórmulas y figuras inyectadas.
 animacion/    animaciones por parámetro: la misma figura, recompuesta en cada fotograma.
-pintor/       pintor GPU en C++ sobre Diligent/Vulkan, unido a Rust por `cxx`.
+pintor/       pintor GPU: Rust compila la escena y C++ la pinta sobre Diligent/Vulkan, unidos por `cxx`.
 adaptador/    `Compositor` sobre el motor. Desaparecerá cuando el motor emita `primitivas`.
 motor/        fork de `mathra` (fórmulas, química, física), `tikra` (TikZ) y `voltik`
               (CircuiTikZ), con su historia (ver motor/README.md).
-ejemplo/      app Flutter: galería y editor de LaTeX, con el pintor de referencia (ver su README).
+ejemplo/      app Flutter: galería y editor de LaTeX, unida a Rust por `rinf` (ver su README).
 formula/      lector, canonizador, validador y segmentador de fórmulas. No lo usa la cadena de
               arriba: las fórmulas las lee `mathra`.
 ```

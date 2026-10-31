@@ -8,21 +8,10 @@
 
 # include "gpu_renderer.h"
 
-// Lo que se puede preguntar desde Flutter
-
-struct MedidasLienzo {
-
-	std :: int64_t vertices = 0 ;
-
-	// Lo que gasta el carril en un fotograma, sin esperar a la GPU
-
-	double ms_carril = 0 ;
-
-} ;
-
 // Pinta el lienzo de N-LTX : texto, fórmulas, figuras y animaciones en una sola
-// superficie, con lo que Rust prepara en cada fotograma (pintor/src/lienzo.rs).
-// Pinta con MSAA en una textura propia y resuelve al final sobre la superficie
+// superficie. Rust lleva el ritmo y lo hace todo en su taller (pintor/src/taller.rs);
+// aquí solo se copia lo último hecho, y solo lo que cambió. Un hilo vigía espera en
+// Rust a que haya algo nuevo y pide el fotograma. Pinta con MSAA en una textura propia y resuelve al final sobre la superficie
 // compartida con Flutter, que mide lo que el lienzo (lienzo.h) : al redimensionar
 // la ventana no se recrea nada y solo cambia la parte que se pinta
 
@@ -53,17 +42,6 @@ public:
 		GError ** error
 
 	) override ;
-
-	// Qué parte del documento se ve : el tamaño de la superficie y el
-	// desplazamiento en píxeles físicos, y los píxeles físicos por punto
-
-	void fijar_vista(std :: uint32_t ancho , std :: uint32_t alto , double escala , double y) ;
-
-	// Depuración : escribe el próximo fotograma en `ruta`, en PPM
-
-	void volcar(const char * ruta) ;
-
-	MedidasLienzo medidas() const ;
 
 private:
 

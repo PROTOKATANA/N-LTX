@@ -803,7 +803,9 @@ impl<C: Catalogo, Q: Quimica> Parser<'_, C, Q> {
         let mut filas: Vec<Vec<Nodo>> = vec![Vec::new()];
         loop {
             let (celda, fin) = self.lista()?;
-            filas.last_mut().expect("siempre hay fila").push(Nodo::Grupo(celda));
+            if let Some(fila) = filas.last_mut() {
+                fila.push(Nodo::Grupo(celda));
+            }
             match fin {
                 Fin::Amp => {}
                 Fin::NuevaFila => filas.push(Vec::new()),

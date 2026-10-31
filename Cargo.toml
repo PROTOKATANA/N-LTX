@@ -7,7 +7,7 @@ members = [
     "animacion",
     "pintor",
     "adaptador",
-    "ejemplo/nativo",
+    "ejemplo/native/hub",
     "motor/tikra/crates/core",
     "motor/mathra/crates/core",
     "motor/voltik/crates/core",
@@ -16,3 +16,5 @@ members = [
 [workspace.lints.clippy]
 # cada bloque unsafe explica por qué es correcto (// SAFETY:)
 undocumented_unsafe_blocks = "warn"
+unwrap_used = "deny"
+expect_used = "deny"

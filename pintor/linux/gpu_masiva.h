@@ -8,20 +8,6 @@
 
 # include "gpu_renderer.h"
 
-// Lo que se puede preguntar desde Flutter
-
-struct MedidasMasiva {
-
-	std :: int64_t elementos = 0 ;
-
-	double fotogramas_por_segundo = 0 ;
-
-	// Lo que gasta el carril en un fotograma, sin esperar a la GPU
-
-	double ms_carril = 0 ;
-
-} ;
-
 // La prueba masiva : cientos de miles de elementos que el vertex shader mueve
 // en cada fotograma, sin que su geometría vuelva a cruzar de la CPU a la GPU
 
@@ -52,8 +38,6 @@ public:
 		GError ** error
 
 	) override ;
-
-	MedidasMasiva medidas() const ;
 
 private:
 

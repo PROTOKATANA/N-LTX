@@ -139,7 +139,10 @@ fn una_formula_en_linea_no_se_pierde_a_ningun_ancho() {
             .count()
     };
     for ancho in 30..400 {
-        let e = documento(ancho as f64).componer("La ley $x$ cambia en vivo.").unwrap().escena;
+        let e = documento(ancho as f64)
+            .componer("La ley $x$ cambia en vivo.")
+            .unwrap()
+            .escena;
         assert_eq!(formulas(&e), 1, "a {ancho} bp");
     }
 }

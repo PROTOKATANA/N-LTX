@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 # Lo que genera cxx al compilar el crate `pintor`.
 if(NOT NLTX_CXX)
-  message(FATAL_ERROR "Falta NLTX_CXX: la carpeta target/<perfil>/cxx-pintor")
+  message(FATAL_ERROR "Falta NLTX_CXX: la carpeta adonde el build.rs de pintor copia lo que genera cxx")
 endif()
 
 add_library(cnx_ltx STATIC

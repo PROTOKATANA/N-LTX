@@ -10,9 +10,9 @@
 
 # include <memory>
 
-# include <mutex>
-
 # include <string>
+
+# include <thread>
 
 # include <vector>
 
@@ -30,6 +30,16 @@ namespace {
 
 constexpr float fondo_lienzo[4] = { 1.0f , 1.0f , 1.0f , 1.0f } ;
 
+// Sin monitor no hay lienzo que medir
+
+constexpr std :: uint32_t ancho_sin_monitor = 1920 ;
+
+constexpr std :: uint32_t alto_sin_monitor = 1080 ;
+
+// Cada cuánto mira el vigía si debe parar, aunque nadie le despierte
+
+constexpr std :: uint32_t espera_vigia_ms = 200 ;
+
 using Reloj = std :: chrono :: steady_clock ;
 
 ITextureView * vista_srv(ITexture * t) { return t->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) ; }
@@ -42,17 +52,13 @@ struct GpuLienzo :: Impl {
 
 	std :: atomic<bool> pendiente{ false } ;
 
-	std :: atomic<bool> animada{ false } ;
-
 	// Un fotograma que no se pudo pintar : hay que volver
 
 	std :: atomic<bool> repetir{ false } ;
 
 	std :: atomic<std :: uint32_t> id{ 0 } ;
 
-	Reloj :: time_point inicio = Reloj :: now() ;
-
-	// El tamaño de la superficie, que no cambia. Sin monitor, 0 : la de la vista
+	// El tamaño de la superficie, que no cambia
 
 	std :: uint32_t lienzo_ancho ;
 
@@ -62,31 +68,45 @@ struct GpuLienzo :: Impl {
 
 	std :: unique_ptr<BancoGpu> banco ;
 
-	// Lo que llega del hilo de plataforma
+	// NLTX_VOLCAR_LIENZO : escribe cada fotograma en ese archivo, en PPM
 
-	mutable std :: mutex cerrojo ;
+	const char * volcado = std :: getenv("NLTX_VOLCAR_LIENZO") ;
 
-	std :: uint32_t ancho = 0 ;
+	std :: thread vigia ;
 
-	std :: uint32_t alto = 0 ;
-
-	double escala = 1.0 ;
-
-	double y = 0.0 ;
-
-	std :: string volcado ;
-
-	// Lo que se lee desde el hilo de plataforma
-
-	std :: atomic<std :: int64_t> vertices{ 0 } ;
-
-	std :: atomic<double> ms_carril{ 0 } ;
+	std :: atomic<bool> parar{ false } ;
 
 	Impl(Carril & carril , std :: uint32_t ancho_lienzo , std :: uint32_t alto_lienzo) :
 
-		surface{ "LTX lienzo" , carril } , lienzo_ancho(ancho_lienzo) , lienzo_alto(alto_lienzo) {
+		surface{ "LTX lienzo" , carril } ,
+
+		lienzo_ancho(ancho_lienzo ? ancho_lienzo : ancho_sin_monitor) ,
+
+		lienzo_alto(alto_lienzo ? alto_lienzo : alto_sin_monitor) {
 
 		if (std :: getenv("NODOS_BANCO_GPU")) { banco = std :: make_unique<BancoGpu>("LTX" , std :: vector<std :: string>{ "lienzo" }) ; }
+
+	}
+
+	// Hasta que Rust deja algo nuevo no hay nada que pintar
+
+	void vigilar() {
+
+		std :: uint64_t vistas = 0 ;
+
+		while (!parar) {
+
+			const std :: uint64_t entregas = ltx :: esperar_entrega(id , vistas , espera_vigia_ms) ;
+
+			if (entregas == vistas) { continue ; }
+
+			vistas = entregas ;
+
+			pendiente = true ;
+
+			surface.pedir() ;
+
+		}
 
 	}
 
@@ -94,25 +114,39 @@ struct GpuLienzo :: Impl {
 
 		IDeviceContext * ctx = gpu.ctx ;
 
-		if (marco.generacion() != r.generacion) {
+		const bool base = marco.generacion_base() != r.generacion_base ;
 
-			if (!r.base.subir(gpu , Geometria{ marco.vertices_base() , marco.indices_base() } , error)) { return false ; }
+		const bool vivos = marco.generacion_vivos() != r.generacion_vivos ;
 
-			r.generacion = marco.generacion() ;
+		if (base && !r.base.subir(gpu , Geometria{ marco.vertices_base() , marco.indices_base() } , error)) { return false ; }
+
+		if (vivos && !r.vivos.subir(gpu , Geometria{ marco.vertices_vivos() , marco.indices_vivos() } , error)) { return false ; }
+
+		if (base || vivos) {
+
+			const auto tintas = marco.tintas() ;
+
+			ctx->UpdateBuffer(r.tintas , 0 , tintas.size() * sizeof(ltx :: Tinta) , tintas.data() , RESOURCE_STATE_TRANSITION_MODE_TRANSITION) ;
 
 		}
 
-		if (!r.vivos.subir(gpu , Geometria{ marco.vertices_vivos() , marco.indices_vivos() } , error)) { return false ; }
+		r.generacion_base = marco.generacion_base() ;
 
-		const auto tintas = marco.tintas() ;
-
-		ctx->UpdateBuffer(r.tintas , 0 , tintas.size() * sizeof(ltx :: Tinta) , tintas.data() , RESOURCE_STATE_TRANSITION_MODE_TRANSITION) ;
+		r.generacion_vivos = marco.generacion_vivos() ;
 
 		const ltx :: Limites limites = ltx :: limites() ;
 
-		subir_filas(ctx , r.atlas , marco.atlas() , marco.atlas_y() , limites.lado_atlas) ;
+		for (std :: size_t i = 0 ; i < marco.parches_atlas() ; i++) {
 
-		subir_filas(ctx , r.rampas , marco.rampas() , marco.rampas_y() , limites.ancho_rampa * 4) ;
+			subir_filas(ctx , r.atlas , marco.parche_atlas(i) , marco.fila_atlas(i) , limites.lado_atlas) ;
+
+		}
+
+		for (std :: size_t i = 0 ; i < marco.parches_rampas() ; i++) {
+
+			subir_filas(ctx , r.rampas , marco.parche_rampas(i) , marco.fila_rampas(i) , limites.ancho_rampa * 4) ;
+
+		}
 
 		return true ;
 
@@ -144,45 +178,11 @@ struct GpuLienzo :: Impl {
 
 		const auto entrada = Reloj :: now() ;
 
-		std :: uint32_t w , h ;
-
-		double e , desplazado ;
-
-		std :: string ruta ;
-
-		{
-
-			std :: lock_guard<std :: mutex> guardia(cerrojo) ;
-
-			w = ancho ;
-
-			h = alto ;
-
-			e = escala ;
-
-			desplazado = y ;
-
-			ruta.swap(volcado) ;
-
-		}
-
-		if (w == 0 || h == 0) { return true ; }
-
-		const std :: uint32_t superficie_w = lienzo_ancho ? lienzo_ancho : w ;
-
-		const std :: uint32_t superficie_h = lienzo_alto ? lienzo_alto : h ;
-
-		w = std :: min(w , superficie_w) ;
-
-		h = std :: min(h , superficie_h) ;
-
 		GpuSurface :: Acomodo acomodo = GpuSurface :: Acomodo :: esperando ;
 
-		if (!surface.acomodar(superficie_w , superficie_h , &acomodo , error)) { return false ; }
+		if (!surface.acomodar(lienzo_ancho , lienzo_alto , &acomodo , error)) { return false ; }
 
 		if (acomodo == GpuSurface :: Acomodo :: esperando) {
-
-			devolver(ruta) ;
 
 			repetir = true ;
 
@@ -196,8 +196,6 @@ struct GpuLienzo :: Impl {
 
 		if (!r.crear(surface.device() , error)) { return false ; }
 
-		r.acomodar(w , h) ;
-
 		if (banco) { banco->comenzar() ; }
 
 		bool hay = false ;
@@ -205,8 +203,6 @@ struct GpuLienzo :: Impl {
 		if (!surface.comenzar(&hay , error)) { return false ; }
 
 		if (!hay) {
-
-			devolver(ruta) ;
 
 			repetir = true ;
 
@@ -216,27 +212,27 @@ struct GpuLienzo :: Impl {
 
 		IDeviceContext * ctx = surface.context() ;
 
-		// después de comenzar : lo que Rust marca como subido se sube de verdad
+		// después de comenzar : los parches que se recogen hay que subirlos
 
-		const std :: chrono :: duration<double> pasado = Reloj :: now() - inicio ;
+		const rust :: Box<ltx :: Marco> marco = ltx :: tomar(id , nuevos) ;
 
-		const ltx :: Vista vista{ double(h) , e , desplazado , pasado.count() } ;
+		const ltx :: Vista vista = marco->vista() ;
 
-		const rust :: Box<ltx :: Marco> marco = ltx :: preparar(id , vista , nuevos) ;
+		const std :: uint32_t w = std :: clamp(vista.ancho , 1u , lienzo_ancho) ;
+
+		const std :: uint32_t h = std :: clamp(vista.alto , 1u , lienzo_alto) ;
+
+		r.acomodar(w , h) ;
 
 		const Gpu gpu{ surface.device() , ctx } ;
 
 		if (!subir(gpu , r , * marco , error)) { return false ; }
 
-		const UniformesVista u{ float(w) , float(h) , 0.0f , float(desplazado) } ;
+		const UniformesVista u{ float(w) , float(h) , 0.0f , float(vista.y) } ;
 
 		ctx->UpdateBuffer(r.uniforme_vista , 0 , sizeof(u) , &u , RESOURCE_STATE_TRANSITION_MODE_TRANSITION) ;
 
-		const float y0 = float(desplazado) ;
-
-		const float y1 = float(desplazado + h) ;
-
-		Ejecucion ejecucion(gpu , r , Recuadro{ w , h , y0 , y1 }) ;
+		Ejecucion ejecucion(gpu , r , Recuadro{ w , h , float(vista.y) , float(vista.y + h) }) ;
 
 		ITexture * resuelta = nullptr ;
 
@@ -272,35 +268,19 @@ struct GpuLienzo :: Impl {
 
 		ctx->Draw(draw) ;
 
-		if (!ruta.empty()) { surface.volcar(ruta.c_str() , w , h) ; }
-
-		animada = marco->animada() ;
-
-		vertices = std :: int64_t(marco->vertices_base().size() + marco->vertices_vivos().size()) ;
+		if (volcado) { surface.volcar(volcado , w , h) ; }
 
 		// lo que gasta el carril, antes de esperar a la GPU en terminar()
 
 		const std :: chrono :: duration<double , std :: milli> gastado = Reloj :: now() - entrada ;
 
-		ms_carril = gastado.count() ;
+		ltx :: anotar_lienzo(gastado.count()) ;
 
 		if (!surface.terminar(error)) { return false ; }
 
 		if (banco) { banco->terminar(ctx , surface.width() , surface.height()) ; }
 
 		return true ;
-
-	}
-
-	// Un volcado pedido en un fotograma que no se llegó a pintar
-
-	void devolver(const std :: string & ruta) {
-
-		if (ruta.empty()) { return ; }
-
-		std :: lock_guard<std :: mutex> guardia(cerrojo) ;
-
-		if (volcado.empty()) { volcado = ruta ; }
 
 	}
 
@@ -314,7 +294,19 @@ GpuLienzo :: GpuLienzo(Carril & carril , std :: uint32_t lienzo_ancho , std :: u
 
 }
 
-GpuLienzo :: ~GpuLienzo() { delete impl_ ; }
+// El vigía se para antes de soltar lo que usa
+
+GpuLienzo :: ~GpuLienzo() {
+
+	impl_->parar = true ;
+
+	ltx :: despertar() ;
+
+	if (impl_->vigia.joinable()) { impl_->vigia.join() ; }
+
+	delete impl_ ;
+
+}
 
 void GpuLienzo :: solicitar() {
 
@@ -329,6 +321,8 @@ void GpuLienzo :: reiniciar(std :: uint32_t id) {
 	impl_->id = id ;
 
 	impl_->pendiente = false ;
+
+	if (!impl_->vigia.joinable()) { impl_->vigia = std :: thread([this] { impl_->vigilar() ; }) ; }
 
 }
 
@@ -352,36 +346,8 @@ bool GpuLienzo :: texture_info(
 
 	if (!impl_->surface.mostrar(target , name , width , height , &nueva , error)) { return false ; }
 
-	// lo que se mueve solo : al coger un fotograma, el siguiente
-
-	const bool repetir = impl_->repetir.exchange(false) ;
-
-	if ((nueva && impl_->animada) || repetir) { impl_->surface.pedir() ; }
+	if (impl_->repetir.exchange(false)) { impl_->surface.pedir() ; }
 
 	return true ;
 
 }
-
-void GpuLienzo :: fijar_vista(std :: uint32_t ancho , std :: uint32_t alto , double escala , double y) {
-
-	std :: lock_guard<std :: mutex> guardia(impl_->cerrojo) ;
-
-	impl_->ancho = ancho ;
-
-	impl_->alto = alto ;
-
-	impl_->escala = escala ;
-
-	impl_->y = y ;
-
-}
-
-void GpuLienzo :: volcar(const char * ruta) {
-
-	std :: lock_guard<std :: mutex> guardia(impl_->cerrojo) ;
-
-	impl_->volcado = ruta ;
-
-}
-
-MedidasLienzo GpuLienzo :: medidas() const { return { impl_->vertices , impl_->ms_carril } ; }

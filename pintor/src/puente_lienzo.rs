@@ -1,9 +1,11 @@
 //! La frontera entre Rust y el pintor del lienzo, en C++. Lo que comparten ambos lados se define
 //! solo aquí: ni los límites ni los tipos de tinta se copian a mano.
 
+use std::time::Duration;
+
+use crate::almacen::{Marco, almacen};
 use crate::atlas::LADO_ATLAS;
-use crate::lienzo::Marco;
-use crate::pizarra::preparar;
+use crate::medidas::anotar_lienzo;
 use crate::rampas::{ANCHO_RAMPA, FILAS_RAMPAS};
 use crate::tintas::MAX_TINTAS;
 
@@ -91,17 +93,15 @@ pub mod ffi {
         pub y1: f32,
     }
 
-    /// Qué se ve del documento.
+    /// Qué se ve del documento, en píxeles físicos.
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct Vista {
-        /// Alto de la superficie en píxeles físicos.
-        pub alto: f64,
+        pub ancho: u32,
+        pub alto: u32,
         /// Píxeles físicos por punto.
         pub escala: f64,
-        /// Desplazamiento en píxeles físicos.
+        /// Desplazamiento vertical.
         pub y: f64,
-        /// Reloj de las animaciones.
-        pub segundos: f64,
     }
 
     /// Lo que mide lo que viaja a la GPU.
@@ -118,11 +118,20 @@ pub mod ffi {
 
         fn limites() -> Limites;
 
-        /// Lo que hay que pintar en este fotograma. `nuevos`: la GPU aún no tiene nada subido.
-        fn preparar(id: u32, vista: Vista, nuevos: bool) -> Box<Marco>;
+        /// Hilo del carril del pintor. Lo último hecho, que no se calcula aquí: solo se copia. Con
+        /// `nuevos`, la GPU aún no tiene nada subido.
+        fn tomar(id: u32, nuevos: bool) -> Box<Marco>;
+        /// Hilo vigía del pintor. Espera a que haya más entregas que `vistas`, como mucho `ms`.
+        fn esperar_entrega(id: u32, vistas: u64, ms: u32) -> u64;
+        /// Hace volver a `esperar_entrega` para poder cerrar sin esperar al tope.
+        fn despertar();
+        /// Lo que gastó el carril en un fotograma.
+        fn anotar_lienzo(ms: f64);
 
-        /// Cambia cuando cambia la lista base: mientras no cambie, no hay que volver a subirla.
-        fn generacion(self: &Marco) -> u64;
+        fn vista(self: &Marco) -> Vista;
+        /// Mientras no cambien, lo que ya se copió sigue valiendo.
+        fn generacion_base(self: &Marco) -> u64;
+        fn generacion_vivos(self: &Marco) -> u64;
         fn vertices_base(self: &Marco) -> &[Vertice];
         fn indices_base(self: &Marco) -> &[u32];
         fn comandos_base(self: &Marco) -> &[Comando];
@@ -131,13 +140,13 @@ pub mod ffi {
         fn indices_vivos(self: &Marco) -> &[u32];
         fn comandos_vivos(self: &Marco) -> &[Comando];
         fn tintas(self: &Marco) -> &[Tinta];
-        /// Las filas del atlas que cambiaron, desde la fila `atlas_y`.
-        fn atlas(self: &Marco) -> &[u8];
-        fn atlas_y(self: &Marco) -> u32;
-        fn rampas(self: &Marco) -> &[u8];
-        fn rampas_y(self: &Marco) -> u32;
-        /// Hay algo moviéndose a la vista: hace falta otro fotograma.
-        fn animada(self: &Marco) -> bool;
+        /// Las filas de textura que cambiaron: cada parche empieza en su `fila_*`.
+        fn parches_atlas(self: &Marco) -> usize;
+        fn parche_atlas(self: &Marco, i: usize) -> &[u8];
+        fn fila_atlas(self: &Marco, i: usize) -> u32;
+        fn parches_rampas(self: &Marco) -> usize;
+        fn parche_rampas(self: &Marco, i: usize) -> &[u8];
+        fn fila_rampas(self: &Marco, i: usize) -> u32;
     }
 }
 
@@ -148,4 +157,16 @@ fn limites() -> ffi::Limites {
         filas_rampas: FILAS_RAMPAS,
         max_tintas: MAX_TINTAS as u32,
     }
+}
+
+fn tomar(id: u32, nuevos: bool) -> Box<Marco> {
+    Box::new(almacen().tomar(id, nuevos))
+}
+
+fn esperar_entrega(id: u32, vistas: u64, ms: u32) -> u64 {
+    almacen().esperar(id, vistas, Duration::from_millis(u64::from(ms)))
+}
+
+fn despertar() {
+    almacen().despertar();
 }
