@@ -1421,6 +1421,9 @@ impl Engine {
             // inside an axis, TikZ statements wait until the axis is set up
             return self.defer_statement(t);
         }
+        if let Some(r) = self.filtered_statement(name, t) {
+            return r;
+        }
         if let Some(defaults) = path_command(cmd) {
             let r = path::statement(self, defaults);
             return self.recover(r, t);

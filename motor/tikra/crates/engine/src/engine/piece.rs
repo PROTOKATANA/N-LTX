@@ -21,6 +21,14 @@ pub type PathOperationFn = fn(&mut Engine) -> Result<(), Error>;
 /// A coordinate system a piece adds (`visualization cs`): from its options to a point.
 pub type CoordinateSystemFn = fn(&mut Engine, &str) -> Result<Point, Error>;
 
+/// What a piece does with a statement of TikZ before the engine runs it (an axis keeps them for
+/// later): `Some` if it took it, with its name and its token.
+pub type StatementFilterFn = fn(&mut Engine, &str, &Token) -> Option<Result<(), Error>>;
+
+/// An anchor a piece adds to nodes (`near ticklabel`): where it is, if `name` is one of its. It gets
+/// the anchors the node has through `local`.
+pub type NodeAnchorFn = fn(&mut Engine, &str, &dyn Fn(&str) -> Option<Point>) -> Option<Point>;
+
 /// The first id of the commands of the pieces (`Meaning::Native`).
 pub const PIECE_COMMAND_BASE: u16 = 1000;
 
@@ -33,6 +41,8 @@ pub struct Piece {
     /// Its commands that read their own input (`\\datavisualization`, data line by line): `\\tikz`
     /// runs them as they come, instead of reading up to the `;` first.
     pub reading_input: &'static [&'static str],
+    pub statement_filters: &'static [StatementFilterFn],
+    pub node_anchors: &'static [NodeAnchorFn],
     /// What it sets up before TikZ's definitions run: registers, macros, keys.
     pub define: fn(&mut Engine),
     /// TeX run with TikZ's definitions, with `@` a letter.
@@ -41,7 +51,17 @@ pub struct Piece {
 
 impl Piece {
     /// A piece with nothing: each says what it has, with `..Piece::EMPTY`.
-    pub const EMPTY: Piece = Piece { name: "", commands: &[], path_operations: &[], coordinate_systems: &[], reading_input: &[], define: |_| {}, definitions: String::new };
+    pub const EMPTY: Piece = Piece {
+        name: "",
+        commands: &[],
+        path_operations: &[],
+        coordinate_systems: &[],
+        reading_input: &[],
+        statement_filters: &[],
+        node_anchors: &[],
+        define: |_| {},
+        definitions: String::new,
+    };
 }
 
 /// What the pieces add to the work of the engine. It asks here only for what it does not know, so
@@ -51,6 +71,8 @@ pub(super) struct Hooks {
     path_operations: Vec<(&'static str, PathOperationFn)>,
     coordinate_systems: Vec<(&'static str, CoordinateSystemFn)>,
     reading_input: Vec<&'static str>,
+    statement_filters: Vec<StatementFilterFn>,
+    node_anchors: Vec<NodeAnchorFn>,
 }
 
 /// What an engine is built with, besides itself.
@@ -103,6 +125,8 @@ impl Engine {
         self.hooks.path_operations.extend_from_slice(piece.path_operations);
         self.hooks.coordinate_systems.extend_from_slice(piece.coordinate_systems);
         self.hooks.reading_input.extend_from_slice(piece.reading_input);
+        self.hooks.statement_filters.extend_from_slice(piece.statement_filters);
+        self.hooks.node_anchors.extend_from_slice(piece.node_anchors);
         (piece.define)(self);
     }
 
@@ -114,6 +138,16 @@ impl Engine {
     /// The coordinate system `name` of a piece.
     pub(super) fn coordinate_system_of(&self, name: &str) -> Option<CoordinateSystemFn> {
         self.hooks.coordinate_systems.iter().find(|(n, _)| *n == name).map(|(_, system)| *system)
+    }
+
+    /// What a piece did with the statement `name`, if it took it.
+    pub(super) fn filtered_statement(&mut self, name: &str, t: &Token) -> Option<Result<(), Error>> {
+        (0..self.hooks.statement_filters.len()).find_map(|i| (self.hooks.statement_filters[i])(self, name, t))
+    }
+
+    /// Where the anchor `name` of a piece is, if it is one of theirs.
+    pub(super) fn piece_anchor(&mut self, name: &str, local: &dyn Fn(&str) -> Option<Point>) -> Option<Point> {
+        (0..self.hooks.node_anchors.len()).find_map(|i| (self.hooks.node_anchors[i])(self, name, local))
     }
 
     /// Whether `t` is a command of a piece that reads its own input.
@@ -178,6 +212,13 @@ mod tests {
         })],
         coordinate_systems: &[("probe", |_, args| Ok(Point::new(args.trim().len() as f64, 0.0)))],
         reading_input: &["probelive"],
+        statement_filters: &[|e, name, _| {
+            (name == "coordinate" && e.tex.is_defined("probeholds")).then(|| {
+                e.tex.define_string("probeheld", "yes", true);
+                e.skip_statement().map(|_| ())
+            })
+        }],
+        node_anchors: &[|_, name, local| (name == "probe anchor").then(|| local("center")).flatten()],
         define: |e| e.tex.define_string("probedefined", "yes", true),
         definitions: || r"\def\probeloaded{yes}".to_string(),
     };
@@ -204,6 +245,13 @@ mod tests {
         e.run().unwrap();
         assert!(e.tex.warnings.is_empty(), "{:?}", e.tex.warnings);
         assert!((e.nodes["a"].center().x - 3.0).abs() < 1e-9, "its coordinate system ran");
+        e.tex.define_string("probeholds", "yes", true);
+        e.tex.push_text(r"\begin{tikzpicture}\coordinate (b) at (1,1);\end{tikzpicture}");
+        e.run().unwrap();
+        assert!(e.tex.is_defined("probeheld") && !e.nodes.contains_key("b"), "it took the statement");
+        e.tex.push_text(r"\begin{tikzpicture}\node[anchor=probe anchor] (c) {x};\end{tikzpicture}");
+        e.run().unwrap();
+        assert!(e.tex.warnings.is_empty(), "its anchor is known: {:?}", e.tex.warnings);
         e.tex.push_text(r"\tikz\probelive with no semicolon!");
         e.run().unwrap();
         assert!(e.tex.is_defined("livedread"), "it read its own input");
