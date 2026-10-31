@@ -246,14 +246,21 @@ impl Maquetador<'_> {
             Ok(c) => {
                 self.separar(0.3);
                 let colocable = self.absorber(c);
-                let caja = colocable.composicion.escena.caja;
-                let px = x + ((ancho - caja.ancho) / 2.0).max(0.0);
-                self.colocar(colocable, px, self.y - caja.y, 1.0);
-                self.y += caja.alto;
+                self.colocar_centrado(colocable, x, ancho);
                 self.separar(SEPARACION);
             }
             Err(e) => self.fuente_visible(latex, &e, x, ancho),
         }
+    }
+
+    /// Un bloque centrado. Lo que es más ancho que el texto se reduce para caber: un documento no
+    /// se desplaza de lado.
+    fn colocar_centrado(&mut self, colocable: Colocable, x: f64, ancho: f64) {
+        let caja = colocable.composicion.escena.caja;
+        let escala = if caja.ancho > ancho { ancho / caja.ancho } else { 1.0 };
+        let px = x + ((ancho - caja.ancho * escala) / 2.0).max(0.0);
+        self.colocar(colocable, px - caja.x * escala, self.y - caja.y * escala, escala);
+        self.y += caja.alto * escala;
     }
 
     fn figura(&mut self, fuente: &str, x: f64, ancho: f64) {
@@ -262,12 +269,7 @@ impl Maquetador<'_> {
             Ok(c) => {
                 self.separar(0.3);
                 let colocable = self.absorber(c);
-                let caja = colocable.composicion.escena.caja;
-                // una figura más ancha que el texto se reduce para caber
-                let escala = if caja.ancho > ancho { ancho / caja.ancho } else { 1.0 };
-                let px = x + ((ancho - caja.ancho * escala) / 2.0).max(0.0);
-                self.colocar(colocable, px - caja.x * escala, self.y - caja.y * escala, escala);
-                self.y += caja.alto * escala;
+                self.colocar_centrado(colocable, x, ancho);
                 self.separar(SEPARACION);
             }
             Err(e) => self.fuente_visible(fuente, &e, x, ancho),

@@ -154,6 +154,20 @@ fn una_figura_ancha_se_reduce_para_caber() {
 }
 
 #[test]
+fn una_formula_en_bloque_ancha_se_reduce_para_caber() {
+    let escala = |ancho: f64, fuente: &str| {
+        let e = documento(ancho).componer(fuente).unwrap().escena;
+        e.primitivas.iter().find_map(|p| match p {
+            Primitiva::Abrir(Capa::Transformacion(m)) => Some(m.a),
+            _ => None,
+        })
+    };
+    let ancha = r"\[ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \]";
+    assert!(escala(100.0, ancha).unwrap() < 0.5);
+    assert_eq!(escala(4000.0, ancha), Some(1.0), "la que cabe no cambia");
+}
+
+#[test]
 fn lo_que_no_se_puede_componer_se_ve_como_fuente() {
     let c = documento(400.0).componer("a $rota$ b").unwrap();
     assert!(c.avisos.iter().any(|a| a.contains("fórmula rota")));
