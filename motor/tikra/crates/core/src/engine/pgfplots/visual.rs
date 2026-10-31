@@ -247,7 +247,7 @@ fn draw_plot_in_group(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], base: &[f64], 
             let color = keys::value(e, "/pgfplots/quiver/arrow color");
             for (i, l) in pts.iter().enumerate() {
                 let Some(c) = p.coords.get(i) else { continue };
-                if !(l[0].is_finite() && l[1].is_finite()) || !c.uvw.iter().take(if f.three_d { 3 } else { 2 }).all(|v| v.is_finite()) {
+                if !l[0].is_finite() || !l[1].is_finite() || !c.uvw.iter().take(if f.three_d { 3 } else { 2 }).all(|v| v.is_finite()) {
                     continue;
                 }
                 let end = [f.logical(0, c.x + c.uvw[0]), f.logical(1, c.y + c.uvw[1]), if f.three_d { f.logical(2, c.z + c.uvw[2]) } else { f.min[2] }];

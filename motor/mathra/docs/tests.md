@@ -30,7 +30,7 @@ cargo llvm-cov report --summary-only        # or --html
 
 ## Benchmark
 
-`cargo run --release -p mathra --example bench` converts the hand-written constructions in `corpus/` in strict and tolerant mode and prints how many convert and the time per equation. The README shows one run.
+`cargo run --release -p mathra --example bench_mathra` converts the hand-written constructions in `corpus/` in strict and tolerant mode and prints how many convert and the time per equation. The README shows one run.
 
 ## What each file covers
 

@@ -1,11 +1,11 @@
 [package]
 name = "voltik"
 description = "CircuiTikZ circuits to SVG and PNG with no TeX install, as a library of tikra."
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
+version = "0.16.0"
+publish = false
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/matheusmota-dev-br/voltik"
 readme = "../../README.md"
 keywords = ["circuitikz", "tikz", "circuit", "svg", "latex"]
 categories = ["rendering", "graphics", "text-processing"]
@@ -13,4 +13,4 @@ categories = ["rendering", "graphics", "text-processing"]
 include = ["src/**", "Cargo.toml"]
 
 [dependencies]
-tikra.workspace = true
+tikra = { path = "../../../tikra/crates/core" }

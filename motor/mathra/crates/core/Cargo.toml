@@ -1,14 +1,14 @@
 [package]
 name = "mathra"
 description = "Equation converter: math LaTeX (chemfig chemistry and commutative diagrams included) to a tree of meaning and accessible SVG, with speech in 16 languages and braille."
-version.workspace = true
-edition.workspace = true
+version = "1.9.2"
+publish = false
+edition = "2021"
 # the code is MIT OR Apache-2.0; the embedded STIX Two Math font is OFL-1.1, and Latin Modern Math
 # (built only with the `latin-modern` feature) is under the GUST Font License, which SPDX does not list:
 # its text is in fonts/
 license = "(MIT OR Apache-2.0) AND OFL-1.1"
-repository.workspace = true
-homepage.workspace = true
+repository = "https://github.com/matheusmota-dev-br/mathra"
 readme = "../../README.md"
 keywords = ["latex", "math", "svg", "accessibility", "equation"]
 categories = ["text-processing", "rendering", "accessibility", "mathematics", "science"]

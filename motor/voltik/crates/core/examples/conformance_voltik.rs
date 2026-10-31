@@ -2,7 +2,7 @@
 //! and writes `<hash>.png` at 100 dpi on white, as TeX's reference is drawn, plus one JSON line per
 //! figure in `results.jsonl`: whether it converted, the warnings, the error, and the time.
 //!
-//! `cargo run --release -p voltik --example conformance -- <input dir> <output dir>`
+//! `cargo run --release -p voltik --example conformance_voltik -- <input dir> <output dir>`
 //!
 //! A panic or a figure that takes longer than 10 s is recorded instead of stopping the run.
 

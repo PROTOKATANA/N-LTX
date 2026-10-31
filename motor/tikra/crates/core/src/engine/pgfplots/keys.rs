@@ -1645,7 +1645,7 @@ fn nf(e: &mut Engine) -> &mut super::number::NumberFormat {
 keyfn!(k_nf, |e, v| {
     let name = current_name(e);
     let value = text(e, &v)?;
-    let on = |s: &str| !(s == "false");
+    let on = |s: &str| s != "false";
     let f = nf(e);
     match name.as_str() {
         "fixed" => f.style = Style::Fixed,

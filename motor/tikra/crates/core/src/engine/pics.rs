@@ -51,7 +51,7 @@ impl Engine {
                 at = p;
                 if self.st.node.sloped {
                     let angle = direction.y.atan2(direction.x).to_degrees();
-                    let angle = if !self.st.allow_upside_down && (angle > 90.0 + 1e-9 || angle < -90.0 - 1e-9) { angle + 180.0 } else { angle };
+                    let angle = if !self.st.allow_upside_down && !(-90.0 - 1e-9..=90.0 + 1e-9).contains(&angle) { angle + 180.0 } else { angle };
                     linear = linear.compose(&Transform::rotation(angle));
                 }
             }

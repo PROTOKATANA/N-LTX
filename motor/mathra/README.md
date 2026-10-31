@@ -227,7 +227,7 @@ Out of scope, by the rule in `spec/boundary.md` (mathra is for equations): TikZ 
 
 ## Benchmark
 
-`corpus/` holds 116 hand-written constructions, one or a few per command family and package. One run of `cargo run --release -p mathra --example bench` (arm64, Apple M5, rustc 1.99.1):
+`corpus/` holds 116 hand-written constructions, one or a few per command family and package. One run of `cargo run --release -p mathra --example bench_mathra` (arm64, Apple M5, rustc 1.99.1):
 
 | Measure | Value |
 |---|---|

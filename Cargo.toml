@@ -3,6 +3,9 @@ resolver = "3"
 members = [
     "formula",
     "primitivas",
+    "motor/tikra/crates/core",
+    "motor/mathra/crates/core",
+    "motor/voltik/crates/core",
 ]
 
 [workspace.lints.clippy]

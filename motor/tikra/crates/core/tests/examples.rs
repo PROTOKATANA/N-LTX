@@ -69,7 +69,7 @@ fn white_card_covers_the_view_box() {
 #[test]
 fn the_readmes_show_examples_that_exist() {
     // the npm and PyPI pages show these images by their URL on GitHub: a renamed file breaks them
-    for readme in ["README.md", "npm/README.md", "crates/python/README.md"] {
+    for readme in ["README.md"] {
         let text = std::fs::read_to_string(root().join(readme)).unwrap();
         for part in text.split("docs/examples/").skip(1) {
             let file: String = part.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '.').collect();

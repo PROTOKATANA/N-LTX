@@ -121,7 +121,7 @@ impl Run<'_> {
 
     /// The `setup` state: the characters, their counts and widths, and the alignment.
     pub(super) fn te_setup(&mut self) -> Result<(), Error> {
-        if !(self.s.te.path_from_text && !self.te.chars.is_empty()) {
+        if !self.s.te.path_from_text || self.te.chars.is_empty() {
             self.te_prepare()?;
         }
         let n = self.te.chars.len();

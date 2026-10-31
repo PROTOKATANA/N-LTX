@@ -1,6 +1,6 @@
 # Corpus
 
-Hand-written LaTeX constructions used by the benchmark (`cargo run --release -p mathra --example bench`).
+Hand-written LaTeX constructions used by the benchmark (`cargo run --release -p mathra --example bench_mathra`).
 
 | File | Content |
 |---|---|

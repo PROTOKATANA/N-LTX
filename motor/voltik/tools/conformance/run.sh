@@ -33,7 +33,7 @@ for line in open(sys.argv[1], encoding="utf-8"):
     tex = json.loads(line)["tex"]
     (out / (hashlib.sha1(tex.encode()).hexdigest()[:16] + ".tex")).write_text(tex, encoding="utf-8")
 ' "$work/examples.jsonl" "$work/voltik-in"
-cargo run -q --release -p voltik --example conformance -- "$work/voltik-in" "$work/voltik"
+cargo run -q --release -p voltik --example conformance_voltik -- "$work/voltik-in" "$work/voltik"
 
 python3 -I tools/conformance/compare.py "$work/examples.jsonl" "$work" --docs docs/conformance.md
 echo "Side by side: $work/report.html"

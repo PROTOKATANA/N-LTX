@@ -1,7 +1,7 @@
 //! Benchmark over the hand-written corpus in `corpus/`: how many constructions convert in each
 //! mode, and how long a conversion takes.
 //!
-//! `cargo run --release -p mathra --example bench`
+//! `cargo run --release -p mathra --example bench_mathra`
 
 use std::time::Instant;
 
