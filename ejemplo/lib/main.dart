@@ -1,24 +1,15 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 
-import 'escena.dart';
 import 'gpu.dart';
 import 'nativo.dart';
-import 'volcado.dart';
 
 void main() {
   motor = Nativo.abrir();
-  runApp(Ejemplo(motor));
+  runApp(const Ejemplo());
 }
 
-late Nativo motor;
-
 class Ejemplo extends StatelessWidget {
-  const Ejemplo(this.nativo, {super.key});
-
-  final Nativo nativo;
+  const Ejemplo({super.key});
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -28,9 +19,11 @@ class Ejemplo extends StatelessWidget {
       colorSchemeSeed: Colors.indigo,
       scaffoldBackgroundColor: const Color(0xFFECEEF3),
     ),
-    home: Galeria(nativo),
+    home: const Galeria(),
   );
 }
+
+enum Modo { formula, figura, documento }
 
 class Muestra {
   const Muestra(this.fuente, {this.modo = Modo.formula});
@@ -184,10 +177,22 @@ Energía & $E$ & \si{J} \\
   ],
 };
 
-class Galeria extends StatefulWidget {
-  const Galeria(this.nativo, {super.key});
+/// Toda la galería en un solo documento: una vista, una superficie.
+final String _galeria = () {
+  final b = StringBuffer();
+  for (final s in _secciones.entries) {
+    if (s.key != 'Documento') b.writeln('\\section{${s.key}}');
+    for (final m in s.value) {
+      b
+        ..writeln(m.modo == Modo.formula ? '\\[ ${m.fuente} \\]' : m.fuente)
+        ..writeln();
+    }
+  }
+  return '$b';
+}();
 
-  final Nativo nativo;
+class Galeria extends StatefulWidget {
+  const Galeria({super.key});
 
   @override
   State<Galeria> createState() => _GaleriaState();
@@ -197,281 +202,72 @@ class _GaleriaState extends State<Galeria> {
   final _editor = TextEditingController(
     text: r'Prueba: la ley $F=ma$ y el agua \ce{H2O}.',
   );
-  late final Map<String, List<(Muestra, Escena)>> _escenas;
-  late Escena _propia;
-  Modo _modo = Modo.documento;
   double _zoom = 1.6;
-  int _microsegundos = 0;
+  bool _masiva = false;
 
   @override
-  void initState() {
-    super.initState();
-    final reloj = Stopwatch()..start();
-    _escenas = {
-      for (final s in _secciones.entries)
-        s.key: [
-          for (final m in s.value)
-            (m, widget.nativo.componer(m.fuente, modo: m.modo)),
-        ],
-    };
-    _microsegundos = reloj.elapsedMicroseconds;
-    _componerPropia();
-    final volcado = Platform.environment['NLTX_VOLCAR'];
-    if (volcado != null) {
-      volcar(volcado, motor, [
-        for (final s in _escenas.values)
-          for (final (_, e) in s) e,
-      ]);
-    }
-  }
-
-  void _componerPropia() {
-    _propia = widget.nativo.componer(_editor.text, modo: _modo);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final total = _escenas.values.fold<int>(0, (a, b) => a + b.length);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('N-LTX · mathra y tikra en Flutter'),
-        backgroundColor: Colors.white,
-        actions: [
-          Text(
-            '$total ejemplos en ${(_microsegundos / 1000).toStringAsFixed(0)} ms · '
-            'pintor Canvas, sin Vulkan',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(width: 20),
-          const Icon(Icons.zoom_in, size: 18),
-          SizedBox(
-            width: 170,
-            child: Slider(
-              value: _zoom,
-              min: 0.8,
-              max: 6,
-              onChanged: (v) => setState(() => _zoom = v),
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const VistaGpu(),
-          const SizedBox(height: 16),
-          _Editor(
-            controlador: _editor,
-            modo: _modo,
-            escena: _propia,
-            zoom: _zoom,
-            alCambiarTexto: () => setState(_componerPropia),
-            alCambiarModo: (v) => setState(() {
-              _modo = v;
-              _componerPropia();
-            }),
-          ),
-          for (final s in _escenas.entries) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 22, 0, 8),
-              child: Text(
-                s.key,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                for (final (m, e) in s.value)
-                  _Tarjeta(muestra: m, escena: e, zoom: _zoom),
-              ],
-            ),
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('N-LTX · Vulkan'),
+      backgroundColor: Colors.white,
+      actions: [
+        SegmentedButton<bool>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: false, label: Text('Documento')),
+            ButtonSegment(value: true, label: Text('Prueba masiva')),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _Lamina extends StatelessWidget {
-  const _Lamina({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: const Color(0xFFD9DCE3)),
+          selected: {_masiva},
+          onSelectionChanged: (s) => setState(() => _masiva = s.first),
+        ),
+        const SizedBox(width: 20),
+        const Icon(Icons.zoom_in, size: 18),
+        SizedBox(
+          width: 170,
+          child: Slider(
+            value: _zoom,
+            min: 0.8,
+            max: 4,
+            onChanged: (v) => setState(() => _zoom = v),
+          ),
+        ),
+        const SizedBox(width: 8),
+      ],
     ),
-    child: child,
-  );
-}
-
-class _Resultado extends StatelessWidget {
-  const _Resultado({required this.escena, required this.zoom});
-
-  final Escena escena;
-  final double zoom;
-
-  @override
-  Widget build(BuildContext context) {
-    final error = escena.error;
-    if (error != null) {
-      return Text(error, style: const TextStyle(color: Colors.red));
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Stack(
+    body: _masiva
+        ? const Center(child: VistaMasiva())
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              VistaEscena(escena: escena, zoom: zoom),
-              for (final z in escena.zonas)
-                Positioned(
-                  left: (z.caja[0] - escena.x) * zoom,
-                  top: (z.caja[1] - escena.y) * zoom,
-                  child: _VistaAnimacion(fuente: z.fuente, zoom: zoom),
+              SizedBox(
+                width: 340,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: TextField(
+                    controller: _editor,
+                    expands: true,
+                    maxLines: null,
+                    textAlignVertical: TextAlignVertical.top,
+                    onChanged: (_) => setState(() {}),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Escribe LaTeX',
+                      alignLabelWithHint: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
                 ),
+              ),
+              Expanded(
+                child: VistaDocumento(
+                  fuente: '${_editor.text}\n\n$_galeria',
+                  zoom: _zoom,
+                ),
+              ),
             ],
           ),
-        ),
-        for (final aviso in escena.avisos)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              '⚠ $aviso',
-              style: const TextStyle(fontSize: 11, color: Color(0xFFB06000)),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// Reproduce una animación: recompone la figura en cada fotograma.
-class _VistaAnimacion extends StatefulWidget {
-  const _VistaAnimacion({required this.fuente, required this.zoom});
-
-  final String fuente;
-  final double zoom;
-
-  @override
-  State<_VistaAnimacion> createState() => _VistaAnimacionState();
-}
-
-class _VistaAnimacionState extends State<_VistaAnimacion>
-    with SingleTickerProviderStateMixin {
-  late final Ticker _reloj;
-  late Escena _fotograma;
-
-  @override
-  void initState() {
-    super.initState();
-    _fotograma = motor.fotograma(widget.fuente, 0);
-    _reloj = createTicker((pasado) {
-      final anterior = _fotograma;
-      setState(() {
-        _fotograma = motor.fotograma(
-          widget.fuente,
-          pasado.inMicroseconds / 1e6,
-        );
-      });
-      anterior.liberar();
-    })..start();
-  }
-
-  @override
-  void dispose() {
-    _reloj.dispose();
-    _fotograma.liberar();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) =>
-      _Resultado(escena: _fotograma, zoom: widget.zoom);
-}
-
-class _Tarjeta extends StatelessWidget {
-  const _Tarjeta({
-    required this.muestra,
-    required this.escena,
-    required this.zoom,
-  });
-
-  final Muestra muestra;
-  final Escena escena;
-  final double zoom;
-
-  @override
-  Widget build(BuildContext context) => ConstrainedBox(
-    constraints: const BoxConstraints(maxWidth: 900),
-    child: _Lamina(
-      child: _Resultado(escena: escena, zoom: zoom),
-    ),
-  );
-}
-
-class _Editor extends StatelessWidget {
-  const _Editor({
-    required this.controlador,
-    required this.modo,
-    required this.escena,
-    required this.zoom,
-    required this.alCambiarTexto,
-    required this.alCambiarModo,
-  });
-
-  final TextEditingController controlador;
-  final Modo modo;
-  final Escena escena;
-  final double zoom;
-  final VoidCallback alCambiarTexto;
-  final ValueChanged<Modo> alCambiarModo;
-
-  @override
-  Widget build(BuildContext context) => _Lamina(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'Escribe LaTeX',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const Spacer(),
-            SegmentedButton<Modo>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(value: Modo.documento, label: Text('Documento')),
-                ButtonSegment(value: Modo.formula, label: Text('Fórmula')),
-                ButtonSegment(value: Modo.figura, label: Text('TikZ')),
-              ],
-              selected: {modo},
-              onSelectionChanged: (s) => alCambiarModo(s.first),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: controlador,
-          minLines: 2,
-          maxLines: 8,
-          onChanged: (_) => alCambiarTexto(),
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-          decoration: const InputDecoration(border: OutlineInputBorder()),
-        ),
-        const SizedBox(height: 14),
-        _Resultado(escena: escena, zoom: zoom),
-      ],
-    ),
   );
 }

@@ -6,14 +6,13 @@
 
 use std::collections::HashMap;
 use std::panic::catch_unwind;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::{ptr, slice};
 
 use adaptador::{FiguraTikra, FormulaMathra, IncrustadosMotor};
 use animacion::Reproductor;
-// el pintor en C++ enlaza contra esta biblioteca: sus símbolos de `cxx` deben quedar dentro
 use documento::{Documento, Formato};
-use pintor as _;
+use pintor::Animador;
 use primitivas::{
     Capa, Color, Composicion, Compositor, Degradado, Escena, GlifoId, Matriz, Parada, Pintura, Primitiva, Punto,
     Relleno, Remate, Segmento, Trazo, Union,
@@ -296,6 +295,73 @@ fn trazo(t: &Trazo) -> Value {
     })
 }
 
+/// Recompone las animaciones en el hilo de render del pintor.
+struct AnimadorTikra;
+
+impl Animador for AnimadorTikra {
+    fn fotograma(&self, fuente: &str, segundos: f64) -> Option<Escena> {
+        let composicion =
+            catch_unwind(|| reproductor(fuente).and_then(|r| r.fotograma(segundos).map_err(|e| e.to_string())));
+        composicion.ok()?.ok().map(|c| c.escena)
+    }
+}
+
+type Maquetador = Option<(u64, Arc<Documento>)>;
+
+/// Un documento de `ancho` bp. Crearlo cuesta: se guarda el último.
+fn documento_de(ancho: f64) -> Arc<Documento> {
+    static ULTIMO: Mutex<Maquetador> = Mutex::new(None);
+    let mut ultimo = ULTIMO.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some((bits, d)) = ultimo.as_ref()
+        && *bits == ancho.to_bits()
+    {
+        return Arc::clone(d);
+    }
+    let formato = Formato {
+        ancho,
+        tam: TAM_FORMULA,
+        color: NEGRO,
+    };
+    let nuevo = Arc::new(Documento::nuevo(formato, Box::new(IncrustadosMotor { color: NEGRO })));
+    *ultimo = Some((ancho.to_bits(), Arc::clone(&nuevo)));
+    nuevo
+}
+
+/// Compone `fuente` y se la entrega al pintor. Devuelve el alto en bp y los avisos.
+pub fn publicar(id: u32, fuente: &str, ancho: f64) -> Value {
+    match documento_de(ancho).componer(fuente) {
+        Ok(Composicion { escena, mut avisos }) => {
+            let alto = escena.caja.alto + 2.0 * pintor::MARGEN;
+            avisos.extend(pintor::publicar(id, escena, Some(Arc::new(AnimadorTikra))));
+            json!({ "alto": alto, "avisos": avisos })
+        }
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
+/// Compone `fuente` para la superficie `id` y devuelve un JSON UTF-8 de `*largo_salida` bytes, a
+/// liberar con `nltx_liberar`.
+///
+/// # Safety
+/// Lo mismo que `nltx_componer`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nltx_publicar(
+    id: u32,
+    fuente: *const u8,
+    largo: usize,
+    ancho: f64,
+    largo_salida: *mut usize,
+) -> *mut u8 {
+    // SAFETY: el contrato de arriba: Dart mantiene vivo el búfer durante la llamada.
+    let texto = String::from_utf8_lossy(unsafe { slice::from_raw_parts(fuente, largo) });
+    let valor = catch_unwind(|| publicar(id, &texto, ancho))
+        .unwrap_or_else(|_| json!({ "error": "el compositor falló con esta entrada" }));
+    let salida = valor.to_string().into_bytes().into_boxed_slice();
+    // SAFETY: el contrato de arriba.
+    unsafe { *largo_salida = salida.len() };
+    Box::into_raw(salida).cast()
+}
+
 /// Como `nltx_componer`, para un fotograma de una animación.
 ///
 /// # Safety
@@ -354,6 +420,34 @@ mod tests {
         let v = componer(r"Sea $x^2$ y \ce{H2O}.", DOCUMENTO);
         assert!(v["error"].is_null(), "{v}");
         assert_eq!(v["avisos"].as_array().unwrap().len(), 0, "{v}");
+    }
+
+    #[test]
+    fn publicar_da_el_alto_con_su_margen_y_pasa_los_avisos() {
+        let v = publicar(0xf0, "Hola", 400.0);
+        assert!(v["alto"].as_f64().unwrap() > 2.0 * pintor::MARGEN, "{v}");
+        let v = publicar(
+            0xf0,
+            r"\usetikzlibrary{patterns}\begin{tikzpicture}\fill[pattern=dots] (0,0) rectangle (1,1);\end{tikzpicture}",
+            400.0,
+        );
+        assert!(v["avisos"].to_string().contains("patrones"), "{v}");
+    }
+
+    #[test]
+    fn un_ancho_menor_alarga_el_documento() {
+        let fuente = "Un párrafo con bastantes palabras para que se parta en varias líneas al estrecharlo.";
+        let alto = |ancho| publicar(0xf1, fuente, ancho)["alto"].as_f64().unwrap();
+        assert!(alto(120.0) > alto(800.0));
+    }
+
+    #[test]
+    fn el_animador_no_deja_pasar_un_error() {
+        let a = AnimadorTikra;
+        assert!(a.fotograma("nada", 0.0).is_none());
+        let fuente =
+            r"\begin{animacion}[t=0:90]\begin{tikzpicture}\draw (0,0) -- (\t:1);\end{tikzpicture}\end{animacion}";
+        assert!(a.fotograma(fuente, 1.0).is_some());
     }
 
     #[test]

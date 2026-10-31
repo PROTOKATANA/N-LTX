@@ -1,4 +1,4 @@
-# include "gpu_ltx.h"
+# include "gpu_masiva.h"
 
 # include <atomic>
 
@@ -253,7 +253,7 @@ struct Recursos {
 
 }  // namespace
 
-struct GpuLtx :: Impl {
+struct GpuMasiva :: Impl {
 
 	GpuSurface surface ;
 
@@ -385,15 +385,15 @@ struct GpuLtx :: Impl {
 
 } ;
 
-GpuLtx :: GpuLtx(Carril & carril) : impl_(new Impl(carril)) {
+GpuMasiva :: GpuMasiva(Carril & carril) : impl_(new Impl(carril)) {
 
 	impl_->surface.al_pintar([this](GError ** error) { return !impl_->pendiente || impl_->dibujar(error) ; }) ;
 
 }
 
-GpuLtx :: ~GpuLtx() { delete impl_ ; }
+GpuMasiva :: ~GpuMasiva() { delete impl_ ; }
 
-void GpuLtx :: solicitar() {
+void GpuMasiva :: solicitar() {
 
 	impl_->pendiente = true ;
 
@@ -401,11 +401,11 @@ void GpuLtx :: solicitar() {
 
 }
 
-void GpuLtx :: reiniciar(std :: uint32_t) { impl_->pendiente = false ; }
+void GpuMasiva :: reiniciar(std :: uint32_t) { impl_->pendiente = false ; }
 
-void GpuLtx :: avisar_con(std :: function<void()> aviso) { impl_->surface.avisar_con(std :: move(aviso)) ; }
+void GpuMasiva :: avisar_con(std :: function<void()> aviso) { impl_->surface.avisar_con(std :: move(aviso)) ; }
 
-bool GpuLtx :: texture_info(
+bool GpuMasiva :: texture_info(
 
 	std :: uint32_t * target ,
 
@@ -431,4 +431,4 @@ bool GpuLtx :: texture_info(
 
 }
 
-MedidasLtx GpuLtx :: medidas() const { return { impl_->elementos , impl_->fps , impl_->ms_carril } ; }
+MedidasMasiva GpuMasiva :: medidas() const { return { impl_->elementos , impl_->fps , impl_->ms_carril } ; }

@@ -33,12 +33,33 @@ typedef _Fotograma = Pointer<Uint8> Function(
   Pointer<IntPtr>,
 );
 
+typedef _PublicarC = Pointer<Uint8> Function(
+  Uint32,
+  Pointer<Uint8>,
+  IntPtr,
+  Double,
+  Pointer<IntPtr>,
+);
+typedef _Publicar = Pointer<Uint8> Function(
+  int,
+  Pointer<Uint8>,
+  int,
+  double,
+  Pointer<IntPtr>,
+);
+
 /// Lo mismo que los modos de `nativo/src/lib.rs`.
 enum Modo { formula, figura, documento }
 
 /// La biblioteca Rust del ejemplo, en `lib/` junto al ejecutable.
 class Nativo {
-  Nativo._(this._reservar, this._liberar, this._componer, this._fotograma);
+  Nativo._(
+    this._reservar,
+    this._liberar,
+    this._componer,
+    this._fotograma,
+    this._publicar,
+  );
 
   factory Nativo.abrir() {
     final carpeta = File(Platform.resolvedExecutable).parent.path;
@@ -48,6 +69,7 @@ class Nativo {
       lib.lookupFunction<_LiberarC, _Liberar>('nltx_liberar'),
       lib.lookupFunction<_ComponerC, _Componer>('nltx_componer'),
       lib.lookupFunction<_FotogramaC, _Fotograma>('nltx_fotograma'),
+      lib.lookupFunction<_PublicarC, _Publicar>('nltx_publicar'),
     );
   }
 
@@ -55,6 +77,20 @@ class Nativo {
   final _Liberar _liberar;
   final _Componer _componer;
   final _Fotograma _fotograma;
+  final _Publicar _publicar;
+
+  /// Compone `fuente` a `ancho` bp y se la entrega al pintor de la superficie `id`.
+  Publicado publicar(String fuente, {required double ancho, int id = 0}) {
+    final j = _leer(
+      fuente,
+      (entrada, largo, celda) => _publicar(id, entrada, largo, ancho, celda),
+    );
+    return Publicado(
+      alto: (j['alto'] as num?)?.toDouble() ?? 0,
+      avisos: (j['avisos'] as List<dynamic>? ?? const []).cast<String>(),
+      error: j['error'] as String?,
+    );
+  }
 
   Escena componer(String fuente, {required Modo modo}) => _llamar(
     fuente,
@@ -70,6 +106,11 @@ class Nativo {
   Escena _llamar(
     String fuente,
     Pointer<Uint8> Function(Pointer<Uint8>, int, Pointer<IntPtr>) llamada,
+  ) => Escena.desdeJson(_leer(fuente, llamada));
+
+  Map<String, dynamic> _leer(
+    String fuente,
+    Pointer<Uint8> Function(Pointer<Uint8>, int, Pointer<IntPtr>) llamada,
   ) {
     final bytes = utf8.encode(fuente);
     final largo = bytes.isEmpty ? 1 : bytes.length;
@@ -82,6 +123,16 @@ class Nativo {
     _liberar(salida, largoSalida);
     _liberar(celda, sizeOf<IntPtr>());
     _liberar(entrada, largo);
-    return Escena.desdeJson(jsonDecode(texto) as Map<String, dynamic>);
+    return jsonDecode(texto) as Map<String, dynamic>;
   }
+}
+
+/// Lo que devuelve el motor al recibir un documento.
+class Publicado {
+  const Publicado({required this.alto, required this.avisos, this.error});
+
+  /// En bp, con el margen.
+  final double alto;
+  final List<String> avisos;
+  final String? error;
 }

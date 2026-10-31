@@ -10,7 +10,7 @@
 
 // Lo que se puede preguntar desde Flutter
 
-struct MedidasLtx {
+struct MedidasMasiva {
 
 	std :: int64_t elementos = 0 ;
 
@@ -22,17 +22,16 @@ struct MedidasLtx {
 
 } ;
 
-// Pinta en la superficie compartida con Flutter. Por ahora, la prueba masiva :
-// cientos de miles de elementos que el vertex shader mueve en cada fotograma,
-// sin que su geometría vuelva a cruzar de la CPU a la GPU
+// La prueba masiva : cientos de miles de elementos que el vertex shader mueve
+// en cada fotograma, sin que su geometría vuelva a cruzar de la CPU a la GPU
 
-class GpuLtx final : public GpuRenderer {
+class GpuMasiva final : public GpuRenderer {
 
 public:
 
-	explicit GpuLtx(Carril & carril) ;
+	explicit GpuMasiva(Carril & carril) ;
 
-	~GpuLtx() override ;
+	~GpuMasiva() override ;
 
 	void solicitar() override ;
 
@@ -54,7 +53,7 @@ public:
 
 	) override ;
 
-	MedidasLtx medidas() const ;
+	MedidasMasiva medidas() const ;
 
 private:
 
