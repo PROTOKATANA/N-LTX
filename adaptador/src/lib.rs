@@ -22,6 +22,7 @@ mod contorno;
 mod figura;
 mod formula;
 mod incrustados;
+mod traduccion;
 
 pub use figura::FiguraTikra;
 pub use formula::FormulaMathra;

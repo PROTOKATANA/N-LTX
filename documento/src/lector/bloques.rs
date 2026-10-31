@@ -1,0 +1,219 @@
+//! Lo que se apila: párrafos, títulos, listas, tablas y entornos.
+
+use super::*;
+
+impl<'a> Lector<'a> {
+    pub(super) fn bloques(&mut self, parada: &Parada) -> Vec<Bloque> {
+        if self.profundidad >= PROFUNDIDAD_MAXIMA {
+            self.avisar("anidamiento demasiado profundo: el resto se ignora".into());
+            self.i = self.t.len();
+            return Vec::new();
+        }
+        self.profundidad += 1;
+        let (mut salida, mut tramos) = (Vec::new(), Vec::new());
+        while !self.fin() && !self.en_parada(parada) {
+            if self.linea_en_blanco() {
+                cerrar_parrafo(&mut tramos, &mut salida);
+            } else if let Some(bloques) = self.bloque_propio() {
+                cerrar_parrafo(&mut tramos, &mut salida);
+                salida.extend(bloques);
+            } else {
+                self.uno(Estilo::default(), &mut tramos);
+            }
+        }
+        cerrar_parrafo(&mut tramos, &mut salida);
+        self.profundidad -= 1;
+        salida
+    }
+
+    /// Lo que no es texto de un párrafo. `None` si lo que sigue es texto.
+    pub(super) fn bloque_propio(&mut self) -> Option<Vec<Bloque>> {
+        let t = self.resto();
+        if t.starts_with("$$") {
+            self.salta(2);
+            let cuerpo = self.resto();
+            let fin = cuerpo.find("$$").unwrap_or(cuerpo.len());
+            self.salta(fin + 2);
+            return Some(vec![Bloque::Formula(cuerpo[..fin].trim().to_string())]);
+        }
+        if t.starts_with("\\[") {
+            self.salta(2);
+            let cuerpo = self.resto();
+            let fin = cuerpo.find("\\]").unwrap_or(cuerpo.len());
+            self.salta(fin + 2);
+            return Some(vec![Bloque::Formula(cuerpo[..fin].trim().to_string())]);
+        }
+        let nombre = self.nombre_si_orden()?;
+        match nombre {
+            "begin" => self.entorno(),
+            "section" | "section*" | "chapter" | "chapter*" => Some(vec![self.titulo(1, nombre)]),
+            "subsection" | "subsection*" => Some(vec![self.titulo(2, nombre)]),
+            "subsubsection" | "subsubsection*" | "paragraph" | "paragraph*" => Some(vec![self.titulo(3, nombre)]),
+            "par" => {
+                self.salta(4);
+                Some(Vec::new())
+            }
+            "caption" => {
+                self.salta(1 + nombre.len());
+                let texto = self.argumento();
+                Some(vec![Bloque::Leyenda(self.tramos_de(texto))])
+            }
+            "hrule" | "rule" => {
+                self.salta(1 + nombre.len());
+                Some(vec![Bloque::Regla])
+            }
+            "tikz" => {
+                // `\tikz …;` llega hasta su punto y coma, fuera de llaves
+                let t = self.resto();
+                let fin = fin_de_instruccion(t);
+                self.salta(fin);
+                Some(vec![Bloque::Figura(t[..fin].to_string())])
+            }
+            _ => None,
+        }
+    }
+
+    pub(super) fn titulo(&mut self, nivel: u8, nombre: &str) -> Bloque {
+        self.salta(1 + nombre.len());
+        self.opcional();
+        let texto = self.argumento();
+        Bloque::Titulo {
+            nivel,
+            tramos: self.tramos_de(texto),
+        }
+    }
+
+    /// Interpreta un argumento como texto en línea.
+    pub(super) fn tramos_de(&mut self, texto: &'a str) -> Vec<Tramo> {
+        self.tramos_con(texto, Estilo::default())
+    }
+
+    pub(super) fn tramos_con(&mut self, texto: &'a str, estilo: Estilo) -> Vec<Tramo> {
+        let mut tramos = Vec::new();
+        if self.profundidad >= PROFUNDIDAD_MAXIMA {
+            self.avisar("anidamiento demasiado profundo: el resto se ignora".into());
+            return tramos;
+        }
+        let (t, i) = (self.t, self.i);
+        self.t = texto;
+        self.i = 0;
+        self.profundidad += 1;
+        while !self.fin() {
+            self.uno(estilo, &mut tramos);
+        }
+        self.profundidad -= 1;
+        self.t = t;
+        self.i = i;
+        tramos
+    }
+
+    pub(super) fn entorno(&mut self) -> Option<Vec<Bloque>> {
+        self.salta("\\begin".len());
+        let nombre = self.argumento();
+        if ENTORNOS_MATEMATICOS.contains(&nombre) {
+            return Some(match self.hasta_fin_de(nombre) {
+                Some(cuerpo) if nombre == "equation" || nombre == "equation*" || nombre == "displaymath" => {
+                    vec![Bloque::Formula(cuerpo.trim().to_string())]
+                }
+                Some(cuerpo) => vec![Bloque::Formula(format!("\\begin{{{nombre}}}{cuerpo}\\end{{{nombre}}}"))],
+                None => {
+                    self.avisar(format!("entorno sin cerrar: {nombre}"));
+                    Vec::new()
+                }
+            });
+        }
+        if ENTORNOS_FIGURA.contains(&nombre) {
+            return Some(match self.hasta_fin_de(nombre) {
+                Some(cuerpo) => vec![Bloque::Figura(format!("\\begin{{{nombre}}}{cuerpo}\\end{{{nombre}}}"))],
+                None => {
+                    self.avisar(format!("figura sin cerrar: {nombre}"));
+                    Vec::new()
+                }
+            });
+        }
+        if nombre == "animacion" {
+            return Some(match self.hasta_fin_de(nombre) {
+                Some(cuerpo) => vec![Bloque::Animacion(format!(
+                    "\\begin{{animacion}}{cuerpo}\\end{{animacion}}"
+                ))],
+                None => {
+                    self.avisar("animación sin cerrar".into());
+                    Vec::new()
+                }
+            });
+        }
+        if ENTORNOS_CODIGO.contains(&nombre) {
+            self.opcional();
+            return Some(match self.hasta_fin_de(nombre) {
+                Some(cuerpo) => vec![Bloque::Codigo(cuerpo.trim_matches('\n').to_string())],
+                None => Vec::new(),
+            });
+        }
+        if ENTORNOS_TRANSPARENTES.contains(&nombre) {
+            self.opcional();
+            return Some(Vec::new());
+        }
+        match nombre {
+            "itemize" | "enumerate" | "description" => Some(vec![self.lista(nombre)]),
+            "quote" | "quotation" => {
+                let dentro = self.bloques(&Parada::Entorno(nombre.to_string()));
+                self.hasta_fin_de(nombre);
+                Some(vec![Bloque::Cita(dentro)])
+            }
+            "tabular" | "tabular*" | "tabularx" => Some(vec![self.tabla(nombre)]),
+            otro => {
+                self.avisar(format!("entorno desconocido: {otro}"));
+                Some(Vec::new())
+            }
+        }
+    }
+
+    pub(super) fn lista(&mut self, nombre: &str) -> Bloque {
+        self.opcional();
+        let mut items = Vec::new();
+        let parada = Parada::Item(nombre.to_string());
+        // lo que hubiera antes del primer `\item` no es parte de la lista
+        self.bloques(&parada);
+        while self.nombre_si_orden() == Some("item") {
+            self.salta("\\item".len());
+            self.opcional();
+            items.push(self.bloques(&parada));
+        }
+        self.hasta_fin_de(nombre);
+        Bloque::Lista {
+            ordenada: nombre == "enumerate",
+            items,
+        }
+    }
+
+    pub(super) fn tabla(&mut self, nombre: &str) -> Bloque {
+        self.opcional();
+        if nombre != "tabular" {
+            self.argumento();
+        }
+        self.argumento();
+        let cuerpo = self.hasta_fin_de(nombre).unwrap_or("");
+        let mut filas = Vec::new();
+        for fila in partir(cuerpo, "\\\\") {
+            let limpia = sin_reglas(fila);
+            if limpia.trim().is_empty() {
+                continue;
+            }
+            let celdas: Vec<String> = partir(&limpia, "&").into_iter().map(str::to_string).collect();
+            filas.push(celdas);
+        }
+        let filas = filas
+            .into_iter()
+            .map(|celdas| {
+                celdas
+                    .into_iter()
+                    .map(|c| {
+                        let texto = c.trim().to_string();
+                        self.tramos_propios(&texto)
+                    })
+                    .collect()
+            })
+            .collect();
+        Bloque::Tabla(filas)
+    }
+}

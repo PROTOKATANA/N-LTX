@@ -8,7 +8,7 @@ use mathra::layout::Item;
 use primitivas::{Capa, Color, GlifoId, Matriz, Pintura, Primitiva, Punto, Relleno, Segmento, Trazo};
 
 use crate::contorno;
-use crate::figura::color_xcolor;
+use crate::traduccion::color_xcolor;
 
 /// Los glifos desde este id son de TeX Gyre Termes: `tikra` los mete en el espacio de la fuente
 /// Times y sus contornos no se piden a `mathra`.
