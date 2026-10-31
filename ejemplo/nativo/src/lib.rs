@@ -4,11 +4,13 @@
 //! un formato binario. Los trazados van planos: 0 = mover (x, y), 1 = línea (x, y), 2 = curva
 //! (x1, y1, x2, y2, x, y), 3 = cerrar.
 
+use std::collections::HashMap;
 use std::panic::catch_unwind;
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::{ptr, slice};
 
 use adaptador::{FiguraTikra, FormulaMathra, IncrustadosMotor};
+use animacion::Reproductor;
 use documento::{Documento, Formato};
 use primitivas::{
     Capa, Color, Composicion, Compositor, Degradado, Escena, GlifoId, Matriz, Parada, Pintura, Primitiva, Punto,
@@ -79,6 +81,31 @@ fn documento() -> &'static Documento {
     })
 }
 
+type Reproductores = HashMap<String, Result<Arc<Reproductor<FiguraTikra>>, String>>;
+
+/// Prepara una animación una sola vez: su caja exige componer el recorrido.
+fn reproductor(fuente: &str) -> Result<Arc<Reproductor<FiguraTikra>>, String> {
+    static LISTOS: OnceLock<Mutex<Reproductores>> = OnceLock::new();
+    let mut listos = LISTOS.get_or_init(Default::default).lock().map_err(|e| e.to_string())?;
+    listos
+        .entry(fuente.to_string())
+        .or_insert_with(|| {
+            Reproductor::nuevo(fuente, FiguraTikra::default())
+                .map(Arc::new)
+                .map_err(|e| e.to_string())
+        })
+        .clone()
+}
+
+/// El fotograma de una animación a los `segundos`.
+pub fn fotograma(fuente: &str, segundos: f64) -> Value {
+    let resultado = reproductor(fuente).and_then(|r| r.fotograma(segundos).map_err(|e| e.to_string()));
+    match resultado {
+        Ok(composicion) => escena(composicion),
+        Err(e) => json!({ "error": e }),
+    }
+}
+
 pub fn componer(fuente: &str, modo: i32) -> Value {
     let resultado = match modo {
         FIGURA => FiguraTikra::default().componer(fuente),
@@ -104,6 +131,8 @@ fn escena(c: Composicion) -> Value {
         fondo,
         primitivas,
         contornos,
+        zonas,
+        ..
     } = escena;
     let lista = lista(&primitivas, &mut avisos);
     let contornos: serde_json::Map<String, Value> = contornos
@@ -116,6 +145,10 @@ fn escena(c: Composicion) -> Value {
         "primitivas": lista,
         "contornos": contornos,
         "avisos": avisos,
+        "zonas": zonas
+            .iter()
+            .map(|z| json!({ "caja": [z.caja.x, z.caja.y, z.caja.ancho, z.caja.alto], "fuente": z.fuente }))
+            .collect::<Vec<_>>(),
     })
 }
 
@@ -261,6 +294,27 @@ fn trazo(t: &Trazo) -> Value {
     })
 }
 
+/// Como `nltx_componer`, para un fotograma de una animación.
+///
+/// # Safety
+/// Lo mismo que `nltx_componer`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nltx_fotograma(
+    fuente: *const u8,
+    largo: usize,
+    segundos: f64,
+    largo_salida: *mut usize,
+) -> *mut u8 {
+    // SAFETY: el contrato de arriba: Dart mantiene vivo el búfer durante la llamada.
+    let texto = String::from_utf8_lossy(unsafe { slice::from_raw_parts(fuente, largo) });
+    let valor = catch_unwind(|| fotograma(&texto, segundos))
+        .unwrap_or_else(|_| json!({ "error": "el compositor falló con esta entrada" }));
+    let salida = valor.to_string().into_bytes().into_boxed_slice();
+    // SAFETY: el contrato de arriba.
+    unsafe { *largo_salida = salida.len() };
+    Box::into_raw(salida).cast()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -298,6 +352,16 @@ mod tests {
         let v = componer(r"Sea $x^2$ y \ce{H2O}.", DOCUMENTO);
         assert!(v["error"].is_null(), "{v}");
         assert_eq!(v["avisos"].as_array().unwrap().len(), 0, "{v}");
+    }
+
+    #[test]
+    fn un_fotograma_se_compone_y_una_animacion_rota_lo_dice() {
+        let fuente =
+            r"\begin{animacion}[t=0:90]\begin{tikzpicture}\draw (0,0) -- (\t:1);\end{tikzpicture}\end{animacion}";
+        let v = fotograma(fuente, 1.0);
+        assert!(v["error"].is_null(), "{v}");
+        assert!(!v["primitivas"].as_array().unwrap().is_empty());
+        assert!(fotograma("nada", 0.0)["error"].is_string());
     }
 
     #[test]

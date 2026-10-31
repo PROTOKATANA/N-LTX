@@ -17,6 +17,7 @@ class Escena {
     this.alto = 0,
     this.avisos = const [],
     this.primitivas = 0,
+    this.zonas = const [],
   });
 
   factory Escena.desdeJson(Map<String, dynamic> j) {
@@ -41,6 +42,13 @@ class Escena {
       alto: caja[3],
       avisos: (j['avisos'] as List<dynamic>).cast<String>(),
       primitivas: lista.length,
+      zonas: [
+        for (final z in j['zonas'] as List<dynamic>)
+          Zona(
+            _doubles((z as Map<String, dynamic>)['caja']),
+            z['fuente'] as String,
+          ),
+      ],
     );
   }
 
@@ -49,6 +57,18 @@ class Escena {
   final double x, y, ancho, alto;
   final List<String> avisos;
   final int primitivas;
+  final List<Zona> zonas;
+
+  void liberar() => dibujo?.dispose();
+}
+
+/// Una animación dentro de una escena.
+class Zona {
+  Zona(this.caja, this.fuente);
+
+  /// x, y, ancho y alto en la escena.
+  final List<double> caja;
+  final String fuente;
 }
 
 List<double> _doubles(dynamic v) => [

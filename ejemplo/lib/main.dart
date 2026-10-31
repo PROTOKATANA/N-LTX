@@ -1,12 +1,18 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import 'escena.dart';
 import 'nativo.dart';
 import 'volcado.dart';
 
-void main() => runApp(Ejemplo(Nativo.abrir()));
+void main() {
+  motor = Nativo.abrir();
+  runApp(Ejemplo(motor));
+}
+
+late Nativo motor;
 
 class Ejemplo extends StatelessWidget {
   const Ejemplo(this.nativo, {super.key});
@@ -56,6 +62,45 @@ Fuerza & $F$ & \si{N} \\
 Energía & $E$ & \si{J} \\
 \end{tabular}
 \begin{quote}La física es una forma de mirar.\end{quote}
+'''),
+  ],
+  'Animaciones': [
+    Muestra(modo: Modo.documento, r'''
+\begin{animacion}[t=0:360, duracion=3]
+\begin{tikzpicture}
+  \pgfmathsetmacro{\px}{cos(\t)}
+  \pgfmathsetmacro{\py}{sin(\t)}
+  \pgfmathsetmacro{\lx}{\px+sqrt(9-\py*\py)}
+  \draw[thick] (0,0) circle (1);
+  \draw (1.6,-0.7) -- (5.2,-0.7) (1.6,0.7) -- (5.2,0.7);
+  \fill[gray!30,draw=black] (\lx-0.4,-0.6) rectangle (\lx+0.8,0.6);
+  \draw[very thick,blue] (0,0) -- (\px,\py) -- (\lx,0);
+  \fill (0,0) circle (0.06) (\px,\py) circle (0.06) (\lx,0) circle (0.06);
+  \node at (0,-1.4) {$\theta=\t^\circ$};
+\end{tikzpicture}
+\end{animacion}
+'''),
+    Muestra(modo: Modo.documento, r'''
+\begin{animacion}[t=0:360, duracion=2]
+\begin{tikzpicture}
+  \draw[->] (-0.2,0) -- (6.6,0) node[right] {$x$};
+  \draw[->] (0,-1.2) -- (0,1.4) node[above] {$y$};
+  \foreach \i in {0,...,60} {
+    \pgfmathsetmacro{\y}{sin(\i*12-\t)}
+    \fill[blue!60] (\i*0.1,\y) circle (0.05);
+  }
+\end{tikzpicture}
+\end{animacion}
+'''),
+    Muestra(modo: Modo.documento, r'''
+\begin{animacion}[t=0:360, duracion=4]
+\begin{tikzpicture}
+  \begin{axis}[domain=0:360,samples=80,width=9cm,height=5cm,xlabel=$x$,ylim={-1.2:1.2}]
+    \addplot[blue,thick] {sin(x+\t)};
+    \addplot[red,thick] {cos(2*x-\t)};
+  \end{axis}
+\end{tikzpicture}
+\end{animacion}
 '''),
   ],
   'Fórmulas': [
@@ -172,7 +217,7 @@ class _GaleriaState extends State<Galeria> {
     _componerPropia();
     final volcado = Platform.environment['NLTX_VOLCAR'];
     if (volcado != null) {
-      volcar(volcado, [
+      volcar(volcado, motor, [
         for (final s in _escenas.values)
           for (final (_, e) in s) e,
       ]);
@@ -282,7 +327,17 @@ class _Resultado extends StatelessWidget {
       children: [
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: VistaEscena(escena: escena, zoom: zoom),
+          child: Stack(
+            children: [
+              VistaEscena(escena: escena, zoom: zoom),
+              for (final z in escena.zonas)
+                Positioned(
+                  left: (z.caja[0] - escena.x) * zoom,
+                  top: (z.caja[1] - escena.y) * zoom,
+                  child: _VistaAnimacion(fuente: z.fuente, zoom: zoom),
+                ),
+            ],
+          ),
         ),
         for (final aviso in escena.avisos)
           Padding(
@@ -295,6 +350,50 @@ class _Resultado extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Reproduce una animación: recompone la figura en cada fotograma.
+class _VistaAnimacion extends StatefulWidget {
+  const _VistaAnimacion({required this.fuente, required this.zoom});
+
+  final String fuente;
+  final double zoom;
+
+  @override
+  State<_VistaAnimacion> createState() => _VistaAnimacionState();
+}
+
+class _VistaAnimacionState extends State<_VistaAnimacion>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _reloj;
+  late Escena _fotograma;
+
+  @override
+  void initState() {
+    super.initState();
+    _fotograma = motor.fotograma(widget.fuente, 0);
+    _reloj = createTicker((pasado) {
+      final anterior = _fotograma;
+      setState(() {
+        _fotograma = motor.fotograma(
+          widget.fuente,
+          pasado.inMicroseconds / 1e6,
+        );
+      });
+      anterior.liberar();
+    })..start();
+  }
+
+  @override
+  void dispose() {
+    _reloj.dispose();
+    _fotograma.liberar();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      _Resultado(escena: _fotograma, zoom: widget.zoom);
 }
 
 class _Tarjeta extends StatelessWidget {
