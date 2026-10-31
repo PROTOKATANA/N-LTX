@@ -1,16 +1,18 @@
 //! De `Escena` a lo que pinta la GPU: vértices, índices, tintas y una lista de comandos.
 //!
 //! Todo queda en píxeles físicos del documento: un cambio de escala obliga a compilar de nuevo.
-//! Los rellenos y los trazos son triángulos que suaviza el MSAA; los glifos pequeños, máscaras del
-//! atlas, porque con el MSAA el texto pequeño pierde demasiada calidad. Un recorte es geometría en
-//! el stencil y solo las capas de verdad (grupos, mezclas y máscaras) cuestan una textura aparte.
+//! Los rellenos son triángulos que suaviza el MSAA. Los trazos llevan una franja de un píxel a cada
+//! lado y el shader calcula su cobertura exacta con la distancia al centro: con unas pocas muestras
+//! por píxel, una línea fina saldría borrosa o a dientes. Los glifos son máscaras del atlas, de área
+//! exacta. Un recorte es geometría en el stencil y solo las capas de verdad (grupos, mezclas y
+//! máscaras) cuestan una textura aparte.
 
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap};
 use std::hash::Hasher;
 
 use lyon::math::Point;
-use lyon::path::{FillRule, LineCap, LineJoin};
+use lyon::path::{FillRule, LineCap, LineJoin, Side};
 use lyon::tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, StrokeOptions, StrokeTessellator, StrokeVertex,
     VertexBuffers,
@@ -31,13 +33,20 @@ const TOLERANCIA: f64 = 0.1;
 /// Dibujos discontinuos más finos que esto no se distinguen de una línea continua, en píxeles.
 const MENOR_CICLO: f64 = 0.25;
 
-/// Las tintas que caben en la GPU. Las dos primeras son fijas.
+/// Lo que sobresale la malla de un trazo por cada lado, en píxeles: el shader calcula la cobertura.
+const FRANJA: f32 = 1.0;
+
+/// Las tintas que caben en la GPU. Las tres primeras son fijas.
 pub const MAX_TINTAS: usize = 4096;
 
 const TINTA_SOLIDA: u32 = 0;
 const TINTA_GLIFO: u32 = 1;
+const TINTA_TRAZO: u32 = 2;
+const TIPO_SOLIDO: u32 = 0;
+const TIPO_GLIFO: u32 = 1;
 const TIPO_LINEAL: u32 = 2;
 const TIPO_RADIAL: u32 = 3;
+const TIPO_TRAZO: u32 = 4;
 
 const BLANCO: Color = Color { r: 1.0, g: 1.0, b: 1.0 };
 
@@ -88,7 +97,7 @@ impl Lista {
             s: 0.0,
         };
         Lista {
-            tintas: vec![tinta(TINTA_SOLIDA), tinta(TINTA_GLIFO)],
+            tintas: vec![tinta(TIPO_SOLIDO), tinta(TIPO_GLIFO), tinta(TIPO_TRAZO)],
             ..Lista::default()
         }
     }
@@ -182,6 +191,13 @@ struct Rango {
     cuenta: u32,
 }
 
+/// Un vértice recién teselado. `lado` solo vale en un trazo: a qué lado del centro cae.
+#[derive(Debug, Clone, Copy)]
+struct Bruto {
+    p: Point,
+    lado: f32,
+}
+
 /// Lo que hay que deshacer al llegar a su `Primitiva::Cerrar`.
 enum Abierta<'p> {
     Nada,
@@ -224,7 +240,7 @@ struct Compilador<'a> {
     nivel: u32,
     relleno: FillTessellator,
     trazo: StrokeTessellator,
-    malla: VertexBuffers<Point, u32>,
+    malla: VertexBuffers<Bruto, u32>,
 }
 
 impl<'a> Compilador<'a> {
@@ -320,7 +336,7 @@ impl<'a> Compilador<'a> {
         if !self.teselar_relleno(segmentos, par_impar, m) {
             return Abierta::Nada;
         }
-        let r = self.volcar(0, TINTA_SOLIDA, None);
+        let r = self.volcar(0, TINTA_SOLIDA, None, 0.0);
         self.comando(Orden::Recortar, r, self.nivel);
         self.nivel += 1;
         Abierta::Recorte(r)
@@ -360,7 +376,7 @@ impl<'a> Compilador<'a> {
                 if let Some(tinta) = self.tinta_degradado(d) {
                     let caja = rectangulo(self.caja);
                     if self.teselar_relleno(&caja, false, self.raiz) {
-                        let r = self.volcar(rgba(BLANCO, 1.0), tinta, None);
+                        let r = self.volcar(rgba(BLANCO, 1.0), tinta, None, 0.0);
                         self.comando(Orden::Dibujar, r, 0);
                     }
                 }
@@ -396,7 +412,7 @@ impl<'a> Compilador<'a> {
     fn pintar_fondo(&mut self, fondo: Color) {
         let caja = rectangulo(self.caja);
         if self.teselar_relleno(&caja, false, self.raiz) {
-            let r = self.volcar(rgba(fondo, 1.0), TINTA_SOLIDA, None);
+            let r = self.volcar(rgba(fondo, 1.0), TINTA_SOLIDA, None, 0.0);
             self.comando(Orden::Dibujar, r, self.nivel);
         }
     }
@@ -410,8 +426,9 @@ impl<'a> Compilador<'a> {
         };
         if cada_uno_una_vez {
             let mut marcas = Vec::with_capacity(2);
+            // sin franja: marcaría en el stencil un píxel de más y el relleno no llegaría al trazo
             if let Some(t) = trazo
-                && let Some(r) = self.pintar_trazo(segmentos, t)
+                && let Some(r) = self.pintar_trazo(segmentos, t, false)
             {
                 self.comando(Orden::Unica, r, self.nivel);
                 marcas.push(r);
@@ -429,10 +446,11 @@ impl<'a> Compilador<'a> {
             self.comando(Orden::Dibujar, r, self.nivel);
         }
         if let Some(t) = trazo
-            && let Some(r) = self.pintar_trazo(segmentos, t)
+            && let Some(r) = self.pintar_trazo(segmentos, t, con_franja(t))
         {
             // la malla de un trazo se solapa en las uniones: con transparencia se notaría
-            if t.opacidad * self.alfa_fino(t) < 1.0 {
+            let tenue = !con_franja(t) && self.alfa_fino(t) < 1.0;
+            if t.opacidad < 1.0 || tenue {
                 self.comando(Orden::Unica, r, self.nivel);
                 self.comando(Orden::Soltar, r, self.nivel + 1);
             } else {
@@ -444,20 +462,35 @@ impl<'a> Compilador<'a> {
     fn pintar_relleno(&mut self, segmentos: &[Segmento], r: &Relleno) -> Option<Rango> {
         let (color, tinta) = self.tinta(r)?;
         self.teselar_relleno(segmentos, r.par_impar, self.ctm)
-            .then(|| self.volcar(color, tinta, None))
+            .then(|| self.volcar(color, tinta, None, 0.0))
     }
 
-    fn pintar_trazo(&mut self, segmentos: &[Segmento], t: &Trazo) -> Option<Rango> {
+    fn pintar_trazo(&mut self, segmentos: &[Segmento], t: &Trazo, franja: bool) -> Option<Rango> {
+        let ctm = Some(self.ctm);
+        let px = self.ancho_px(t);
+        if franja {
+            return self
+                .teselar_trazo(segmentos, t, (px + 2.0 * FRANJA as f64) / self.ctm.factor())
+                .then(|| self.volcar(rgba(t.color, t.opacidad), TINTA_TRAZO, ctm, px as f32 / 2.0));
+        }
         let alfa = self.alfa_fino(t);
-        self.teselar_trazo(segmentos, t)
-            .then(|| self.volcar(rgba(t.color, t.opacidad * alfa), TINTA_SOLIDA, Some(self.ctm)))
+        self.teselar_trazo(segmentos, t, t.ancho.max(1.0 / self.ctm.factor()))
+            .then(|| self.volcar(rgba(t.color, t.opacidad * alfa), TINTA_SOLIDA, ctm, 0.0))
     }
 
-    /// Una línea de menos de un píxel se pinta de un píxel y más tenue: con solo unas muestras por
-    /// píxel, tal cual saldría a trozos. Ancho cero es la línea más fina posible, igual que en PDF.
+    /// Ancho cero es la línea más fina posible, igual que en PDF.
+    fn ancho_px(&self, t: &Trazo) -> f64 {
+        if t.ancho <= 0.0 {
+            1.0
+        } else {
+            t.ancho * self.ctm.factor()
+        }
+    }
+
+    /// Sin franja, una línea de menos de un píxel se pinta de un píxel y más tenue: con solo unas
+    /// muestras por píxel, tal cual saldría a trozos.
     fn alfa_fino(&self, t: &Trazo) -> f64 {
-        let px = t.ancho * self.ctm.factor();
-        if t.ancho <= 0.0 { 1.0 } else { px.min(1.0) }
+        self.ancho_px(t).min(1.0)
     }
 
     fn tinta(&mut self, r: &Relleno) -> Option<(u32, u32)> {
@@ -522,13 +555,16 @@ impl<'a> Compilador<'a> {
             FillRule::NonZero
         };
         let opciones = FillOptions::tolerance(TOLERANCIA as f32).with_fill_rule(regla);
-        let mut salida = BuffersBuilder::new(&mut self.malla, |v: FillVertex| v.position());
+        let mut salida = BuffersBuilder::new(&mut self.malla, |v: FillVertex| Bruto {
+            p: v.position(),
+            lado: 0.0,
+        });
         self.relleno.tessellate_path(&r, &opciones, &mut salida).is_ok()
     }
 
     /// Deja el trazo en `malla`, en el espacio del trazado: la transformación deforma también su
     /// ancho, y por eso se aplica después.
-    fn teselar_trazo(&mut self, segmentos: &[Segmento], t: &Trazo) -> bool {
+    fn teselar_trazo(&mut self, segmentos: &[Segmento], t: &Trazo, ancho: f64) -> bool {
         self.malla.clear();
         let factor = self.ctm.factor();
         if factor <= 0.0 || !factor.is_finite() {
@@ -543,7 +579,6 @@ impl<'a> Compilador<'a> {
         {
             r = discontinua(&r, d, tolerancia);
         }
-        let ancho = t.ancho.max(1.0 / factor) as f32;
         let remate = match t.remate {
             Remate::Plano => LineCap::Butt,
             Remate::Redondo => LineCap::Round,
@@ -555,35 +590,39 @@ impl<'a> Compilador<'a> {
             Union::Biselada => LineJoin::Bevel,
         };
         let opciones = StrokeOptions::tolerance(tolerancia)
-            .with_line_width(ancho)
+            .with_line_width(ancho as f32)
             .with_line_cap(remate)
             .with_line_join(union)
             .with_miter_limit(t.limite_inglete.max(1.0) as f32);
-        let mut salida = BuffersBuilder::new(&mut self.malla, |v: StrokeVertex| v.position());
+        let mut salida = BuffersBuilder::new(&mut self.malla, |v: StrokeVertex| Bruto {
+            p: v.position(),
+            lado: if v.side() == Side::Positive { 1.0 } else { -1.0 },
+        });
         self.trazo.tessellate_path(&r, &opciones, &mut salida).is_ok()
     }
 
-    /// Pasa `malla` a la lista.
-    fn volcar(&mut self, color: u32, tinta: u32, m: Option<Afin>) -> Rango {
+    /// Pasa `malla` a la lista. `medio` es el medio ancho en píxeles de un trazo con franja: con él
+    /// y la distancia al centro, que se interpola, el shader sabe cuánto cubre cada píxel.
+    fn volcar(&mut self, color: u32, tinta: u32, m: Option<Afin>, medio: f32) -> Rango {
         let lista = &mut *self.d.lista;
         let primero = lista.vertices.len() as u32;
         let inicio = lista.indices.len() as u32;
-        lista.vertices.extend(self.malla.vertices.iter().map(|p| {
+        lista.vertices.extend(self.malla.vertices.iter().map(|b| {
             let (x, y) = match m {
                 Some(m) => {
                     let q = m.aplicar(Punto {
-                        x: p.x as f64,
-                        y: p.y as f64,
+                        x: b.p.x as f64,
+                        y: b.p.y as f64,
                     });
                     (q.x as f32, q.y as f32)
                 }
-                None => (p.x, p.y),
+                None => (b.p.x, b.p.y),
             };
             Vertice {
                 x,
                 y,
-                u: 0.0,
-                v: 0.0,
+                u: b.lado * (medio + FRANJA),
+                v: medio,
                 rgba: color,
                 tinta,
             }
@@ -608,7 +647,7 @@ impl<'a> Compilador<'a> {
             Some((e, x, y)) => self.cuadrado(e, x, y, color),
             None => {
                 if self.teselar_relleno(contorno, false, d) {
-                    let r = self.volcar(color, TINTA_SOLIDA, None);
+                    let r = self.volcar(color, TINTA_SOLIDA, None, 0.0);
                     self.comando(Orden::Dibujar, r, self.nivel);
                 }
             }
@@ -624,27 +663,27 @@ impl<'a> Compilador<'a> {
             ancho = (ancho.0.min(x), ancho.1.max(x));
             alto = (alto.0.min(y), alto.1.max(y));
         }
-        if ancho.1 - ancho.0 > MAYOR_GLIFO || alto.1 - alto.0 > MAYOR_GLIFO {
+        if (ancho.1 - ancho.0).max(alto.1 - alto.0) > MAYOR_GLIFO {
             return None;
         }
         // al más cercano: redondear hacia abajo subiría todo el texto un octavo de píxel de media
         let subpixel = |v: f64| {
             let cuantizado = (v * SUBPIXELES).round() / SUBPIXELES;
             let entero = cuantizado.floor();
-            (entero, (cuantizado - entero) * SUBPIXELES)
+            (entero, cuantizado - entero)
         };
         let ((x, sx), (y, sy)) = (subpixel(d.e), subpixel(d.f));
         let cuantizar = |v: f64| (v * 1048576.0).round() as i32;
         let clave = Clave {
             contorno: p.huella,
             matriz: [cuantizar(d.a), cuantizar(d.b), cuantizar(d.c), cuantizar(d.d)],
-            sx: sx as u8,
-            sy: sy as u8,
+            sx: (sx * SUBPIXELES) as u8,
+            sy: (sy * SUBPIXELES) as u8,
         };
         if let Some(e) = self.d.atlas.buscar(&clave) {
             return Some((e, x, y));
         }
-        let (mascara, sitio) = rasterizar(contorno, d, sx / SUBPIXELES, sy / SUBPIXELES);
+        let (mascara, sitio) = rasterizar(contorno, d, sx, sy);
         let e = self
             .d
             .atlas
@@ -677,6 +716,12 @@ impl<'a> Compilador<'a> {
         lista.indices.extend([0, 1, 2, 0, 2, 3].map(|i: u32| i + primero));
         self.comando(Orden::Dibujar, Rango { inicio, cuenta: 6 }, self.nivel);
     }
+}
+
+/// La franja solo sirve con remate plano: un remate redondo o cuadrado crecería con ella, y la
+/// distancia al centro no describe el borde de un remate.
+fn con_franja(t: &Trazo) -> bool {
+    t.remate == Remate::Plano
 }
 
 fn comando_vacio() -> Comando {
@@ -907,8 +952,13 @@ mod tests {
             ..Escena::default()
         };
         let l = compilada_con(&e, Afin::escala(2.0)).lista;
-        // 10 por 3 por 2 de largo y 2 por 3 por 2 de ancho
-        assert!((area(&l, &l.comandos[0]) - 60.0 * 12.0).abs() < 1e-2);
+        // 10 por 3 por 2 de largo y 2 por 3 por 2 de ancho, más la franja de cada lado
+        assert!(
+            (area(&l, &l.comandos[0]) - 60.0 * 14.0).abs() < 1e-2,
+            "{}",
+            area(&l, &l.comandos[0])
+        );
+        assert_eq!(l.vertices[0].v, 6.0, "medio ancho en píxeles");
     }
 
     #[test]
@@ -924,30 +974,71 @@ mod tests {
                 ..Trazo::simple(NEGRO, 1.0)
             }),
         }]);
-        assert!((area(&l, &l.comandos[0]) - 7.0).abs() < 1e-3);
+        // 7 de largo por 1 de ancho y la franja de cada lado
+        assert!((area(&l, &l.comandos[0]) - 21.0).abs() < 1e-3);
+    }
+
+    fn linea(trazo: Trazo) -> Lista {
+        compilada(vec![Primitiva::Trazado {
+            segmentos: vec![Segmento::Mover(p(0.0, 0.0)), Segmento::Linea(p(10.0, 0.0))],
+            relleno: None,
+            trazo: Some(trazo),
+        }])
     }
 
     #[test]
-    fn una_linea_fina_se_pinta_de_un_pixel_y_mas_tenue() {
-        let l = compilada(vec![Primitiva::Trazado {
-            segmentos: vec![Segmento::Mover(p(0.0, 0.0)), Segmento::Linea(p(10.0, 0.0))],
-            relleno: None,
-            trazo: Some(Trazo::simple(NEGRO, 0.25)),
-        }]);
-        assert_eq!(ordenes(&l), [Orden::Unica, Orden::Soltar]);
-        assert!((area(&l, &l.comandos[0]) - 10.0).abs() < 1e-3);
-        assert_eq!(l.vertices[0].rgba >> 24, 64);
+    fn un_trazo_lleva_su_distancia_al_centro_y_su_medio_ancho() {
+        let l = linea(Trazo::simple(NEGRO, 3.0));
+        assert_eq!(ordenes(&l), [Orden::Dibujar]);
+        for v in &l.vertices {
+            assert_eq!(v.tinta, TINTA_TRAZO);
+            assert_eq!(v.u.abs(), 1.5 + FRANJA, "{v:?}");
+            assert_eq!(v.v, 1.5);
+            // la malla llega justo hasta donde dice la distancia
+            assert_eq!(v.y.abs(), v.u.abs());
+        }
+    }
+
+    #[test]
+    fn una_linea_fina_no_pierde_tinta_ni_se_pinta_de_un_pixel() {
+        let l = linea(Trazo::simple(NEGRO, 0.25));
+        assert_eq!(ordenes(&l), [Orden::Dibujar], "opaca: no necesita marcar nada");
+        assert_eq!(
+            l.vertices[0].rgba >> 24,
+            255,
+            "la cobertura sale de la distancia, no del color"
+        );
+        assert_eq!(l.vertices[0].v, 0.125);
     }
 
     #[test]
     fn el_ancho_cero_es_la_linea_mas_fina() {
-        let l = compilada(vec![Primitiva::Trazado {
-            segmentos: vec![Segmento::Mover(p(0.0, 0.0)), Segmento::Linea(p(10.0, 0.0))],
-            relleno: None,
-            trazo: Some(Trazo::simple(NEGRO, 0.0)),
-        }]);
+        let l = linea(Trazo::simple(NEGRO, 0.0));
+        assert_eq!(l.vertices[0].v, 0.5, "un píxel de ancho");
         assert_eq!(l.vertices[0].rgba >> 24, 255);
-        assert!((area(&l, &l.comandos[0]) - 10.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn un_trazo_translucido_se_pinta_una_vez_por_muestra() {
+        let l = linea(Trazo {
+            opacidad: 0.5,
+            ..Trazo::simple(NEGRO, 3.0)
+        });
+        assert_eq!(ordenes(&l), [Orden::Unica, Orden::Soltar]);
+        assert_eq!(l.vertices[0].tinta, TINTA_TRAZO);
+    }
+
+    #[test]
+    fn un_remate_que_no_es_plano_no_lleva_franja() {
+        for remate in [Remate::Redondo, Remate::Cuadrado] {
+            let l = linea(Trazo {
+                remate,
+                ..Trazo::simple(NEGRO, 0.25)
+            });
+            assert_eq!(l.vertices[0].tinta, TINTA_SOLIDA, "{remate:?}");
+            assert_eq!(l.vertices[0].rgba >> 24, 64, "un píxel de ancho y más tenue");
+            assert_eq!(ordenes(&l), [Orden::Unica, Orden::Soltar]);
+        }
     }
 
     #[test]
@@ -1152,7 +1243,7 @@ mod tests {
         ]);
         let dibujo = l.comandos[3];
         assert!((area(&l, &dibujo) - 10000.0).abs() < 1e-2);
-        assert_eq!(l.vertices[l.indices[dibujo.inicio as usize] as usize].tinta, 2);
+        assert_eq!(l.vertices[l.indices[dibujo.inicio as usize] as usize].tinta, 3);
     }
 
     fn degradado() -> Relleno {
@@ -1196,8 +1287,8 @@ mod tests {
         };
         let l = compilada_con(&e, Afin::escala(2.0)).lista;
         let v = l.vertices[0];
-        assert_eq!((v.tinta, v.rgba >> 24), (2, 128));
-        let t = l.tintas[2];
+        assert_eq!((v.tinta, v.rgba >> 24), (3, 128));
+        let t = l.tintas[3];
         assert_eq!(t.tipo, TIPO_LINEAL);
         // el píxel (24, 0) es el punto (12, 0): la mitad del degradado
         let x = t.a * 24.0 + t.e;
@@ -1212,7 +1303,7 @@ mod tests {
             trazo: None,
         };
         let l = compilada(vec![t(), t()]);
-        assert_eq!(l.tintas.len(), 3);
+        assert_eq!(l.tintas.len(), 4);
     }
 
     #[test]
@@ -1317,6 +1408,20 @@ mod tests {
             (s.bytes[(filas - 1) * lado] as i32 - 64).abs() <= 1,
             "{}",
             s.bytes[(filas - 1) * lado]
+        );
+    }
+
+    #[test]
+    fn un_glifo_alto_sigue_en_el_atlas_y_en_su_cuarto_de_pixel() {
+        // como una raíz alta: al píxel entero su trazo fino cambiaría de forma
+        let e = escena_de_glifo(100.0, vec![glifo(1, en(10.25, 150.0)), glifo(1, en(200.0, 150.0))]);
+        let l = compilada_con(&e, Afin::IDENTIDAD).lista;
+        assert_eq!(l.vertices[0].tinta, TINTA_GLIFO);
+        let ancho = |i: usize| l.vertices[i * 4 + 1].x - l.vertices[i * 4].x;
+        assert_eq!(
+            (ancho(0), ancho(1)),
+            (101.0, 100.0),
+            "el desplazado ocupa una columna más"
         );
     }
 

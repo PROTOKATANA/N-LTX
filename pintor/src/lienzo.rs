@@ -58,7 +58,10 @@ impl Lienzo {
     }
 
     fn compilar_base(&mut self, escala: f64) {
-        self.atlas.limpiar();
+        // otra escala son otras máscaras; con la misma, escribir o reflujar reaprovecha las que hay
+        if self.hecha.as_ref().is_none_or(|h| h.escala != escala) {
+            self.atlas.limpiar();
+        }
         self.rampas.limpiar();
         let mut lista = Lista::base();
         compilar(
@@ -255,7 +258,8 @@ mod tests {
     use super::*;
     use crate::atlas::LADO_ATLAS;
     use crate::puente::ffi::Orden;
-    use primitivas::{Caja, Color, Pintura, Primitiva, Relleno, Segmento, Zona};
+    use primitivas::{Caja, Color, GlifoId, Matriz, Pintura, Primitiva, Relleno, Segmento, Zona};
+    use std::collections::BTreeMap;
     use std::sync::atomic::{AtomicU32, Ordering};
 
     fn cuadro() -> Primitiva {
@@ -411,6 +415,55 @@ mod tests {
         assert!(l.preparar(vista(0.0), false).atlas().is_empty(), "ya se subió");
         let nuevo = l.preparar(vista(0.0), true);
         assert_eq!(nuevo.atlas().len(), (LADO_ATLAS * LADO_ATLAS) as usize);
+    }
+
+    fn con_glifo() -> Escena {
+        let g = GlifoId { fuente: 0, id: 1 };
+        let p = |x, y| Punto { x, y };
+        Escena {
+            primitivas: vec![Primitiva::Glifo {
+                glifo: g,
+                matriz: Matriz {
+                    a: 1.0,
+                    b: 0.0,
+                    c: 0.0,
+                    d: -1.0,
+                    e: 5.0,
+                    f: 20.0,
+                },
+                color: Color { r: 0.0, g: 0.0, b: 0.0 },
+            }],
+            contornos: BTreeMap::from([(
+                g,
+                vec![
+                    Segmento::Mover(p(0.0, 0.0)),
+                    Segmento::Linea(p(8.0, 0.0)),
+                    Segmento::Linea(p(8.0, 8.0)),
+                    Segmento::Cerrar,
+                ],
+            )]),
+            ..Escena::default()
+        }
+    }
+
+    #[test]
+    fn republicar_a_la_misma_escala_no_vuelve_a_subir_el_atlas() {
+        let mut l = Lienzo::default();
+        l.publicar(con_glifo(), None);
+        assert!(!l.preparar(vista(0.0), false).atlas().is_empty());
+        l.publicar(con_glifo(), None);
+        assert!(l.preparar(vista(0.0), false).atlas().is_empty(), "la máscara ya estaba");
+        assert!(
+            !l.preparar(
+                Vista {
+                    escala: 2.0,
+                    ..vista(0.0)
+                },
+                false
+            )
+            .atlas()
+            .is_empty()
+        );
     }
 
     #[test]

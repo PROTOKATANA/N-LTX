@@ -11,10 +11,12 @@ use primitivas::{Color, Parada};
 /// Lado del atlas de glifos, en píxeles: 4 MiB, de sobra para decenas de miles de glifos.
 pub const LADO_ATLAS: u32 = 2048;
 
-/// Por encima de este tamaño en píxeles un glifo ya es una forma: se pinta como trazado.
-pub const MAYOR_GLIFO: f64 = 96.0;
+/// Por encima de este tamaño en píxeles un glifo se pinta como trazado: una máscara ya gastaría
+/// demasiado atlas, y lo que se ve grande perdona menos los dientes que el texto.
+pub const MAYOR_GLIFO: f64 = 256.0;
 
-/// Posiciones por píxel en cada eje: colocar los glifos al píxel entero hace bailar las letras.
+/// Posiciones por píxel en cada eje: colocar los glifos al píxel entero hace bailar las letras y
+/// cambia la forma de los trazos finos, también en los grandes, como una raíz alta.
 pub const SUBPIXELES: f64 = 4.0;
 
 /// Separación entre máscaras, para que el filtrado no toque a la vecina.
@@ -94,11 +96,10 @@ impl Default for Atlas {
 }
 
 impl Atlas {
+    /// Lo que queda en la GPU no estorba: solo se lee lo que se vuelva a insertar.
     pub fn limpiar(&mut self) {
-        self.pixeles.fill(0);
         self.entradas.clear();
         (self.x, self.y, self.alto_fila) = (0, 0, 0);
-        self.marcar_todo();
     }
 
     pub fn marcar_todo(&mut self) {

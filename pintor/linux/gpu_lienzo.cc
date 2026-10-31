@@ -125,6 +125,10 @@ float4 main(in Entrada i) : SV_TARGET {
   float4 c = i.Color;
   if (t.tipo == 1) {
     c.a *= Atlas.SampleLevel(Atlas_sampler, i.UV, 0.0).r;
+  } else if (t.tipo == 4) {
+    // lo que se solapan el píxel y el trazo, medidos en perpendicular al trazo
+    float d = abs(i.UV.x);
+    c.a *= saturate(min(d + 0.5, i.UV.y) - max(d - 0.5, -i.UV.y));
   } else if (t.tipo >= 2) {
     float2 g = float2(t.a * i.Doc.x + t.c * i.Doc.y + t.e, t.b * i.Doc.x + t.d * i.Doc.y + t.f);
     float u = t.tipo == 2 ? dot(g - float2(t.p, t.q), float2(t.r, t.s)) : radial(t, g);
