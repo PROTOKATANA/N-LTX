@@ -6,8 +6,11 @@
 //! sign (⠡, ⠌), and anything longer goes in the auxiliary parentheses ⠢…⠔, which exist only in braille
 //! (§1.3). The same parentheses delimit numerators, denominators and radicands.
 
+mod signs;
+
 use super::{cells, letter, Braille};
 use crate::tree::*;
+use signs::{lower_digit, portuguese_letter, sign, upper_digit};
 
 pub fn transcribe(node: &Node) -> Braille {
     let mut w = Writer { out: String::new(), after_number: false, missing: Vec::new() };
@@ -25,6 +28,14 @@ struct Writer {
 
 const AUX_OPEN: &str = "⠢";
 const AUX_CLOSE: &str = "⠔";
+
+/// What a pair of fences encloses, and the fences between its parts.
+struct Delimited<'a> {
+    open: &'a Option<char>,
+    close: &'a Option<char>,
+    parts: &'a [Node],
+    middles: &'a [char],
+}
 
 impl Writer {
     fn push(&mut self, s: &str) {
@@ -65,30 +76,9 @@ impl Writer {
             Node::LargeOperator { symbol, .. } => self.large_operator(*symbol, None, None),
             Node::Row { children } => self.row(children),
             Node::Fraction { num, den, rule, .. } => self.fraction(num, den, *rule),
-            Node::Root { radicand, index } => {
-                // §5.3: ⠫ index ⠱ radicand; the square root omits the index
-                self.dots("1246");
-                if let Some(i) = index {
-                    self.node(i);
-                }
-                self.dots("156");
-                self.argument(radicand);
-            }
+            Node::Root { radicand, index } => self.root(radicand, index),
             Node::Scripts { base, sup, sub } => self.scripts(base, sup.as_deref(), sub.as_deref()),
-            Node::Delimited { open, close, parts, middles } => {
-                if let Some(o) = open {
-                    self.symbol(*o);
-                }
-                for (i, p) in parts.iter().enumerate() {
-                    if i > 0 {
-                        self.symbol(middles.get(i - 1).copied().unwrap_or('|'));
-                    }
-                    self.node(p);
-                }
-                if let Some(c) = close {
-                    self.symbol(*c);
-                }
-            }
+            Node::Delimited { open, close, parts, middles } => self.delimited(&Delimited { open, close, parts, middles }),
             Node::Table { shape, rows, .. } => self.table(*shape, rows),
             Node::Accent { base, accent, below, .. } => self.mark(base, *accent, *below),
             Node::Bar { base, above } => self.mark(base, '\u{0304}', !above),
@@ -111,19 +101,7 @@ impl Writer {
                     self.missing('⟶');
                 }
             }
-            // "sobrescrito" ⠡⠡ and "subscrito" ⠌⠌: directly over and under (§2.2)
-            Node::Stacked { base, above, below } => {
-                self.node(base);
-                let filled = |n: Option<&Node>| n.filter(|n| **n != Node::row(vec![])).cloned();
-                if let Some(b) = filled(below.as_deref()) {
-                    self.dots("34 34");
-                    self.argument(&b);
-                }
-                if let Some(a) = filled(above.as_deref()) {
-                    self.dots("16 16");
-                    self.argument(&a);
-                }
-            }
+            Node::Stacked { base, above, below } => self.stacked(base, above, below),
             // the 2006 code has no sign for striking out or framing an expression
             Node::Canceled { base, .. } => {
                 self.node(base);
@@ -162,92 +140,169 @@ impl Writer {
             Node::VerticalArrow { symbol, .. } => self.missing(*symbol),
             #[cfg(feature = "chem")]
             Node::Chemistry { scheme } => self.node(&crate::chem::speech::as_nodes(scheme)),
-            Node::ArrowDiagram { cells, arrows } => {
-                // each arrow is one more line, after the rows of cells
-                let lines: Vec<Vec<Node>> = cells.iter().cloned().chain(arrows.iter().map(|a| vec![a.as_row(cells)])).collect();
-                self.table(TableKind::Diagram, &lines);
-            }
+            Node::ArrowDiagram { cells, arrows } => self.arrow_diagram(cells, arrows),
             Node::LongDivision { dividend, divisor } => {
                 self.number(dividend, false);
                 self.dots("256");
                 self.number(divisor, false);
             }
-            Node::ColumnArithmetic { operation, terms } => {
-                for (i, t) in terms.iter().enumerate() {
-                    if i > 0 {
-                        self.symbol(*operation);
-                    }
-                    self.number(t, false);
-                }
-            }
+            Node::ColumnArithmetic { operation, terms } => self.column_arithmetic(*operation, terms),
         }
+    }
+
+    /// §5.3: ⠫ index ⠱ radicand; the square root omits the index.
+    fn root(&mut self, radicand: &Node, index: &Option<Box<Node>>) {
+        self.dots("1246");
+        if let Some(i) = index {
+            self.node(i);
+        }
+        self.dots("156");
+        self.argument(radicand);
+    }
+
+    fn delimited(&mut self, delimited: &Delimited<'_>) {
+        let Delimited { open, close, parts, middles } = *delimited;
+        if let Some(o) = open {
+            self.symbol(*o);
+        }
+        for (i, p) in parts.iter().enumerate() {
+            if i > 0 {
+                self.symbol(middles.get(i - 1).copied().unwrap_or('|'));
+            }
+            self.node(p);
+        }
+        if let Some(c) = close {
+            self.symbol(*c);
+        }
+    }
+
+    /// "sobrescrito" ⠡⠡ and "subscrito" ⠌⠌: directly over and under (§2.2).
+    fn stacked(&mut self, base: &Node, above: &Option<Box<Node>>, below: &Option<Box<Node>>) {
+        self.node(base);
+        let filled = |n: Option<&Node>| n.filter(|n| **n != Node::row(vec![])).cloned();
+        if let Some(b) = filled(below.as_deref()) {
+            self.dots("34 34");
+            self.argument(&b);
+        }
+        if let Some(a) = filled(above.as_deref()) {
+            self.dots("16 16");
+            self.argument(&a);
+        }
+    }
+
+    /// Each arrow is one more line, after the rows of cells.
+    fn arrow_diagram(&mut self, cells: &[Vec<Node>], arrows: &[DiagramArrow]) {
+        let lines: Vec<Vec<Node>> = cells.iter().cloned().chain(arrows.iter().map(|a| vec![a.as_row(cells)])).collect();
+        self.table(TableKind::Diagram, &lines);
+    }
+
+    fn column_arithmetic(&mut self, operation: char, terms: &[String]) {
+        for (i, t) in terms.iter().enumerate() {
+            if i > 0 {
+                self.symbol(operation);
+            }
+            self.number(t, false);
+        }
+    }
+
+    /// Left indices (an isotope's ¹⁴₆C): the letter first, then the lower index and the upper (§2.2, §2.4.2).
+    /// Returns how many children it consumed.
+    fn left_indices(&mut self, children: &[Node], at: usize) -> Option<usize> {
+        let (Node::Scripts { base, sup, sub }, Some(next)) = (&children[at], children.get(at + 1)) else {
+            return None;
+        };
+        if **base != Node::row(vec![]) {
+            return None;
+        }
+        let (letter, right_sup, right_sub) = match next {
+            Node::Scripts { base, sup, sub } => (base.as_ref(), sup.as_deref(), sub.as_deref()),
+            other => (other, None, None),
+        };
+        self.node(letter);
+        if let Some(s) = sub {
+            self.dots("6 34");
+            self.argument(s);
+        }
+        if let Some(s) = sup {
+            self.dots("4 16");
+            self.argument(s);
+        }
+        self.indices(right_sup, right_sub);
+        Some(2)
+    }
+
+    /// ∠ and a name of several points in auxiliary parentheses; △ and □ directly followed by the points (§8.1).
+    /// Returns how many children it consumed.
+    fn geometry_points(&mut self, children: &[Node], at: usize) -> Option<usize> {
+        let Node::Operator { symbol: s @ ('∠' | '△' | '□'), .. } = &children[at] else {
+            return None;
+        };
+        let points: Vec<&Node> = children[at + 1..].iter().take_while(|n| matches!(n, Node::Identifier { name, .. } if name.chars().count() == 1)).collect();
+        if points.is_empty() {
+            return None;
+        }
+        self.dots(match s {
+            '∠' => "45 25",
+            '△' => "6 23456",
+            _ => "456 13456",
+        });
+        let aux = *s == '∠' && points.len() > 1;
+        if aux {
+            self.push(AUX_OPEN);
+        }
+        for p in &points {
+            self.node(p);
+        }
+        if aux {
+            self.push(AUX_CLOSE);
+        }
+        Some(1 + points.len())
+    }
+
+    /// A mixed number: the whole part, then the fraction (§3.2.2: 2 3/4 = ⠼⠃⠼⠒⠙).
+    fn mixed_number(&mut self, child: &Node, next: Option<&Node>) -> bool {
+        let (Node::Number { value, thousands, .. }, Some(f @ Node::Fraction { .. })) = (child, next) else {
+            return false;
+        };
+        if numeric_fraction(f).is_none() || value.contains('.') {
+            return false;
+        }
+        self.number(value, thousands.is_some());
+        self.node(f);
+        true
+    }
+
+    /// ">" followed by the letter "o": the letter takes ⠐ (§4.2).
+    fn greater_than_o(&mut self, child: &Node, next: Option<&Node>) -> bool {
+        let (Node::Operator { symbol: '>', .. }, Some(Node::Identifier { name, .. })) = (child, next) else {
+            return false;
+        };
+        if name != "o" {
+            return false;
+        }
+        self.symbol('>');
+        self.dots("5 135");
+        true
     }
 
     fn row(&mut self, children: &[Node]) {
         let mut i = 0;
         while i < children.len() {
-            // left indices (an isotope's ¹⁴₆C): the letter first, then ⠠⠌ lower and ⠈⠡ upper (§2.2, §2.4.2)
-            if let (Node::Scripts { base, sup, sub }, Some(next)) = (&children[i], children.get(i + 1)) {
-                if **base == Node::row(vec![]) {
-                    let (letter, right_sup, right_sub) = match next {
-                        Node::Scripts { base, sup, sub } => (base.as_ref(), sup.as_deref(), sub.as_deref()),
-                        other => (other, None, None),
-                    };
-                    self.node(letter);
-                    if let Some(s) = sub {
-                        self.dots("6 34");
-                        self.argument(s);
-                    }
-                    if let Some(s) = sup {
-                        self.dots("4 16");
-                        self.argument(s);
-                    }
-                    self.indices(right_sup, right_sub);
-                    i += 2;
-                    continue;
-                }
+            if let Some(n) = self.left_indices(children, i) {
+                i += n;
+                continue;
             }
-            // geometry: ∠ and a name of several points in auxiliary parentheses; △ and □ directly
-            // followed by the points (§8.1)
-            if let Node::Operator { symbol: s @ ('∠' | '△' | '□'), .. } = &children[i] {
-                let points: Vec<&Node> = children[i + 1..].iter().take_while(|n| matches!(n, Node::Identifier { name, .. } if name.chars().count() == 1)).collect();
-                if !points.is_empty() {
-                    self.dots(match s {
-                        '∠' => "45 25",
-                        '△' => "6 23456",
-                        _ => "456 13456",
-                    });
-                    let aux = *s == '∠' && points.len() > 1;
-                    if aux {
-                        self.push(AUX_OPEN);
-                    }
-                    for p in &points {
-                        self.node(p);
-                    }
-                    if aux {
-                        self.push(AUX_CLOSE);
-                    }
-                    i += 1 + points.len();
-                    continue;
-                }
+            if let Some(n) = self.geometry_points(children, i) {
+                i += n;
+                continue;
             }
-            // a mixed number: the whole part, then the fraction (§3.2.2: 2 3/4 = ⠼⠃⠼⠒⠙)
-            if let (Node::Number { value, thousands, .. }, Some(f @ Node::Fraction { .. })) = (&children[i], children.get(i + 1)) {
-                if numeric_fraction(f).is_some() && !value.contains('.') {
-                    self.number(value, thousands.is_some());
-                    self.node(f);
-                    i += 2;
-                    continue;
-                }
+            if self.mixed_number(&children[i], children.get(i + 1)) {
+                i += 2;
+                continue;
             }
-            // ">" followed by the letter "o": the letter takes ⠐ (§4.2)
-            if let (Node::Operator { symbol: '>', .. }, Some(Node::Identifier { name, .. })) = (&children[i], children.get(i + 1)) {
-                if name == "o" {
-                    self.symbol('>');
-                    self.dots("5 135");
-                    i += 2;
-                    continue;
-                }
+            if self.greater_than_o(&children[i], children.get(i + 1)) {
+                i += 2;
+                continue;
             }
             self.node(&children[i]);
             i += 1;
@@ -467,43 +522,47 @@ impl Writer {
 
     fn scripts(&mut self, base: &Node, sup: Option<&Node>, sub: Option<&Node>) {
         match base {
-            Node::LargeOperator { symbol, .. } => return self.large_operator(*symbol, sub, sup),
-            Node::Function { name, .. } if name == "lim" => {
-                // §7.2: lim⠄ condition ⠱
-                self.function_name("lim");
-                if let Some(s) = sub {
-                    self.node(s);
-                }
-                self.dots("156");
-                return;
+            Node::LargeOperator { symbol, .. } => self.large_operator(*symbol, sub, sup),
+            Node::Function { name, .. } if name == "lim" => self.limit(sub),
+            // max, min, sup…: in display style the limit is directly under the name (§2.1, §2.2)
+            Node::Function { name, limits: true } if name != "lim" => self.function_limits(name, sub, sup),
+            Node::Function { name, .. } if name == "log" && sub.is_some() && sup.is_none() => self.logarithm(sub),
+            _ => {
+                self.node(base);
+                self.indices(sup, sub);
             }
-            // max, min, sup…: in display style the limit is directly under the name, the "subscrito" ⠌⠌
-            // (§2.1, §2.2); lim and log have their own forms below
-            Node::Function { name, limits: true } if name != "lim" => {
-                self.function_name(name);
-                if let Some(s) = sub {
-                    self.dots("34 34");
-                    self.argument(s);
-                }
-                if let Some(s) = sup {
-                    self.dots("16 16");
-                    self.argument(s);
-                }
-                return;
-            }
-            Node::Function { name, .. } if name == "log" && sub.is_some() && sup.is_none() => {
-                // §7.5.2: log⠄ base ⠱ x
-                self.function_name("log");
-                if let Some(s) = sub {
-                    self.node(s);
-                }
-                self.dots("156");
-                return;
-            }
-            _ => {}
         }
-        self.node(base);
-        self.indices(sup, sub);
+    }
+
+    /// §7.2: lim⠄ condition ⠱.
+    fn limit(&mut self, sub: Option<&Node>) {
+        self.function_name("lim");
+        if let Some(s) = sub {
+            self.node(s);
+        }
+        self.dots("156");
+    }
+
+    /// The "subscrito" ⠌⠌ under the name; lim and log have their own forms.
+    fn function_limits(&mut self, name: &str, sub: Option<&Node>, sup: Option<&Node>) {
+        self.function_name(name);
+        if let Some(s) = sub {
+            self.dots("34 34");
+            self.argument(s);
+        }
+        if let Some(s) = sup {
+            self.dots("16 16");
+            self.argument(s);
+        }
+    }
+
+    /// §7.5.2: log⠄ base ⠱ x.
+    fn logarithm(&mut self, sub: Option<&Node>) {
+        self.function_name("log");
+        if let Some(s) = sub {
+            self.node(s);
+        }
+        self.dots("156");
     }
 
     /// Right marks and indices: primes ⠳ (§2.4) before the indices, the subscript before the superscript
@@ -648,146 +707,6 @@ fn numeric_fraction(n: &Node) -> Option<(String, String)> {
         },
         _ => None,
     }
-}
-
-fn upper_digit(d: char) -> &'static str {
-    match d {
-        '1' => "1",
-        '2' => "12",
-        '3' => "14",
-        '4' => "145",
-        '5' => "15",
-        '6' => "124",
-        '7' => "1245",
-        '8' => "125",
-        '9' => "24",
-        _ => "245",
-    }
-}
-
-fn lower_digit(d: char) -> &'static str {
-    match d {
-        '1' => "2",
-        '2' => "23",
-        '3' => "25",
-        '4' => "256",
-        '5' => "26",
-        '6' => "235",
-        '7' => "2356",
-        '8' => "236",
-        '9' => "35",
-        _ => "356",
-    }
-}
-
-/// The accented letters of Portuguese braille, for words inside the equation.
-fn portuguese_letter(c: char) -> Option<String> {
-    let lower = c.to_lowercase().next()?;
-    let dots = match lower {
-        'á' => "12356",
-        'à' => "1246",
-        'â' => "16",
-        'ã' => "345",
-        'é' => "123456",
-        'ê' => "126",
-        'í' => "34",
-        'ó' => "346",
-        'ô' => "1456",
-        'õ' => "246",
-        'ú' => "23456",
-        'ü' => "1256",
-        'ç' => "12346",
-        _ => return None,
-    };
-    Some(format!("{}{}", if c != lower { "⠨" } else { "" }, cells(dots)))
-}
-
-/// Signs of operations (§4.1), relations (§4.2–4.3, §6), grouping (§1.3) and logic (§6.2).
-fn sign(c: char) -> Option<&'static str> {
-    Some(match c {
-        '+' => "235",
-        '−' | '-' => "36",
-        '±' => "235 25 36",
-        '×' => "236",
-        '·' | '⋅' => "3",
-        '÷' | '/' => "256",
-        '!' => "45 3",
-        '%' => "456 356",
-        '‰' => "456 356 356",
-        '=' => "2356",
-        '≈' => "4 2356",
-        '≡' => "2356 2356",
-        '<' => "246",
-        '>' => "135",
-        '≤' => "246 2356",
-        '≥' => "135 2356",
-        '≪' => "246 246",
-        '≫' => "135 135",
-        // negation: ⠘ before the relation (§4.3)
-        '≠' => "45 2356",
-        '≮' => "45 246",
-        '≯' => "45 135",
-        '≰' => "45 246 2356",
-        '≱' => "45 135 2356",
-        '≢' => "45 2356 2356",
-        '≉' => "45 4 2356",
-        '∉' => "45 126 2",
-        '⊄' => "45 126 3",
-        '⊈' => "45 126 23",
-        '∈' => "126 2",
-        '∋' => "5 345",
-        '⊂' => "126 3",
-        '⊆' => "126 23",
-        '⊃' => "6 345",
-        '⊇' => "56 345",
-        '∪' => "456 345",
-        '∩' => "456 156",
-        '∅' => "456 245",
-        '∖' | '\\' => "5 3",
-        // degree, as after a superscript (CIB 2024, §11.5)
-        '°' => "356",
-        // negations by §4.3: ⠘ before the relation
-        '≁' => "45 5 26 3",
-        '⇏' => "45 25 135",
-        '⇍' => "45 246 25",
-        '⇎' => "45 246 25 135",
-        '→' | '⟶' => "25 2",
-        '⇒' | '⟹' => "25 135",
-        '⇐' | '⟸' => "246 25",
-        '⇔' | '⟺' => "246 25 135",
-        '∞' => "3456 1256",
-        '…' | '⋯' => "3 3 3",
-        '∘' => "6 23",
-        '∴' => "6 16",
-        '∵' => "4 34",
-        'ℵ' => "6 1256",
-        '∼' => "5 26 3",
-        // nabla: ^ï in the 2006 text, 4-12456 as the CIB 2024 edition prints it
-        '∇' | '𝛁' => "4 12456",
-        '∀' => "46 3",
-        '∃' => "46 26",
-        '¬' => "6 3",
-        '∧' => "56 2",
-        '∨' => "56 3",
-        '∂' => "456 145",
-        '′' | '\'' => "1256",
-        '″' => "1256 1256",
-        '(' => "126",
-        ')' => "345",
-        '[' => "12356",
-        ']' => "23456",
-        '{' => "5 123",
-        '}' => "456 2",
-        '⟨' => "5 13",
-        '⟩' => "46 2",
-        '|' => "456",
-        '‖' => "456 123",
-        ',' => "2",
-        ';' => "23",
-        ':' => "25",
-        '.' => "3",
-        _ => return None,
-    })
 }
 
 /// The primes at the start of a superscript, and what remains of it.

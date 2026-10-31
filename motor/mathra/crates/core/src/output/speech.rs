@@ -16,6 +16,14 @@ struct Speaker {
     words: Vec<String>,
 }
 
+/// What a pair of fences encloses, and the fences between its parts.
+struct Delimited<'a> {
+    open: &'a Option<char>,
+    close: &'a Option<char>,
+    parts: &'a [Node],
+    middles: &'a [char],
+}
+
 impl Speaker {
     /// A phrase of the locale, filled with `args`.
     fn t(&self, key: &str, args: &[&str]) -> String {
@@ -70,111 +78,13 @@ impl Speaker {
                 let o = large_operator(*symbol, self.loc);
                 self.say(o);
             }
-            Node::Row { children } => {
-                let children = &pair_bars(children);
-                let cl = classes(children, self.loc, None, false);
-                for (i, (child, class)) in children.iter().zip(cl).enumerate() {
-                    match (child, class) {
-                        // L-OPR-1: between two vectors, the dot is the dot product: "v dot w"
-                        (Node::Operator { symbol: '·', .. }, Some(Class::Bin))
-                            if i > 0 && children.get(i + 1).is_some_and(is_vector) && is_vector(&children[i - 1]) && self.loc.own_phrase("dot_product").is_some() =>
-                        {
-                            self.say(self.loc.own_phrase("dot_product").unwrap_or_default());
-                        }
-                        (Node::Operator { symbol, .. }, Some(c)) => {
-                            let o = operator(*symbol, c, self.loc);
-                            self.say(o);
-                        }
-                        (other, _) => self.node(other),
-                    }
-                }
-            }
-            Node::Fraction { num, den, rule, .. } => {
-                if !rule {
-                    let (n, d) = (self.spoken(num), self.spoken(den));
-                    self.say(self.t("binomial", &[&n, &d]));
-                } else if let Some(name) = ordinary_fraction(num, den, self.loc) {
-                    self.say(name);
-                } else if is_simple(num) && is_simple(den) {
-                    let (n, d) = (self.spoken(num), self.spoken(den));
-                    self.say(self.t("fraction_simple", &[&n, &d]));
-                } else {
-                    let (n, d) = (self.spoken(num), self.spoken(den));
-                    self.say(self.t("fraction", &[&n, &d]));
-                }
-            }
-            Node::Root { radicand, index } => {
-                let r = self.spoken(radicand);
-                let phrase = match index.as_deref() {
-                    None => self.t("sqrt", &[&r]),
-                    Some(Node::Number { value, .. }) if value == "3" => self.t("cbrt", &[&r]),
-                    Some(Node::Number { value, .. }) if value == "2" => self.t("sqrt", &[&r]),
-                    Some(i) => {
-                        let i = self.spoken(i);
-                        self.t("root_index", &[&i, &r])
-                    }
-                };
-                if is_simple(radicand) {
-                    self.say(phrase);
-                } else {
-                    self.say(format!("{phrase}, {}", self.t("root_end", &[])));
-                }
-            }
+            Node::Row { children } => self.row(children),
+            Node::Fraction { num, den, rule, .. } => self.fraction(num, den, *rule),
+            Node::Root { radicand, index } => self.root(radicand, index),
             Node::Scripts { base, sup, sub } => self.scripts(base, sup.as_deref(), sub.as_deref()),
-            Node::Delimited { open, close, parts, middles } => {
-                // |x| and ‖v‖; a longer content gets an end marker, like roots: "absolute value of, a plus b, end absolute value"
-                let unit = match (open, close) {
-                    (Some('|'), Some('|')) => Some(("abs", "abs_long")),
-                    (Some('‖'), Some('‖')) => Some(("norm", "norm_long")),
-                    _ => None,
-                };
-                if let (Some((short, long)), [inner]) = (unit, parts.as_slice()) {
-                    let x = self.spoken(inner);
-                    let phrase = self.t(if is_simple(inner) { short } else { long }, &[&x]);
-                    self.say(phrase);
-                    return;
-                }
-                // \binom: the parentheses are part of "n choose k"
-                if let ((Some('('), Some(')')), [p]) = ((open, close), parts.as_slice()) {
-                    if let binomial @ Node::Fraction { rule: false, .. } = p.single() {
-                        self.node(binomial);
-                        return;
-                    }
-                }
-                if let Some(a) = open {
-                    let o = operator(*a, Class::Open, self.loc);
-                    self.say(o);
-                }
-                for (i, p) in parts.iter().enumerate() {
-                    if i > 0 {
-                        let o = operator(middles.get(i - 1).copied().unwrap_or('|'), Class::Rel, self.loc);
-                        self.say(o);
-                    }
-                    self.node(p);
-                }
-                if let Some(f) = close {
-                    let o = operator(*f, Class::Close, self.loc);
-                    self.say(o);
-                }
-            }
+            Node::Delimited { open, close, parts, middles } => self.delimited(&Delimited { open, close, parts, middles }),
             Node::Table { shape: kind, rows, .. } => self.table(*kind, rows),
-            Node::Accent { base, accent, .. } => {
-                let b = self.spoken(base);
-                let key = match accent {
-                    '\u{20D7}' | '→' => "accent.vector",
-                    '\u{0302}' => "accent.hat",
-                    '\u{0304}' => "accent.bar",
-                    '\u{0307}' => "accent.dot",
-                    '\u{0308}' => "accent.ddot",
-                    '\u{0303}' => "accent.tilde",
-                    '⏜' => "accent.arc",
-                    _ => {
-                        self.say(b);
-                        return;
-                    }
-                };
-                self.say(self.t(key, &[&b]));
-            }
+            Node::Accent { base, accent, .. } => self.accent(base, *accent),
             Node::Bar { base, above } => {
                 let b = self.spoken(base);
                 if *above {
@@ -203,48 +113,14 @@ impl Speaker {
                 let b = self.spoken(base);
                 self.say(self.t("canceled", &[&b]));
             }
-            Node::Framed { base, shape, .. } => {
-                let b = self.spoken(base);
-                match shape {
-                    Frame::Circle => self.say(self.t("circled", &[&b])),
-                    Frame::Rectangle => self.say(self.t("boxed", &[&b])),
-                    Frame::Phase | Frame::ActuarialAngle => self.say(self.t("angle", &[&b])),
-                    // a background is emphasis, like color: it is not read
-                    Frame::Fill => self.say(b),
-                }
-            }
+            Node::Framed { base, shape, .. } => self.framed(base, *shape),
             Node::Colored { base, .. } | Node::ForcedClass { base, .. } | Node::Style { base, .. } | Node::Unit { base, .. } => self.node(base),
             Node::Quantity { value, unit } => {
                 let named = units_by_name(unit, value.as_deref(), self.loc);
                 self.node(&named);
             }
-            Node::Arrow { symbol, above, below } => {
-                // a labeled arrow is a function or a reaction, not a limit: it is not read as "tends to"
-                let o = match symbol {
-                    '→' => self.t("arrow.right", &[]),
-                    '←' => self.t("arrow.left", &[]),
-                    '↔' => self.t("arrow.both", &[]),
-                    '⇒' => self.t("arrow.implies", &[]),
-                    '=' => self.t("arrow.equals", &[]),
-                    other => operator(*other, Class::Rel, self.loc),
-                };
-                self.say(o);
-                for label in [above, below].into_iter().flatten() {
-                    let l = self.spoken(label);
-                    self.say(format!("({l})"));
-                }
-            }
-            Node::Stacked { base, above, below } => {
-                self.node(base);
-                if let Some(a) = above {
-                    let a = self.spoken(a);
-                    self.say(self.t("with_above", &[&a]));
-                }
-                if let Some(b) = below {
-                    let b = self.spoken(b);
-                    self.say(self.t("with_below", &[&b]));
-                }
-            }
+            Node::Arrow { symbol, above, below } => self.arrow(*symbol, above, below),
+            Node::Stacked { base, above, below } => self.stacked(base, above, below),
             Node::Multicolumn { base, .. }
             | Node::Raised { base, .. }
             | Node::Scaled { base, .. }
@@ -261,106 +137,297 @@ impl Speaker {
                 }
             }
             Node::Rule { .. } => {}
-            Node::VerticalArrow { symbol, left, right } => {
-                let arrow = match symbol {
-                    '↓' => self.t("arrow.down", &[]),
-                    '↑' => self.t("arrow.up", &[]),
-                    _ => self.t("arrow.equals", &[]),
-                };
-                self.say(arrow);
-                for r in [left, right].into_iter().flatten() {
-                    let r = self.spoken(r);
-                    self.say(format!("({r})"));
-                }
-            }
+            Node::VerticalArrow { symbol, left, right } => self.vertical_arrow(*symbol, left, right),
             #[cfg(feature = "chem")]
             Node::Chemistry { scheme } => self.say(crate::chem::speech::speak(scheme, self.loc)),
-            Node::ArrowDiagram { cells, arrows } => {
-                self.table(TableKind::Diagram, cells);
-                let name = |this: &mut Self, (r, c): (usize, usize)| -> String {
-                    let spoken = cells.get(r).and_then(|row| row.get(c)).map(|n| this.spoken(n)).unwrap_or_default();
-                    if spoken.is_empty() {
-                        format!("{} {}", this.t("row", &[&(r + 1).to_string()]), c + 1)
-                    } else {
-                        spoken
-                    }
-                };
-                for a in arrows {
-                    let (from, to) = (name(self, a.from), name(self, a.to));
-                    let mut phrase = format!("; {}", self.t("diagram_arrow", &[&from, &to]));
-                    for l in &a.labels {
-                        let l = self.spoken(&l.node);
-                        phrase.push_str(&format!(" ({l})"));
-                    }
-                    self.say(phrase);
-                }
-            }
+            Node::ArrowDiagram { cells, arrows } => self.arrow_diagram(cells, arrows),
             Node::LongDivision { dividend, divisor } => {
                 let (q, r) = divide(dividend, divisor);
                 self.say(self.t("long_division", &[dividend, divisor, &q, &r]));
             }
-            Node::ColumnArithmetic { operation, terms } => {
-                let a: i128 = terms[0].parse().unwrap_or(0);
-                let b: i128 = terms[1].parse().unwrap_or(0);
-                let (op, r) = match operation {
-                    '+' => (operator('+', Class::Bin, self.loc), a + b),
-                    '−' => (operator('−', Class::Bin, self.loc), a - b),
-                    _ => (operator('×', Class::Bin, self.loc), a.saturating_mul(b)),
-                };
-                self.say(self.t("column_arithmetic", &[&a.to_string(), &op, &b.to_string(), &r.to_string()]));
+            Node::ColumnArithmetic { operation, terms } => self.column_arithmetic(*operation, terms),
+        }
+    }
+
+    fn fraction(&mut self, num: &Node, den: &Node, rule: bool) {
+        if !rule {
+            let (n, d) = (self.spoken(num), self.spoken(den));
+            self.say(self.t("binomial", &[&n, &d]));
+        } else if let Some(name) = ordinary_fraction(num, den, self.loc) {
+            self.say(name);
+        } else if is_simple(num) && is_simple(den) {
+            let (n, d) = (self.spoken(num), self.spoken(den));
+            self.say(self.t("fraction_simple", &[&n, &d]));
+        } else {
+            let (n, d) = (self.spoken(num), self.spoken(den));
+            self.say(self.t("fraction", &[&n, &d]));
+        }
+    }
+
+    fn root(&mut self, radicand: &Node, index: &Option<Box<Node>>) {
+        let r = self.spoken(radicand);
+        let phrase = match index.as_deref() {
+            None => self.t("sqrt", &[&r]),
+            Some(Node::Number { value, .. }) if value == "3" => self.t("cbrt", &[&r]),
+            Some(Node::Number { value, .. }) if value == "2" => self.t("sqrt", &[&r]),
+            Some(i) => {
+                let i = self.spoken(i);
+                self.t("root_index", &[&i, &r])
+            }
+        };
+        if is_simple(radicand) {
+            self.say(phrase);
+        } else {
+            self.say(format!("{phrase}, {}", self.t("root_end", &[])));
+        }
+    }
+
+    fn row(&mut self, children: &[Node]) {
+        let children = &pair_bars(children);
+        let cl = classes(children, self.loc, None, false);
+        for (i, (child, class)) in children.iter().zip(cl).enumerate() {
+            match (child, class) {
+                // L-OPR-1: between two vectors, the dot is the dot product: "v dot w"
+                (Node::Operator { symbol: '·', .. }, Some(Class::Bin)) if between_vectors(children, i) && self.loc.own_phrase("dot_product").is_some() => {
+                    self.say(self.loc.own_phrase("dot_product").unwrap_or_default());
+                }
+                (Node::Operator { symbol, .. }, Some(c)) => {
+                    let o = operator(*symbol, c, self.loc);
+                    self.say(o);
+                }
+                (other, _) => self.node(other),
             }
         }
     }
 
-    fn scripts(&mut self, base: &Node, sup: Option<&Node>, sub: Option<&Node>) {
-        if let Node::LargeOperator { symbol, .. } = base {
-            let name = large_operator(*symbol, self.loc);
-            let from = sub.map(|s| self.spoken(s));
-            let to = sup.map(|s| self.spoken(s));
-            let phrase = match (from, to) {
-                (Some(d), Some(a)) => self.t("big_from_to", &[&name, &d, &a]),
-                (Some(d), None) => self.t("big_over", &[&name, &d]),
-                (None, Some(a)) => self.t("big_to", &[&name, &a]),
-                (None, None) => name,
-            };
-            self.say(phrase);
+    fn delimited(&mut self, fences: &Delimited<'_>) {
+        if self.bar_unit(fences) || self.parenthesized_binomial(fences) {
             return;
         }
-        if let (Node::Function { name, .. }, Some(s)) = (base, sub) {
-            if name == "lim" {
-                let s = self.spoken(s).replace(self.loc.phrase("op.→"), self.loc.phrase("tending_to"));
-                self.say(self.t("lim_as", &[&s]));
-                if let Some(p) = sup {
-                    let p = self.spoken(p);
-                    self.say(p);
-                }
+        self.enclosure(fences);
+    }
+
+    /// `|x|` and `‖v‖`. A longer content gets an end marker, like roots.
+    fn bar_unit(&mut self, fences: &Delimited<'_>) -> bool {
+        let Delimited { open, close, parts, .. } = *fences;
+        let unit = match (open, close) {
+            (Some('|'), Some('|')) => Some(("abs", "abs_long")),
+            (Some('‖'), Some('‖')) => Some(("norm", "norm_long")),
+            _ => None,
+        };
+        let (Some((short, long)), [inner]) = (unit, parts) else {
+            return false;
+        };
+        let x = self.spoken(inner);
+        let phrase = self.t(if is_simple(inner) { short } else { long }, &[&x]);
+        self.say(phrase);
+        true
+    }
+
+    /// `\binom`: the parentheses are part of "n choose k".
+    fn parenthesized_binomial(&mut self, fences: &Delimited<'_>) -> bool {
+        let Delimited { open, close, parts, .. } = *fences;
+        let ((Some('('), Some(')')), [p]) = ((open, close), parts) else {
+            return false;
+        };
+        let binomial @ Node::Fraction { rule: false, .. } = p.single() else {
+            return false;
+        };
+        self.node(binomial);
+        true
+    }
+
+    fn enclosure(&mut self, fences: &Delimited<'_>) {
+        let Delimited { open, close, parts, middles } = *fences;
+        if let Some(a) = open {
+            let o = operator(*a, Class::Open, self.loc);
+            self.say(o);
+        }
+        for (i, p) in parts.iter().enumerate() {
+            if i > 0 {
+                let o = operator(middles.get(i - 1).copied().unwrap_or('|'), Class::Rel, self.loc);
+                self.say(o);
+            }
+            self.node(p);
+        }
+        if let Some(f) = close {
+            let o = operator(*f, Class::Close, self.loc);
+            self.say(o);
+        }
+    }
+
+    fn accent(&mut self, base: &Node, accent: char) {
+        let b = self.spoken(base);
+        let key = match accent {
+            '\u{20D7}' | '→' => "accent.vector",
+            '\u{0302}' => "accent.hat",
+            '\u{0304}' => "accent.bar",
+            '\u{0307}' => "accent.dot",
+            '\u{0308}' => "accent.ddot",
+            '\u{0303}' => "accent.tilde",
+            '⏜' => "accent.arc",
+            _ => {
+                self.say(b);
                 return;
             }
+        };
+        self.say(self.t(key, &[&b]));
+    }
+
+    fn framed(&mut self, base: &Node, shape: Frame) {
+        let b = self.spoken(base);
+        match shape {
+            Frame::Circle => self.say(self.t("circled", &[&b])),
+            Frame::Rectangle => self.say(self.t("boxed", &[&b])),
+            Frame::Phase | Frame::ActuarialAngle => self.say(self.t("angle", &[&b])),
+            // a background is emphasis, like color: it is not read
+            Frame::Fill => self.say(b),
         }
-        // sen² x, log₂ x: the scripts belong to the function name, before "de"/"of"
-        if let Node::Function { name, .. } = base {
-            let spoken = self.loc.function_spoken(name);
-            let bare = spoken.map_or_else(|| self.loc.function_name(name), str::to_string);
-            // sen⁻¹ x is the inverse function, not 1/sen x: "arco seno de x", "inverse sine of x"
-            let minus_one = format!("{} 1", self.loc.phrase("negative"));
-            let inverse = sup.is_some_and(|s| self.spoken(s) == minus_one);
-            let trig = matches!(name.as_str(), "sin" | "cos" | "tan" | "cot" | "sec" | "csc");
-            let mut words = vec![match (inverse, trig) {
-                (false, _) => bare,
-                (true, true) => self.t("inverse_trig", &[&bare]),
-                (true, false) => self.t("inverse", &[&bare]),
-            }];
-            if let Some(s) = sub {
-                let s = self.spoken(s);
-                words.push(self.t(if name == "log" { "log_base" } else { "sub" }, &[&s]));
+    }
+
+    /// A labeled arrow is a function or a reaction, not a limit: it is not read as "tends to".
+    fn arrow(&mut self, symbol: char, above: &Option<Box<Node>>, below: &Option<Box<Node>>) {
+        let o = match symbol {
+            '→' => self.t("arrow.right", &[]),
+            '←' => self.t("arrow.left", &[]),
+            '↔' => self.t("arrow.both", &[]),
+            '⇒' => self.t("arrow.implies", &[]),
+            '=' => self.t("arrow.equals", &[]),
+            other => operator(other, Class::Rel, self.loc),
+        };
+        self.say(o);
+        for label in [above, below].into_iter().flatten() {
+            let l = self.spoken(label);
+            self.say(format!("({l})"));
+        }
+    }
+
+    fn stacked(&mut self, base: &Node, above: &Option<Box<Node>>, below: &Option<Box<Node>>) {
+        self.node(base);
+        if let Some(a) = above {
+            let a = self.spoken(a);
+            self.say(self.t("with_above", &[&a]));
+        }
+        if let Some(b) = below {
+            let b = self.spoken(b);
+            self.say(self.t("with_below", &[&b]));
+        }
+    }
+
+    fn vertical_arrow(&mut self, symbol: char, left: &Option<Box<Node>>, right: &Option<Box<Node>>) {
+        let arrow = match symbol {
+            '↓' => self.t("arrow.down", &[]),
+            '↑' => self.t("arrow.up", &[]),
+            _ => self.t("arrow.equals", &[]),
+        };
+        self.say(arrow);
+        for r in [left, right].into_iter().flatten() {
+            let r = self.spoken(r);
+            self.say(format!("({r})"));
+        }
+    }
+
+    fn arrow_diagram(&mut self, cells: &[Vec<Node>], arrows: &[DiagramArrow]) {
+        self.table(TableKind::Diagram, cells);
+        let name = |this: &mut Self, (r, c): (usize, usize)| -> String {
+            let spoken = cells.get(r).and_then(|row| row.get(c)).map(|n| this.spoken(n)).unwrap_or_default();
+            if spoken.is_empty() {
+                format!("{} {}", this.t("row", &[&(r + 1).to_string()]), c + 1)
+            } else {
+                spoken
             }
-            if let Some(s) = sup.filter(|_| !inverse) {
-                words.push(self.superscript(s));
+        };
+        for a in arrows {
+            let (from, to) = (name(self, a.from), name(self, a.to));
+            let mut phrase = format!("; {}", self.t("diagram_arrow", &[&from, &to]));
+            for l in &a.labels {
+                let l = self.spoken(&l.node);
+                phrase.push_str(&format!(" ({l})"));
             }
-            let words = words.join(" ");
-            self.say(if spoken.is_some() { self.t("function_of", &[&words]) } else { words });
+            self.say(phrase);
+        }
+    }
+
+    fn column_arithmetic(&mut self, operation: char, terms: &[String]) {
+        let a: i128 = terms[0].parse().unwrap_or(0);
+        let b: i128 = terms[1].parse().unwrap_or(0);
+        let (op, r) = match operation {
+            '+' => (operator('+', Class::Bin, self.loc), a + b),
+            '−' => (operator('−', Class::Bin, self.loc), a - b),
+            _ => (operator('×', Class::Bin, self.loc), a.saturating_mul(b)),
+        };
+        self.say(self.t("column_arithmetic", &[&a.to_string(), &op, &b.to_string(), &r.to_string()]));
+    }
+
+    fn scripts(&mut self, base: &Node, sup: Option<&Node>, sub: Option<&Node>) {
+        if self.big_operator_phrase(base, sup, sub) || self.limit_phrase(base, sup, sub) || self.function_scripts(base, sup, sub) {
             return;
         }
+        self.plain_scripts(base, sup, sub);
+    }
+
+    fn big_operator_phrase(&mut self, base: &Node, sup: Option<&Node>, sub: Option<&Node>) -> bool {
+        let Node::LargeOperator { symbol, .. } = base else {
+            return false;
+        };
+        let name = large_operator(*symbol, self.loc);
+        let from = sub.map(|s| self.spoken(s));
+        let to = sup.map(|s| self.spoken(s));
+        let phrase = match (from, to) {
+            (Some(d), Some(a)) => self.t("big_from_to", &[&name, &d, &a]),
+            (Some(d), None) => self.t("big_over", &[&name, &d]),
+            (None, Some(a)) => self.t("big_to", &[&name, &a]),
+            (None, None) => name,
+        };
+        self.say(phrase);
+        true
+    }
+
+    fn limit_phrase(&mut self, base: &Node, sup: Option<&Node>, sub: Option<&Node>) -> bool {
+        let (Node::Function { name, .. }, Some(s)) = (base, sub) else {
+            return false;
+        };
+        if name != "lim" {
+            return false;
+        }
+        let s = self.spoken(s).replace(self.loc.phrase("op.→"), self.loc.phrase("tending_to"));
+        self.say(self.t("lim_as", &[&s]));
+        if let Some(p) = sup {
+            let p = self.spoken(p);
+            self.say(p);
+        }
+        true
+    }
+
+    /// sen² x, log₂ x: the scripts belong to the function name, before "de"/"of".
+    fn function_scripts(&mut self, base: &Node, sup: Option<&Node>, sub: Option<&Node>) -> bool {
+        let Node::Function { name, .. } = base else {
+            return false;
+        };
+        let spoken = self.loc.function_spoken(name);
+        let bare = spoken.map_or_else(|| self.loc.function_name(name), str::to_string);
+        // sen⁻¹ x is the inverse function, not 1/sen x: "arco seno de x", "inverse sine of x"
+        let minus_one = format!("{} 1", self.loc.phrase("negative"));
+        let inverse = sup.is_some_and(|s| self.spoken(s) == minus_one);
+        let trig = matches!(name.as_str(), "sin" | "cos" | "tan" | "cot" | "sec" | "csc");
+        let mut words = vec![match (inverse, trig) {
+            (false, _) => bare,
+            (true, true) => self.t("inverse_trig", &[&bare]),
+            (true, false) => self.t("inverse", &[&bare]),
+        }];
+        if let Some(s) = sub {
+            let s = self.spoken(s);
+            words.push(self.t(if name == "log" { "log_base" } else { "sub" }, &[&s]));
+        }
+        if let Some(s) = sup.filter(|_| !inverse) {
+            words.push(self.superscript(s));
+        }
+        let words = words.join(" ");
+        self.say(if spoken.is_some() { self.t("function_of", &[&words]) } else { words });
+        true
+    }
+
+    fn plain_scripts(&mut self, base: &Node, sup: Option<&Node>, sub: Option<&Node>) {
         self.node(base);
         if let Some(s) = sub {
             let s = self.spoken(s);
@@ -499,6 +566,11 @@ fn is_vector(node: &Node) -> bool {
         Node::Scripts { base, sup: None, .. } => is_vector(base),
         _ => false,
     }
+}
+
+/// L-OPR-1: the dot sits between two vectors.
+fn between_vectors(children: &[Node], index: usize) -> bool {
+    index > 0 && children.get(index + 1).is_some_and(is_vector) && is_vector(&children[index - 1])
 }
 
 fn is_simple(node: &Node) -> bool {

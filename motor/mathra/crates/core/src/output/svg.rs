@@ -155,7 +155,7 @@ pub fn generate(c: &Content) -> String {
 
     // S-SVG-5: each glyph drawn only once, in order of first appearance (deterministic)
     s.push_str("<defs>");
-    glyph_defs(&math_box.items, &id, f, &mut HashSet::new(), &mut s);
+    GlyphCatalog { id: &id, font: f, seen: &mut HashSet::new(), svg: &mut s }.write(&math_box.items);
     s.push_str("</defs>");
 
     s.push_str(&body);
@@ -173,15 +173,29 @@ pub fn generate(c: &Content) -> String {
     s
 }
 
-/// S-SVG-5: the outline of each glyph, once, in order of first appearance, inside turned boxes too.
-fn glyph_defs(items: &[Item], id: &str, f: &Font, seen: &mut HashSet<u16>, s: &mut String) {
-    for item in items {
-        match item {
-            Item::Glyph { id: g, .. } if seen.insert(g.0) => {
-                let _ = write!(s, r#"<path id="{id}-g{}" d="{}"/>"#, g.0, f.outline(*g));
+/// The outlines of one equation. The id, the font, the glyphs already written and the buffer travel together.
+struct GlyphCatalog<'a> {
+    id: &'a str,
+    font: &'a Font,
+    seen: &'a mut HashSet<u16>,
+    svg: &'a mut String,
+}
+
+impl GlyphCatalog<'_> {
+    /// S-SVG-5: the outline of each glyph, once, in order of first appearance, inside turned boxes too.
+    fn write(&mut self, items: &[Item]) {
+        for item in items {
+            match item {
+                Item::Glyph { id: g, .. } => {
+                    if self.seen.insert(g.0) {
+                        let id = self.id;
+                        let outline = self.font.outline(*g);
+                        let _ = write!(self.svg, r#"<path id="{id}-g{}" d="{}"/>"#, g.0, outline);
+                    }
+                }
+                Item::Transformed { items, .. } => self.write(items),
+                _ => {}
             }
-            Item::Transformed { items, .. } => glyph_defs(items, id, f, seen, s),
-            _ => {}
         }
     }
 }
@@ -191,58 +205,73 @@ fn glyph_defs(items: &[Item], id: &str, f: &Font, seen: &mut HashSet<u16>, s: &m
 fn items_svg(math_box: &MathBox, id: &str, steps: &mut Steps) -> String {
     let mut out = String::new();
     out.push_str(r#"<g fill="currentColor" stroke="none" transform="scale(1,-1)">"#);
-    item_svg(&math_box.items, id, steps, &mut out);
+    ItemDrawing { id, steps, svg: &mut out }.write(&math_box.items);
     out.push_str("</g>");
     out
 }
 
-fn item_svg(items: &[Item], id: &str, steps: &mut Steps, out: &mut String) {
-    for item in items {
-        match item {
-            Item::Glyph { id: g, x, y, scale, color, flip } => {
-                let transform = if *flip {
-                    format!(r#"transform="translate({} {}) scale({} {})""#, n(*x), n(*y), n(-*scale), n(*scale))
-                } else if (*scale - 1.0).abs() < 1e-4 {
-                    format!(r#"x="{}" y="{}""#, n(*x), n(*y))
-                } else {
-                    format!(r#"transform="translate({} {}) scale({})""#, n(*x), n(*y), n(*scale))
-                };
-                let _ = write!(out, r##"<use href="#{id}-g{}" {transform}{}{}/>"##, g.0, fill(color), steps.next(Entry::Fade));
-            }
-            Item::Rule { x, y, width, height, color } => {
-                let entry = if width >= height { Entry::Wide } else { Entry::Tall };
-                let _ = write!(out, r#"<rect x="{}" y="{}" width="{}" height="{}"{}{}/>"#, n(*x), n(*y), n(*width), n(*height), fill(color), steps.next(entry));
-            }
-            Item::Line { x1, y1, x2, y2, thickness, color } => {
-                let _ = write!(
-                    out,
-                    r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" stroke-linecap="round"{}/>"#,
-                    n(*x1),
-                    n(*y1),
-                    n(*x2),
-                    n(*y2),
-                    color.as_deref().unwrap_or("currentColor"),
-                    n(*thickness),
-                    steps.next(Entry::Drawn)
-                );
-            }
-            Item::Ellipse { cx, cy, rx, ry, thickness, color } => {
-                let _ = write!(
-                    out,
-                    r#"<ellipse cx="{}" cy="{}" rx="{}" ry="{}" fill="none" stroke="{}" stroke-width="{}"{}/>"#,
-                    n(*cx),
-                    n(*cy),
-                    n(*rx),
-                    n(*ry),
-                    color.as_deref().unwrap_or("currentColor"),
-                    n(*thickness),
-                    steps.next(Entry::Drawn)
-                );
-            }
-            Item::Transformed { matrix: [a, b, c, d, e, f], items } => {
-                let _ = write!(out, r#"<g transform="matrix({} {} {} {} {} {})">"#, n(*a), n(*b), n(*c), n(*d), n(*e), n(*f));
-                item_svg(items, id, steps, out);
-                out.push_str("</g>");
+/// One equation's drawing: the id prefix, the step counter and the buffer they share.
+struct ItemDrawing<'a> {
+    id: &'a str,
+    steps: &'a mut Steps,
+    svg: &'a mut String,
+}
+
+impl ItemDrawing<'_> {
+    /// S-SVG-5 and S-SVG-10: glyphs as `<use>` of their `<path>`, in the order the layout set them.
+    fn write(&mut self, items: &[Item]) {
+        let id = self.id;
+        for item in items {
+            match item {
+                Item::Glyph { id: g, x, y, scale, color, flip } => {
+                    let transform = if *flip {
+                        format!(r#"transform="translate({} {}) scale({} {})""#, n(*x), n(*y), n(-*scale), n(*scale))
+                    } else if (*scale - 1.0).abs() < 1e-4 {
+                        format!(r#"x="{}" y="{}""#, n(*x), n(*y))
+                    } else {
+                        format!(r#"transform="translate({} {}) scale({})""#, n(*x), n(*y), n(*scale))
+                    };
+                    let step = self.steps.next(Entry::Fade);
+                    let _ = write!(self.svg, r##"<use href="#{id}-g{}" {transform}{}{}/>"##, g.0, fill(color), step);
+                }
+                Item::Rule { x, y, width, height, color } => {
+                    let entry = if width >= height { Entry::Wide } else { Entry::Tall };
+                    let step = self.steps.next(entry);
+                    let _ = write!(self.svg, r#"<rect x="{}" y="{}" width="{}" height="{}"{}{}/>"#, n(*x), n(*y), n(*width), n(*height), fill(color), step);
+                }
+                Item::Line { x1, y1, x2, y2, thickness, color } => {
+                    let step = self.steps.next(Entry::Drawn);
+                    let _ = write!(
+                        self.svg,
+                        r#"<line x1="{}" y1="{}" x2="{}" y2="{}" stroke="{}" stroke-width="{}" stroke-linecap="round"{}/>"#,
+                        n(*x1),
+                        n(*y1),
+                        n(*x2),
+                        n(*y2),
+                        color.as_deref().unwrap_or("currentColor"),
+                        n(*thickness),
+                        step
+                    );
+                }
+                Item::Ellipse { cx, cy, rx, ry, thickness, color } => {
+                    let step = self.steps.next(Entry::Drawn);
+                    let _ = write!(
+                        self.svg,
+                        r#"<ellipse cx="{}" cy="{}" rx="{}" ry="{}" fill="none" stroke="{}" stroke-width="{}"{}/>"#,
+                        n(*cx),
+                        n(*cy),
+                        n(*rx),
+                        n(*ry),
+                        color.as_deref().unwrap_or("currentColor"),
+                        n(*thickness),
+                        step
+                    );
+                }
+                Item::Transformed { matrix: [a, b, c, d, e, f], items } => {
+                    let _ = write!(self.svg, r#"<g transform="matrix({} {} {} {} {} {})">"#, n(*a), n(*b), n(*c), n(*d), n(*e), n(*f));
+                    self.write(items);
+                    self.svg.push_str("</g>");
+                }
             }
         }
     }
