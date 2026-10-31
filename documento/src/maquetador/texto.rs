@@ -11,8 +11,10 @@ const ROMANA: &str = "Latin Modern Roman";
 const MONO: &str = "Latin Modern Mono";
 /// Las fuentes propias del texto se numeran desde aquí: las de las fórmulas usan las primeras.
 const PRIMERA_FUENTE: u8 = 16;
-/// Espacio sin corte, del ancho exacto de la fórmula que ocupa su lugar.
-const RESERVA: &str = "\u{a0}";
+/// Lo que ocupa el lugar de una fórmula, con su ancho exacto. Es una letra y no un espacio porque
+/// cosmic-text descarta los espacios al final de una línea, y con ellos se perdería la fórmula. No
+/// llega a pintarse: en su sitio va la fórmula.
+const RESERVA: &str = "x";
 /// `metadata` de un glifo: desde aquí, una fórmula; 1, subrayado.
 const BASE_FORMULA: usize = 1 << 40;
 const SUBRAYADO: usize = 1;

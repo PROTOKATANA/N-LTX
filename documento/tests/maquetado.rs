@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use documento::{Documento, Formato, Incrustados};
 use primitivas::{Caja, Capa, Composicion, Compositor, ErrorComposicion, Escena, Primitiva};
 
@@ -126,6 +128,20 @@ fn una_formula_en_linea_empuja_el_texto_que_sigue() {
     let con = x_tras("a $xxxx$ b");
     // la fórmula de mentira mide 4 cuerpos
     assert!(((con - sin) - 4.0 * tam).abs() < tam, "{sin} {con}");
+}
+
+#[test]
+fn una_formula_en_linea_no_se_pierde_a_ningun_ancho() {
+    let formulas = |e: &Escena| {
+        e.primitivas
+            .iter()
+            .filter(|p| matches!(p, Primitiva::Abrir(Capa::Transformacion(_))))
+            .count()
+    };
+    for ancho in 30..400 {
+        let e = documento(ancho as f64).componer("La ley $x$ cambia en vivo.").unwrap().escena;
+        assert_eq!(formulas(&e), 1, "a {ancho} bp");
+    }
 }
 
 #[test]
