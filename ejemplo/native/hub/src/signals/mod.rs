@@ -37,3 +37,18 @@ pub struct MedidasPintor {
     pub fps_masiva: f64,
     pub ms_masiva: f64,
 }
+
+/// Dart → Rust: la muestra que hay que leer.
+#[derive(Clone, Copy, Deserialize, DartSignal)]
+pub struct PedirMuestra {
+    pub indice: u32,
+}
+
+/// Rust → Dart: una muestra de la carpeta, o vacía si no hay ninguna.
+#[derive(Clone, Serialize, RustSignal)]
+pub struct MuestraLeida {
+    pub indice: u32,
+    pub total: u32,
+    pub nombre: String,
+    pub fuente: String,
+}

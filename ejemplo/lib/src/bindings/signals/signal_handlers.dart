@@ -13,4 +13,10 @@ final assignRustSignal = <String, void Function(Uint8List, Uint8List)>{
     _medidasPintorStreamController.add(rustSignal);
     MedidasPintor.latestRustSignal = rustSignal;
   },
+  'MuestraLeida': (Uint8List messageBytes, Uint8List binary) {
+    final message = MuestraLeida.bincodeDeserialize(messageBytes);
+    final rustSignal = RustSignalPack(message, binary);
+    _muestraLeidaStreamController.add(rustSignal);
+    MuestraLeida.latestRustSignal = rustSignal;
+  },
 };

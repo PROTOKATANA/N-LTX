@@ -18,4 +18,8 @@ Las fronteras son las de `PUENTES.md`: Flutter habla con Rust por `rinf`, a trav
 Vulkan en una sola superficie: ver `pintor/README.md`. Lo que el pintor no sabe hacer
 se avisa en pantalla: imágenes, patrones (los aproxima con su color) y mosaicos.
 
+Con `NLTX_MUESTRAS=<carpeta>`, la pestaña Muestras recorre los `.tex` de esa carpeta: sirve para ver cómo
+se comporta el motor con LaTeX de fuera, por ejemplo con [DaTikZ](https://huggingface.co/datasets/nllg/datikz).
+Las muestras no se versionan: ese conjunto no declara licencia y mezcla orígenes distintos.
+
 El runner desactiva Impeller, como en CORTEX: en esta GPU pixela los recortes y los trazados.

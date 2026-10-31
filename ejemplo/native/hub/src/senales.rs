@@ -9,13 +9,15 @@ use rinf::DartSignal;
 
 use crate::avisos;
 use crate::compositor::{Compositor, Encargo};
+use crate::muestras::Muestras;
 use crate::signals;
 
 const CADA_MEDIDA: Duration = Duration::from_secs(1);
 
-pub async fn escuchar(compositor: Compositor, taller: Arc<Taller>) {
+pub async fn escuchar(compositor: Compositor, taller: Arc<Taller>, muestras: Muestras) {
     let publicar = signals::PublicarDocumento::get_dart_signal_receiver();
     let ver = signals::VerDocumento::get_dart_signal_receiver();
+    let pedir = signals::PedirMuestra::get_dart_signal_receiver();
     let mut reloj = tokio::time::interval(CADA_MEDIDA);
     loop {
         tokio::select! {
@@ -29,6 +31,7 @@ pub async fn escuchar(compositor: Compositor, taller: Arc<Taller>) {
                 escala: s.message.escala,
                 y: s.message.y,
             }),
+            Some(s) = pedir.recv() => avisos::enviar_muestra(muestras.leer(s.message.indice)),
             _ = reloj.tick() => avisos::enviar_medidas(medidas::leer()),
             else => return,
         }

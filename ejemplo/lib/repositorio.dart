@@ -12,6 +12,21 @@ class Publicado {
   final String? error;
 }
 
+/// Un archivo de la carpeta de muestras.
+class ArchivoMuestra {
+  const ArchivoMuestra({
+    required this.indice,
+    required this.total,
+    required this.nombre,
+    required this.fuente,
+  });
+
+  final int indice;
+  final int total;
+  final String nombre;
+  final String fuente;
+}
+
 /// Lo que se está midiendo en el pintor.
 class Medidas {
   const Medidas({
@@ -53,7 +68,11 @@ abstract interface class RepositorioMotor {
 
   void ver(Encuadre encuadre);
 
+  void pedirMuestra(int indice);
+
   Stream<Publicado> get publicados;
+
+  Stream<ArchivoMuestra> get muestras;
 
   Stream<Medidas> get medidas;
 }
@@ -71,6 +90,20 @@ class RepositorioRinf implements RepositorioMotor {
     escala: e.escala,
     y: e.y,
   ).sendSignalToRust();
+
+  @override
+  void pedirMuestra(int indice) =>
+      PedirMuestra(indice: indice).sendSignalToRust();
+
+  @override
+  Stream<ArchivoMuestra> get muestras => MuestraLeida.rustSignalStream.map(
+    (RustSignalPack<MuestraLeida> s) => ArchivoMuestra(
+      indice: s.message.indice,
+      total: s.message.total,
+      nombre: s.message.nombre,
+      fuente: s.message.fuente,
+    ),
+  );
 
   @override
   Stream<Publicado> get publicados => DocumentoPublicado.rustSignalStream.map(
