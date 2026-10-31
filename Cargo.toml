@@ -10,6 +10,7 @@ members = [
     "ejemplo/native/hub",
     "motor/tikra/crates/core",
     "motor/tikra/crates/calendar",
+    "motor/tikra/crates/pgfplots",
     "motor/tikra/crates/libraries",
     "motor/tikra/crates/datavis",
     "motor/tikra/crates/canvas",

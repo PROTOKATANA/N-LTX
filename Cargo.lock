@@ -1203,6 +1203,7 @@ dependencies = [
  "tikra_graphs",
  "tikra_label",
  "tikra_libraries",
+ "tikra_pgfplots",
  "tikra_tex",
  "ttf-parser",
 ]
@@ -1260,6 +1261,13 @@ dependencies = [
 
 [[package]]
 name = "tikra_libraries"
+version = "1.8.1"
+dependencies = [
+ "tikra_engine",
+]
+
+[[package]]
+name = "tikra_pgfplots"
 version = "1.8.1"
 dependencies = [
  "tikra_engine",

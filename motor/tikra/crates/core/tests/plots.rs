@@ -278,7 +278,7 @@ fn interp_image_cells_shade_between_their_corners() {
     // `matrix plot, shader=interp`: the corners' metas as pgfplots finds them sweeping the
     // scanlines (pgfplots manual, the matrix with a nan in its middle)
     let metas = [0.0, 1.0, 2.0, 3.0, f64::NAN, 5.0, 6.0, 7.0, 8.0];
-    let cells = tikra::engine::pgfplots::mesh::image_interp_metas(&metas, 3, 3, 0.0);
+    let cells = tikra_pgfplots::mesh::image_interp_metas(&metas, 3, 3, 0.0);
     // the first corner its own; the inner corner after a nan the mean of the four around
     // (nan as the lowest meta); the first row's from its centers; the last column extrapolated
     assert_eq!(cells[0], [0.0, 1.0, 1.0, 3.0]);

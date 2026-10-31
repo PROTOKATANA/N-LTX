@@ -4,9 +4,9 @@
 //! each piece is filled on its own, in `every segment`, the plot's options, `every segment no k`,
 //! `every odd segment` or `every even segment` and `every last segment` (`\tikzfillbetween`).
 
-use crate::scene::{Point, Segment};
-use crate::tex::{self, Token};
-use crate::{Error, PT};
+use tikra_engine::scene::{Point, Segment};
+use tikra_engine::tex::{self, Token};
+use tikra_engine::{Error, PT};
 
 use super::plot::Plot;
 use super::{toks, Engine};
@@ -160,7 +160,7 @@ pub fn draw(e: &mut Engine, p: &Plot, spec: &[Token]) -> Result<(), Error> {
     let mut soft_domain = false;
     let mut soft: [Option<String>; 3] = [None, None, None];
     let mut rest: Vec<Token> = Vec::new();
-    for item in crate::keys::split_list(spec) {
+    for item in tikra_engine::keys::split_list(spec) {
         let value = item.value.clone().map(|v| tex::tokens_to_string(&v)).unwrap_or_default();
         match item.key.trim() {
             "of" => of = value,
@@ -244,7 +244,7 @@ pub fn draw(e: &mut Engine, p: &Plot, spec: &[Token]) -> Result<(), Error> {
         // both run the same way, then are cut where they cross: the kth pieces make the kth segment
         let la = polyline(&pa);
         let lb = if reverse { polyline(&pb) } else { polyline(&super::visual::reverse(&pb)) };
-        let crossings = super::super::intersections::intersections(&path_of(&la), &path_of(&lb));
+        let crossings = tikra_engine::engine::intersections::intersections(&path_of(&la), &path_of(&lb));
         let (ca, cb) = (cut(&la, &crossings), cut(&lb, &crossings));
         if ca.len() != cb.len() {
             e.warn("fill between: the paths are cut into different numbers of pieces: filled as one");
@@ -297,7 +297,7 @@ pub fn intersection_segments(e: &mut Engine, v: Option<Vec<Token>>) -> Result<()
     let mut of = String::new();
     let mut sequence = "A0 -- B1".to_string();
     let mut reverse_all = false;
-    for item in crate::keys::split_list(&v.unwrap_or_default()) {
+    for item in tikra_engine::keys::split_list(&v.unwrap_or_default()) {
         let value = item.value.map(|v| tex::tokens_to_string(&v)).unwrap_or_default();
         match item.key.trim() {
             "of" => of = value,
@@ -315,7 +315,7 @@ pub fn intersection_segments(e: &mut Engine, v: Option<Vec<Token>>) -> Result<()
         return Ok(());
     };
     let (la, lb) = (polyline(&pa), polyline(&pb));
-    let crossings = super::super::intersections::intersections(&path_of(&la), &path_of(&lb));
+    let crossings = tikra_engine::engine::intersections::intersections(&path_of(&la), &path_of(&lb));
     let pieces = [cut(&la, &crossings), cut(&lb, &crossings)];
     let whole = [la, lb];
     let mut out: Vec<Token> = Vec::new();
@@ -402,11 +402,11 @@ pub fn intersection_segments(e: &mut Engine, v: Option<Vec<Token>>) -> Result<()
     }
     // as `insert path` does: the path goes on with them (`\tikra@insertpath`)
     let mut body = match e.tex.meaning_of("tikra@insertpath") {
-        crate::tex::Meaning::Macro(m) => tex::substitute(&m.body, &[]),
+        tikra_engine::tex::Meaning::Macro(m) => tex::substitute(&m.body, &[]),
         _ => Vec::new(),
     };
     body.extend(out);
-    e.tex.set_meaning(&Token::cs("tikra@insertpath"), super::super::macro_tokens(body), false);
+    e.tex.set_meaning(&Token::cs("tikra@insertpath"), tikra_engine::engine::macro_tokens(body), false);
     Ok(())
 }
 
@@ -414,14 +414,7 @@ pub fn intersection_segments(e: &mut Engine, v: Option<Vec<Token>>) -> Result<()
 pub fn softpath(e: &mut Engine, segs: Vec<Segment>) -> tex::Meaning {
     let key = format!("@softpath{}", e.saved_paths.len());
     e.saved_paths.insert(key.clone(), segs);
-    super::super::macro_from(&key)
-}
-
-/// The soft path a macro holds, if it holds one.
-pub fn softpath_of(e: &Engine, macro_name: &Token) -> Option<Vec<Segment>> {
-    let tex::Meaning::Macro(m) = e.tex.meaning(macro_name) else { return None };
-    let text: String = m.body.iter().filter_map(|b| if let tex::Body::Tok(t) = b { Some(tex::tokens_to_string(std::slice::from_ref(t))) } else { None }).collect();
-    text.starts_with("@softpath").then(|| e.saved_paths.get(&text).cloned()).flatten()
+    tikra_engine::engine::macro_from(&key)
 }
 
 /// The first control sequence of an argument (`\pgfsetpath\A`, `{\A}`).
@@ -468,9 +461,9 @@ pub fn soft_command(e: &mut Engine, name: &str) -> Result<(), Error> {
         }
         "pgfsetpathandBB" | "pgfaddpathandBB" => {
             let t = macro_arg(e)?;
-            let segs = softpath_of(e, &t).unwrap_or_default();
+            let segs = tikra_engine::engine::basic::softpath_of(e, &t).unwrap_or_default();
             if name == "pgfsetpathandBB" {
-                e.pgf_path = super::super::basic::PgfPath::default();
+                e.pgf_path = tikra_engine::engine::basic::PgfPath::default();
             }
             for s in segs {
                 e.pgf_add(s);
@@ -478,7 +471,7 @@ pub fn soft_command(e: &mut Engine, name: &str) -> Result<(), Error> {
         }
         // the outline of the axis being drawn, added to the path being built
         "pgfplotspathaxisoutline" => {
-            let Some(f) = e.frame.clone() else { return Ok(()) };
+            let Some(f) = super::fig(e).frame.clone() else { return Ok(()) };
             let (lo, hi) = (f.min, f.max);
             let corners = [[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]].map(|[x, y]| f.at([x, y, lo[2]]));
             e.pgf_add(Segment::MoveTo(corners[0]));
@@ -489,7 +482,7 @@ pub fn soft_command(e: &mut Engine, name: &str) -> Result<(), Error> {
         }
         "pgfpathreplacefirstmoveto" => {
             let t = macro_arg(e)?;
-            let mut segs = softpath_of(e, &t).unwrap_or_default();
+            let mut segs = tikra_engine::engine::basic::softpath_of(e, &t).unwrap_or_default();
             if let Some(Segment::MoveTo(p)) = segs.first().copied() {
                 segs[0] = Segment::LineTo(p);
             }
@@ -504,12 +497,12 @@ pub fn soft_command(e: &mut Engine, name: &str) -> Result<(), Error> {
 /// The region of `soft clip={(3,-1) rectangle (4,100)}` or `soft clip={domain=3:4}` (the x range of
 /// an axis, or `domain y=` its y range), on the canvas: its lower left and upper right corners.
 pub fn soft_clip_region(e: &mut Engine, spec: &str) -> Option<(Point, Point)> {
-    let spec = crate::keys::strip_braces(spec.trim()).trim().to_string();
+    let spec = tikra_engine::keys::strip_braces(spec.trim()).trim().to_string();
     let far = 1e9;
     if let Some((key, range)) = spec.split_once('=') {
         let (a, b) = range.split_once(':')?;
         let (a, b) = (e.number(a.trim()).ok()?, e.number(b.trim()).ok()?);
-        let f = e.frame.clone()?;
+        let f = super::fig(e).frame.clone()?;
         let (p, q) = match key.trim() {
             "domain" => (f.at([f.logical(0, a), f.min[1], f.min[2]]), f.at([f.logical(0, b), f.min[1], f.min[2]])),
             "domain y" => (f.at([f.min[0], f.logical(1, a), f.min[2]]), f.at([f.min[0], f.logical(1, b), f.min[2]])),
@@ -523,8 +516,8 @@ pub fn soft_clip_region(e: &mut Engine, spec: &str) -> Option<(Point, Point)> {
     let (a, b) = spec.split_once("rectangle")?;
     let inner = |s: &str| s.trim().strip_prefix('(').and_then(|r| r.strip_suffix(')')).map(str::to_string);
     let (a, b) = (inner(a)?, inner(b)?);
-    let a = e.tex.expand_to_string(super::super::tikra_tokens(&a)).ok()?;
-    let b = e.tex.expand_to_string(super::super::tikra_tokens(&b)).ok()?;
+    let a = e.tex.expand_to_string(tikra_engine::engine::tikra_tokens(&a)).ok()?;
+    let b = e.tex.expand_to_string(tikra_engine::engine::tikra_tokens(&b)).ok()?;
     let (p, q) = (e.coordinate(&a).ok()?.p, e.coordinate(&b).ok()?.p);
     Some((Point::new(p.x.min(q.x), p.y.min(q.y)), Point::new(p.x.max(q.x), p.y.max(q.y))))
 }

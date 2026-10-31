@@ -7,20 +7,20 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::canvas::{Fill, Item, Paint};
-use crate::keys as pk;
-use crate::scene::{Point, Segment, Transform};
-use crate::tex::{self, Token};
-use crate::{Error, PT};
+use tikra_engine::canvas::{Fill, Item, Paint};
+use tikra_engine::keys as pk;
+use tikra_engine::scene::{Point, Segment, Transform};
+use tikra_engine::tex::{self, Token};
+use tikra_engine::{Error, PT};
 
-use super::super::coords::Coord as TikzCoord;
-use super::super::nodes::{NodeInfo, NodeSpec, OnPath};
-use super::super::shapes::{Border, Geometry};
 use super::keys;
-use super::number::NumberFormat;
 use super::plot::Plot;
 use super::ticks::{self, TickSettings};
 use super::{toks, Axis, Engine, Entry};
+use tikra_engine::engine::coords::Coord as TikzCoord;
+use tikra_engine::engine::nodes::{NodeInfo, NodeSpec, OnPath};
+use tikra_engine::engine::number::NumberFormat;
+use tikra_engine::engine::shapes::{Border, Geometry};
 
 /// Which coordinate system a plain `(x,y)` means while the axis is drawn.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -339,46 +339,44 @@ fn enlarge_setting(v: &str, auto_min: bool, auto_max: bool) -> (bool, bool, f64,
     (lo, hi, rel, abs)
 }
 
-impl Engine {
-    /// A value of the axis (`/pgfplots/<key>`), expanded.
-    pub(super) fn pv(&mut self, key: &str) -> String {
-        keys::value(self, &format!("/pgfplots/{key}"))
-    }
+/// A value of the axis (`/pgfplots/<key>`), expanded.
+pub(super) fn pv(e: &mut Engine, key: &str) -> String {
+    keys::value(e, &format!("/pgfplots/{key}"))
+}
 
-    /// Items pushed and the bounding box grown while `f` runs, taken out of the canvas.
-    fn capture<T>(&mut self, f: impl FnOnce(&mut Engine) -> Result<T, Error>) -> Result<Captured<T>, Error> {
-        let start = self.canvas.items.len();
-        let (min, max) = (self.canvas.min.take(), self.canvas.max.take());
-        let r = f(self);
-        let bbox = self.canvas.min.zip(self.canvas.max);
-        self.canvas.min = min;
-        self.canvas.max = max;
-        let items: Vec<Item> = self.canvas.items.drain(start..).collect();
-        Ok((r?, items, bbox))
-    }
+/// Items pushed and the bounding box grown while `f` runs, taken out of the canvas.
+fn capture<T>(e: &mut Engine, f: impl FnOnce(&mut Engine) -> Result<T, Error>) -> Result<Captured<T>, Error> {
+    let start = e.canvas.items.len();
+    let (min, max) = (e.canvas.min.take(), e.canvas.max.take());
+    let r = f(e);
+    let bbox = e.canvas.min.zip(e.canvas.max);
+    e.canvas.min = min;
+    e.canvas.max = max;
+    let items: Vec<Item> = e.canvas.items.drain(start..).collect();
+    Ok((r?, items, bbox))
+}
 
-    /// Runs a key list on a path or node, with `/pgfplots` styles reachable.
-    pub(super) fn keys_tikz(&mut self, list: &str) -> Result<(), Error> {
-        self.process_keys(toks(list), Some("/tikz"))
-    }
+/// Runs a key list on a path or node, with `/pgfplots` styles reachable.
+pub(super) fn keys_tikz(e: &mut Engine, list: &str) -> Result<(), Error> {
+    e.process_keys(toks(list), Some("/tikz"))
+}
 
-    /// Draws a path with the options `list` (as `\draw[list] …;`).
-    pub(super) fn draw_with(&mut self, list: &str, segs: Vec<Segment>) -> Result<(), Error> {
-        if segs.is_empty() {
-            return Ok(());
-        }
-        self.begin_group();
-        self.st.mode = Default::default();
-        self.st.pending = Transform::default();
-        let r = (|| {
-            self.st.mode.draw = true;
-            self.keys_tikz(list)?;
-            self.st.apply_pending();
-            self.use_path(segs, "axis")
-        })();
-        self.end_group();
-        r
+/// Draws a path with the options `list` (as `\draw[list] …;`).
+pub(super) fn draw_with(e: &mut Engine, list: &str, segs: Vec<Segment>) -> Result<(), Error> {
+    if segs.is_empty() {
+        return Ok(());
     }
+    e.begin_group();
+    e.st.mode = Default::default();
+    e.st.pending = Transform::default();
+    let r = (|| {
+        e.st.mode.draw = true;
+        keys_tikz(e, list)?;
+        e.st.apply_pending();
+        e.use_path(segs, "axis")
+    })();
+    e.end_group();
+    r
 }
 
 /// The axis' `at` (in the picture), and whether its own `xshift` moves it: not when a colorbar is
@@ -391,17 +389,17 @@ fn axis_at(e: &mut Engine) -> Result<(Point, bool), Error> {
             let s = e.tex.expand_to_string(v)?;
             let inner = s.trim().trim_start_matches('{').trim_end_matches('}').trim().trim_start_matches('(').trim_end_matches(')').to_string();
             // a colorbar's `at` is in its parent's description coordinates
-            let parent = super::colorbar::parent();
+            let parent = super::colorbar::parent(e);
             if parent.is_some() && inner.chars().all(|c| c.is_ascii_digit() || ".,-+ ".contains(c)) {
                 shifts = false;
             }
             if let Some(p) = &parent {
                 p.cs.set(Cs::Description);
-                e.frame = Some(p.clone());
+                super::fig(e).frame = Some(p.clone());
             }
             let r = e.coordinate(&inner);
             if parent.is_some() {
-                e.frame = None;
+                super::fig(e).frame = None;
             }
             match r {
                 Ok(c) => c.p,
@@ -460,7 +458,7 @@ fn draw_axis_unscaled(e: &mut Engine, axis: &Axis) -> Result<Option<super::color
         let a = anchor.trim();
         let box_only =
             !a.starts_with("outer") && !["above", "below", "left of", "right of"].iter().any(|w| a.starts_with(w)) && named_anchor(&anchor, lo, hi, lo, hi, &setup.frame).is_some();
-        if box_only && super::colorbar::parent().is_none() {
+        if box_only && super::colorbar::parent(e).is_none() {
             let anchor_point = named_anchor(&anchor, lo, hi, lo, hi, &setup.frame).unwrap_or(lo);
             let (at, shifts) = axis_at(e)?;
             let p = e.st.pending;
@@ -473,20 +471,20 @@ fn draw_axis_unscaled(e: &mut Engine, axis: &Axis) -> Result<Option<super::color
         setup.frame = Rc::new(Frame { origin: setup.frame.origin.plus(d), ..clone_frame(&setup.frame) });
     }
     let frame = setup.frame.clone();
-    e.frame = Some(frame.clone());
+    super::fig(e).frame = Some(frame.clone());
     // the canvas items and bounding box of the axis alone, then moved by `at` and `anchor`
     let nodes_before: std::collections::HashSet<String> = e.nodes.keys().cloned().collect();
-    if e.facts.mute == 0 && super::colorbar::parent().is_none() {
+    if e.facts.mute == 0 && super::colorbar::parent(e).is_none() {
         note_axis(e, axis, &frame);
     }
     // its ticks, labels and legend are not the figure's text
     e.facts.mute += 1;
-    let r = e.capture(|e| draw_all(e, axis, &setup));
+    let r = capture(e, |e| draw_all(e, axis, &setup));
     e.facts.mute -= 1;
     let ((), items, bbox) = match r {
         Ok(v) => v,
         Err(err) => {
-            e.frame = None;
+            super::fig(e).frame = None;
             return Err(err);
         }
     };
@@ -499,7 +497,7 @@ fn draw_axis_unscaled(e: &mut Engine, axis: &Axis) -> Result<Option<super::color
         e.nodes.get(n.trim()).filter(|_| !nodes_before.contains(n.trim())).and_then(|info| info.anchor(a.trim()))
     };
     let anchor_point = named_anchor(&anchor, lo, hi, blo, bhi, &frame).or_else(node_anchor).unwrap_or(lo);
-    e.frame = None;
+    super::fig(e).frame = None;
     let d = match early {
         Some(_) => Point::default(),
         None => {
@@ -531,7 +529,7 @@ fn draw_axis_unscaled(e: &mut Engine, axis: &Axis) -> Result<Option<super::color
         // a filled contour's colorbar shows its bands
         cb.bands = axis.entries.iter().find_map(|en| match en {
             Entry::Plot(p) if p.handler == "contour filled" => {
-                crate::keys::split_list(&p.style).into_iter().find(|i| i.key.trim_start_matches("/pgfplots/") == "contour filled").map(|i| i.value.unwrap_or_default())
+                tikra_engine::keys::split_list(&p.style).into_iter().find(|i| i.key.trim_start_matches("/pgfplots/") == "contour filled").map(|i| i.value.unwrap_or_default())
             }
             _ => None,
         });
@@ -546,7 +544,7 @@ fn draw_axis_unscaled(e: &mut Engine, axis: &Axis) -> Result<Option<super::color
 
 /// The axis for the figure's description: its kind, title, labels, ranges and plots.
 fn note_axis(e: &mut Engine, axis: &Axis, f: &Frame) {
-    use crate::describe::{AxisFact, Series};
+    use tikra_engine::describe::{AxisFact, Series};
     let mut names = super::legend::entries(e, axis).into_iter().map(|l| tex::tokens_to_string(&l.text));
     let mut series = Vec::new();
     let mut colored = false;
@@ -767,7 +765,7 @@ fn register_axis_node(e: &mut Engine, name: &str, lo: Point, hi: Point, blo: Poi
 fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
     let ternary = axis.kind == "ternaryaxis";
     let smith = axis.kind == "smithchart";
-    let three_d = ternary || axis.entries.iter().any(|en| matches!(en, Entry::Plot(p) if p.three_d)) || !e.pv("zmin").is_empty() || !e.pv("zmax").is_empty();
+    let three_d = ternary || axis.entries.iter().any(|en| matches!(en, Entry::Plot(p) if p.three_d)) || !pv(e, "zmin").is_empty() || !pv(e, "zmax").is_empty();
     if three_d {
         three_d_descriptions(e, axis)?;
     }
@@ -781,7 +779,7 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
             }
         }
     }
-    let log = [e.pv("xmode") == "log", e.pv("ymode") == "log", e.pv("zmode") == "log"];
+    let log = [pv(e, "xmode") == "log", pv(e, "ymode") == "log", pv(e, "zmode") == "log"];
     let lg = |a: usize, v: f64| {
         if log[a] {
             if v > 0.0 {
@@ -802,7 +800,7 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
     let mut points: Vec<PlotPoints> = Vec::new();
     let mut stack_base: [Vec<f64>; 2] = [Vec::new(), Vec::new()];
     // `stack negative=separate`: the negative values stack on their own, from zero down
-    let separate = e.pv("stack negative") == "separate";
+    let separate = pv(e, "stack negative") == "separate";
     let mut stack_base_neg: [Vec<f64>; 2] = [Vec::new(), Vec::new()];
     let mut dmin = [f64::INFINITY; 3];
     let mut dmax = [f64::NEG_INFINITY; 3];
@@ -977,7 +975,7 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
         0..dims
     } {
         let c = axis_char(a);
-        let v = e.pv(&format!("enlarge {c} limits"));
+        let v = pv(e, &format!("enlarge {c} limits"));
         // 'auto' enlarges only limits that were computed: x and y of a 2d axis, z of a 3d one
         let auto = if three_d { a == 2 } else { a < 2 };
         let (lo, hi, rel, abs) = enlarge_setting(&v, auto_min[a] && auto, auto_max[a] && auto);
@@ -1041,7 +1039,7 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
         width = (width - 45.0 * PT).max(0.0);
         height = (height - 45.0 * PT).max(0.0);
     }
-    let dir = [e.pv("x dir") == "reverse", e.pv("y dir") == "reverse", e.pv("z dir") == "reverse"];
+    let dir = [pv(e, "x dir") == "reverse", pv(e, "y dir") == "reverse", pv(e, "z dir") == "reverse"];
     let mut ev = [Point::default(); 3];
     let user_unit = |e: &mut Engine, c: char| -> Option<Point> {
         let s = keys::value(e, &format!("/pgfplots/{c}"));
@@ -1050,7 +1048,7 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
         }
         let t = s.trim().trim_start_matches('{').trim_end_matches('}').trim().to_string();
         if let Some(inner) = t.strip_prefix('(').and_then(|r| r.strip_suffix(')')) {
-            let parts = crate::keys::split_top_level(inner);
+            let parts = tikra_engine::keys::split_top_level(inner);
             let x = parts.first().and_then(|p| e.length(p).ok()).unwrap_or(0.0);
             let y = parts.get(1).and_then(|p| e.length(p).ok()).unwrap_or(0.0);
             return Some(Point::new(x, y));
@@ -1106,7 +1104,7 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
         let (az, el) = view_angles(e);
         let (saz, caz) = az.to_radians().sin_cos();
         let (sel, cel) = (-el).to_radians().sin_cos();
-        let ratio: Vec<f64> = e.pv("plot box ratio").replace(['{', '}'], " ").split_whitespace().filter_map(|x| x.parse().ok()).collect();
+        let ratio: Vec<f64> = pv(e, "plot box ratio").replace(['{', '}'], " ").split_whitespace().filter_map(|x| x.parse().ok()).collect();
         let r = |k: usize| ratio.get(k).copied().unwrap_or(1.0);
         let base = [Point::new(caz, saz * sel).scale(r(0)), Point::new(saz, -sel * caz).scale(r(1)), Point::new(0.0, cel).scale(r(2))];
         // stretch to fill: scale x and y components so that the box's projection is W × H
@@ -1121,8 +1119,8 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
         }
         let (bw, bh) = bbox_size(&corners);
         let (sx, sy) = (if bw > 1e-9 { width / bw } else { 1.0 }, if bh > 1e-9 { height / bh } else { 1.0 });
-        let ratio = e.pv("unit vector ratio");
-        let mode = e.pv("scale mode");
+        let ratio = pv(e, "unit vector ratio");
+        let mode = pv(e, "scale mode");
         // `unit vector ratio` asks for one scale for all unit vectors
         let uniform = mode == "scale uniformly" || (mode == "auto" && !ratio.trim().is_empty());
         if uniform {
@@ -1132,10 +1130,10 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
                 height,
                 unit_box: true,
                 three_d: true,
-                strategy: super::scaling::Strategy::parse(&e.pv("scale uniformly strategy")),
+                strategy: super::scaling::Strategy::parse(&pv(e, "scale uniformly strategy")),
                 ratio: &ratio,
-                ratio_axis: &e.pv("unit vector ratio axis"),
-                keep: super::scaling::KeepSize::parse(&e.pv("unit rescale keep size")),
+                ratio_axis: &pv(e, "unit vector ratio axis"),
+                keep: super::scaling::KeepSize::parse(&pv(e, "unit rescale keep size")),
                 auto_min,
                 auto_max,
             };
@@ -1173,8 +1171,8 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
             };
         }
         // a 3d axis with given unit vectors, scaled uniformly to width × height
-        let ratio = e.pv("unit vector ratio");
-        let mode = e.pv("scale mode");
+        let ratio = pv(e, "unit vector ratio");
+        let mode = pv(e, "scale mode");
         if three_d && units.iter().all(Option::is_some) && (mode == "scale uniformly" || (mode == "auto" && !ratio.trim().is_empty())) {
             let inp = super::scaling::Input {
                 e: ev,
@@ -1182,10 +1180,10 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
                 height,
                 unit_box: false,
                 three_d: true,
-                strategy: super::scaling::Strategy::parse(&e.pv("scale uniformly strategy")),
+                strategy: super::scaling::Strategy::parse(&pv(e, "scale uniformly strategy")),
                 ratio: &ratio,
-                ratio_axis: &e.pv("unit vector ratio axis"),
-                keep: super::scaling::KeepSize::parse(&e.pv("unit rescale keep size")),
+                ratio_axis: &pv(e, "unit vector ratio axis"),
+                keep: super::scaling::KeepSize::parse(&pv(e, "unit rescale keep size")),
                 auto_min,
                 auto_max,
             };
@@ -1195,7 +1193,7 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
         if !ratio.is_empty() && !three_d && units[0].is_none() && units[1].is_none() {
             let r: Vec<f64> = ratio.split_whitespace().filter_map(|x| x.parse().ok()).collect();
             let (rx, ry) = (r.first().copied().unwrap_or(1.0), r.get(1).copied().unwrap_or(1.0));
-            let keep = e.pv("unit rescale keep size");
+            let keep = pv(e, "unit rescale keep size");
             let ux = ev[0].x.abs() / rx;
             let uy = ev[1].y.abs() / ry;
             let u = ux.min(uy);
@@ -1253,12 +1251,12 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
     for a in 0..3 {
         zero[a] = if log[a] { 0.0 } else { 0.0f64.clamp(min[a].min(max[a]), max[a].max(min[a])) };
     }
-    let lines = [e.pv("@x line"), e.pv("@y line"), e.pv("@z line")];
+    let lines = [pv(e, "@x line"), pv(e, "@y line"), pv(e, "@z line")];
     let mut label_side = [-1i8; 3];
     for a in 0..3 {
         let c = axis_char(a);
-        let pos = e.pv(&format!("{c}ticklabel pos"));
-        let tickpos = e.pv(&format!("{c}tick pos"));
+        let pos = pv(e, &format!("{c}ticklabel pos"));
+        let tickpos = pv(e, &format!("{c}tick pos"));
         label_side[a] = match lines[a].as_str() {
             "center" => 0,
             "high" => 1,
@@ -1395,8 +1393,8 @@ const DESCRIPTION_KEYS: &[&str] = &[
 /// `every 3d description` (and `every 3d view {az}{el}`); the description styles of `every axis`
 /// and of the axis' options are then set again, so that they still win.
 fn three_d_descriptions(e: &mut Engine, axis: &Axis) -> Result<(), Error> {
-    let az = e.pv("view/az");
-    let el = e.pv("view/el");
+    let az = pv(e, "view/az");
+    let el = pv(e, "view/el");
     let saved = e.st.key_path.clone();
     e.st.key_path = "/pgfplots".into();
     let r = (|| {
@@ -1426,7 +1424,7 @@ fn description_items(list: &[Token]) -> Vec<Token> {
     let mut plain = Vec::new();
     while i < list.len() {
         if list[i].is_cs("pgfkeysalso") {
-            let (arg, end) = group_at(list, i + 1);
+            let (arg, end) = super::group_at(list, i + 1);
             lists.push(arg);
             i = end;
             continue;
@@ -1528,7 +1526,7 @@ fn bbox_size(points: &[Point]) -> (f64, f64) {
 pub(super) fn number_list(e: &mut Engine, tokens: Vec<Token>) -> Result<Vec<f64>, Error> {
     let list = e.tex.expand_fully(tokens)?;
     let mut v = Vec::new();
-    for item in super::super::foreach_items(&list) {
+    for item in tikra_engine::engine::foreach_items(&list) {
         if let Ok(x) = e.number_of(item) {
             if x.is_finite() {
                 v.push(x);
@@ -1572,7 +1570,7 @@ fn tick_list(e: &mut Engine, a: usize, f: &Frame, axis: &Axis) -> Result<(Vec<f6
         // names of a symbolic axis
         if !super::symbolic::names(e, c).is_empty() {
             let mut v = Vec::new();
-            for item in super::super::foreach_items(&e.tex.expand_fully(trimmed.clone())?) {
+            for item in tikra_engine::engine::foreach_items(&e.tex.expand_fully(trimmed.clone())?) {
                 let s = tex::tokens_to_string(&item);
                 match super::symbolic::index(e, c, &s) {
                     Some(i) => v.push(i),
@@ -1673,7 +1671,7 @@ fn draw_all(e: &mut Engine, axis: &Axis, s: &Setup) -> Result<(), Error> {
     if let Some(Meaning(code)) = style_code(e, "/pgfplots/axis background") {
         let _ = code;
         let rect = box_path(&f);
-        e.draw_with("draw=none,/pgfplots/axis background", rect)?;
+        draw_with(e, "draw=none,/pgfplots/axis background", rect)?;
     }
     if f.ternary || f.smith {
         if !on_top {
@@ -1749,7 +1747,7 @@ fn draw_all(e: &mut Engine, axis: &Axis, s: &Setup) -> Result<(), Error> {
                 match r {
                     Ok(Some(m)) => marks.push(m),
                     Ok(None) => {}
-                    Err(err) if super::super::is_limit(&err) => return Err(err),
+                    Err(err) if tikra_engine::engine::is_limit(&err) => return Err(err),
                     Err(err) => e.warn(format!("\\addplot: {err}; plot not drawn")),
                 }
             }
@@ -1759,7 +1757,7 @@ fn draw_all(e: &mut Engine, axis: &Axis, s: &Setup) -> Result<(), Error> {
                 let r = e.run_tokens(tokens.clone());
                 e.facts.mute = mute;
                 if let Err(err) = r {
-                    if super::super::is_limit(&err) {
+                    if tikra_engine::engine::is_limit(&err) {
                         return Err(err);
                     }
                     e.warn(format!("statement in axis: {err}"));
@@ -1771,7 +1769,7 @@ fn draw_all(e: &mut Engine, axis: &Axis, s: &Setup) -> Result<(), Error> {
     if e.key_exists("/pgfplots/before end axis") {
         let r = in_plain_units(e, &f, |e| e.process_keys(toks("/pgfplots/before end axis"), None));
         if let Err(err) = r {
-            if super::super::is_limit(&err) {
+            if tikra_engine::engine::is_limit(&err) {
                 return Err(err);
             }
             e.warn(format!("before end axis: {err}"));
@@ -1783,7 +1781,7 @@ fn draw_all(e: &mut Engine, axis: &Axis, s: &Setup) -> Result<(), Error> {
         (e.canvas.min, e.canvas.max) = saved_bbox;
     }
     // `3d box=complete`: the foreground edges, on top of the plots
-    if f.three_d && !f.ternary && e.pv("3d box") != "background" {
+    if f.three_d && !f.ternary && pv(e, "3d box") != "background" {
         super::cube::draw(e, s, true)?;
     }
     if on_top {
@@ -1833,7 +1831,7 @@ fn draw_all(e: &mut Engine, axis: &Axis, s: &Setup) -> Result<(), Error> {
         for (k, v) in [("min", f.min[a]), ("max", f.max[a])] {
             let v = if f.log[a] { v.exp() } else { v };
             if v.is_finite() && !f.polar && !f.ternary && !f.smith {
-                keys::set(e, &format!("/pgfplots/{c}{k}"), &super::super::pgf_number(v));
+                keys::set(e, &format!("/pgfplots/{c}{k}"), &tikra_engine::engine::pgf_number(v));
             }
         }
     }
@@ -1861,7 +1859,7 @@ struct Meaning(Vec<Token>);
 
 fn style_code(e: &Engine, path: &str) -> Option<Meaning> {
     match e.tex.meaning_of(&pk::macro_name(&format!("{path}/.@cmd"))) {
-        crate::tex::Meaning::Macro(m) => {
+        tikra_engine::tex::Meaning::Macro(m) => {
             let body = tex::substitute(&m.body, &[vec![]]);
             let text = tex::tokens_to_string(&body);
             let inner = text.replace("\\pgfkeysalso", "").replace(['{', '}', ' '], "");
@@ -1978,11 +1976,11 @@ fn grid(e: &mut Engine, s: &Setup, a: usize, list: &[f64], extra: &str) -> Resul
     let line = |t: f64| vec![Segment::MoveTo(on_axis(f, a, t, f.min[b])), Segment::LineTo(on_axis(f, a, t, f.max[b]))];
     if minor {
         let segs: Vec<Segment> = minor_ticks(e, s, a, list).into_iter().flat_map(line).collect();
-        e.draw_with(&format!("/pgfplots/every axis grid,/pgfplots/every minor grid,/pgfplots/every axis {c} grid,/pgfplots/every minor {c} grid"), segs)?;
+        draw_with(e, &format!("/pgfplots/every axis grid,/pgfplots/every minor grid,/pgfplots/every axis {c} grid,/pgfplots/every minor {c} grid"), segs)?;
     }
     if major {
         let segs: Vec<Segment> = visible(f, a, list).into_iter().flat_map(|(_, t)| line(t)).collect();
-        e.draw_with(&format!("/pgfplots/every axis grid,/pgfplots/every major grid,/pgfplots/every axis {c} grid,/pgfplots/every major {c} grid"), segs)?;
+        draw_with(e, &format!("/pgfplots/every axis grid,/pgfplots/every major grid,/pgfplots/every axis {c} grid,/pgfplots/every major {c} grid"), segs)?;
     }
     Ok(())
 }
@@ -2027,8 +2025,8 @@ fn tick_lines(e: &mut Engine, s: &Setup, a: usize, list: &[f64], extra: &str) ->
     let f = &s.frame;
     let c = axis_char(a);
     let b = 1 - a;
-    let pos = e.pv(&format!("{c}tick pos"));
-    let align = e.pv(&format!("{c}tick align"));
+    let pos = pv(e, &format!("{c}tick pos"));
+    let align = pv(e, &format!("{c}tick align"));
     let (lower, upper, center) = match pos.as_str() {
         "left" | "bottom" => (true, false, false),
         "right" | "top" => (false, true, false),
@@ -2074,7 +2072,7 @@ fn tick_lines(e: &mut Engine, s: &Setup, a: usize, list: &[f64], extra: &str) ->
                 segs.push(Segment::LineTo(p.plus(ub.scale(off - len))));
             }
         }
-        e.draw_with(&format!("/pgfplots/every tick,/pgfplots/every {kind} tick,/pgfplots/every {c} tick,/pgfplots/every {kind} {c} tick"), segs)?;
+        draw_with(e, &format!("/pgfplots/every tick,/pgfplots/every {kind} tick,/pgfplots/every {c} tick,/pgfplots/every {kind} {c} tick"), segs)?;
     }
     Ok(())
 }
@@ -2129,7 +2127,7 @@ fn axis_lines(e: &mut Engine, s: &Setup) -> Result<(), Error> {
         if !s.hide[0] && !s.hide[1] {
             segs.push(Segment::Close);
         }
-        return e.draw_with("/pgfplots/every outer x axis line,/pgfplots/every outer y axis line", segs);
+        return draw_with(e, "/pgfplots/every outer x axis line,/pgfplots/every outer y axis line", segs);
     }
     for (a, &sa) in shift.iter().enumerate() {
         if s.hide[a] {
@@ -2137,7 +2135,7 @@ fn axis_lines(e: &mut Engine, s: &Setup) -> Result<(), Error> {
         }
         let c = axis_char(a);
         let b = 1 - a;
-        let discontinuity = e.pv(&format!("axis {c} discontinuity"));
+        let discontinuity = pv(e, &format!("axis {c} discontinuity"));
         // shifted outwards: away from the other axis' middle, along the normal for a centered line
         let ub = unit(f.e[b]).scale(if f.max[b] >= f.min[b] { 1.0 } else { -1.0 });
         let line = |bv: f64| {
@@ -2153,13 +2151,13 @@ fn axis_lines(e: &mut Engine, s: &Setup) -> Result<(), Error> {
             discontinuous(p0, p1, &discontinuity)
         };
         match s.line[a].as_str() {
-            "center" => e.draw_with(&format!("/pgfplots/every inner {c} axis line"), line(f.zero[b]))?,
+            "center" => draw_with(e, &format!("/pgfplots/every inner {c} axis line"), line(f.zero[b]))?,
             "box" => {
-                e.draw_with(&format!("/pgfplots/every outer {c} axis line"), line(f.min[b]))?;
-                e.draw_with(&format!("/pgfplots/every outer {c} axis line"), line(f.max[b]))?;
+                draw_with(e, &format!("/pgfplots/every outer {c} axis line"), line(f.min[b]))?;
+                draw_with(e, &format!("/pgfplots/every outer {c} axis line"), line(f.max[b]))?;
             }
-            "low" => e.draw_with(&format!("/pgfplots/every outer {c} axis line"), line(if f.label_side[a] > 0 { f.max[b] } else { f.min[b] }))?,
-            "high" => e.draw_with(&format!("/pgfplots/every outer {c} axis line"), line(f.max[b]))?,
+            "low" => draw_with(e, &format!("/pgfplots/every outer {c} axis line"), line(if f.label_side[a] > 0 { f.max[b] } else { f.min[b] }))?,
+            "high" => draw_with(e, &format!("/pgfplots/every outer {c} axis line"), line(f.max[b]))?,
             _ => {}
         }
     }
@@ -2195,103 +2193,23 @@ fn discontinuous(p0: Point, p1: Point, kind: &str) -> Vec<Segment> {
     }
 }
 
-/// Replaces `\pgfmathprintnumber[options]{x}` in `tokens` by the number as printed.
-pub fn print_numbers(e: &mut Engine, tokens: &[Token]) -> Result<Vec<Token>, Error> {
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < tokens.len() {
-        if tokens[i].is_cs("pgfplotspointplotattime") {
-            i = super::attime::run(e, tokens, i)?;
-            continue;
-        }
-        // `\pgfplotspointgetcoordinates{(point)}`: the point's axis coordinates as `/data point/x`…
-        if tokens[i].is_cs("pgfplotspointgetcoordinates") {
-            let mut j = i + 1;
-            while j < tokens.len() && tokens[j].is_space() {
-                j += 1;
-            }
-            let (arg, end) = group_at(tokens, j);
-            i = end;
-            let text = e.tex.expand_to_string(arg)?;
-            let inner = text.trim().strip_prefix('(').and_then(|r| r.strip_suffix(')')).unwrap_or(text.trim()).to_string();
-            let (Some(f), Ok(c)) = (e.frame.clone(), e.coordinate(&inner)) else { continue };
-            if let Some([x, y]) = f.data_at(c.p) {
-                super::keys::set(e, "/data point/x", &super::super::pgf_number(x));
-                super::keys::set(e, "/data point/y", &super::super::pgf_number(y));
-            }
-            continue;
-        }
-        if tokens[i].is_cs("pgfmathprintnumber") {
-            let mut j = i + 1;
-            let mut opts = Vec::new();
-            while j < tokens.len() && tokens[j].is_space() {
-                j += 1;
-            }
-            if j < tokens.len() && tokens[j].is_char('[') {
-                let k = tokens[j..].iter().position(|t| t.is_char(']')).map_or(tokens.len(), |p| j + p);
-                opts = tokens[j + 1..k.min(tokens.len())].to_vec();
-                j = k + 1;
-            }
-            while j < tokens.len() && tokens[j].is_space() {
-                j += 1;
-            }
-            let (mut arg, mut end) = group_at(tokens, j);
-            // an expanded `\pgfmathprintnumber\tick`: the number's characters, unbraced
-            let numeric = |t: &Token, first: bool| match t {
-                Token::Char(c, tex::Cat::Other | tex::Cat::Letter) => c.is_ascii_digit() || matches!(c, '-' | '+' | '.') || (!first && matches!(c, 'e' | 'E')),
-                _ => false,
-            };
-            if arg.len() == 1 && numeric(&arg[0], true) && numeric(&tokens[j], true) {
-                let mut k = j;
-                while k < tokens.len() && numeric(&tokens[k], k == j) {
-                    k += 1;
-                }
-                // the longest prefix that is a number (`1--4` is 1, then `--4`)
-                while k > j + 1 && tex::tokens_to_string(&tokens[j..k]).trim().parse::<f64>().is_err() {
-                    k -= 1;
-                }
-                arg = tokens[j..k].to_vec();
-                end = k;
-            }
-            let saved = e.st.number_format.clone();
-            if !opts.is_empty() {
-                e.process_keys(opts, Some("/pgf/number format"))?;
-            }
-            let v = e.number_of(arg).unwrap_or(f64::NAN);
-            let s = e.st.number_format.print(v);
-            e.st.number_format = saved;
-            out.extend(tex::string_tokens(&s));
-            i = end;
-            continue;
-        }
-        out.push(tokens[i].clone());
-        i += 1;
+/// `\pgfplotspointgetcoordinates{(point)}` in a node's text: the point's axis coordinates
+/// as `/data point/x` and `/data point/y`. Returns where the text goes on.
+pub fn getcoordinates(e: &mut Engine, tokens: &[Token], i: usize) -> Result<usize, Error> {
+    let mut j = i + 1;
+    while j < tokens.len() && tokens[j].is_space() {
+        j += 1;
     }
-    Ok(out)
-}
-
-/// The argument at `j`: a group's content or one token; and the index after it.
-fn group_at(tokens: &[Token], j: usize) -> (Vec<Token>, usize) {
-    if j >= tokens.len() {
-        return (Vec::new(), j);
+    let (arg, end) = super::group_at(tokens, j);
+    let text = e.tex.expand_to_string(arg)?;
+    let inner = text.trim().strip_prefix('(').and_then(|r| r.strip_suffix(')')).unwrap_or(text.trim()).to_string();
+    let frame = super::fig(e).frame.clone();
+    let (Some(f), Ok(c)) = (frame, e.coordinate(&inner)) else { return Ok(end) };
+    if let Some([x, y]) = f.data_at(c.p) {
+        super::keys::set(e, "/data point/x", &tikra_engine::engine::pgf_number(x));
+        super::keys::set(e, "/data point/y", &tikra_engine::engine::pgf_number(y));
     }
-    if matches!(tokens[j], Token::Char(_, crate::tex::Cat::Begin)) {
-        let mut depth = 0;
-        for (k, t) in tokens.iter().enumerate().skip(j) {
-            match t {
-                Token::Char(_, crate::tex::Cat::Begin) => depth += 1,
-                Token::Char(_, crate::tex::Cat::End) => {
-                    depth -= 1;
-                    if depth == 0 {
-                        return (tokens[j + 1..k].to_vec(), k + 1);
-                    }
-                }
-                _ => {}
-            }
-        }
-        return (tokens[j + 1..].to_vec(), tokens.len());
-    }
-    (vec![tokens[j].clone()], j + 1)
+    Ok(end)
 }
 
 /// The text of tick `t` of axis `a`, the `k`-th.
@@ -2301,7 +2219,7 @@ pub(super) fn tick_text_for(e: &mut Engine, a: usize, t: f64, k: usize) -> Resul
 
 /// The text of tick `t` (index `k` in the list) of axis `a`.
 fn tick_text(e: &mut Engine, a: usize, t: f64, next: Option<f64>, k: usize, factor: f64, extra: bool) -> Result<Vec<Token>, Error> {
-    let f = e.frame.clone().expect("drawing an axis");
+    let f = super::fig(e).frame.clone().expect("drawing an axis");
     let c = axis_char(a);
     // groupplots' inner plots: the labels are there, empty
     if !extra && keys::flag(e, &format!("/pgfplots/@empty {c}ticklabels")) {
@@ -2317,49 +2235,49 @@ fn tick_text(e: &mut Engine, a: usize, t: f64, next: Option<f64>, k: usize, fact
     if let Some(code) = keys::value_tokens(&*e, &label_key) {
         e.begin_group();
         let value = if f.log[a] { t } else { shown(t) };
-        let tick = super::super::pgf_number(value);
-        e.tex.set_meaning(&Token::cs("tick"), super::super::macro_from(&tick), false);
-        e.tex.set_meaning(&Token::cs("ticknum"), super::super::macro_from(&k.to_string()), false);
+        let tick = tikra_engine::engine::pgf_number(value);
+        e.tex.set_meaning(&Token::cs("tick"), tikra_engine::engine::macro_from(&tick), false);
+        e.tex.set_meaning(&Token::cs("ticknum"), tikra_engine::engine::macro_from(&k.to_string()), false);
         if super::dateplot::is_date(e, c) {
             super::dateplot::define_tick(e, value);
         }
         if let Some(n) = next {
-            e.tex.set_meaning(&Token::cs("nexttick"), super::super::macro_from(&super::super::pgf_number(shown(n))), false);
+            e.tex.set_meaning(&Token::cs("nexttick"), tikra_engine::engine::macro_from(&tikra_engine::engine::pgf_number(shown(n))), false);
         }
-        let r = e.tex.expand_fully(code).and_then(|x| print_numbers(e, &x));
+        let r = e.tex.expand_fully(code).and_then(|x| super::print_numbers(e, &x));
         e.end_group();
         return r;
     }
     if f.log[a] {
         let basis = keys::number(e, &format!("/pgfplots/log basis {c}"));
         let (base_text, exp) = match basis {
-            Some(b) if b > 0.0 && b != 10.0 => (super::super::pgf_number(b), t / b.ln()),
+            Some(b) if b > 0.0 && b != 10.0 => (tikra_engine::engine::pgf_number(b), t / b.ln()),
             _ => ("10".to_string(), t / std::f64::consts::LN_10),
         };
-        let fmt = NumberFormat { style: super::number::Style::Fixed, precision: 2, ..e.st.number_format.clone() };
+        let fmt = NumberFormat { style: tikra_engine::engine::number::Style::Fixed, precision: 2, ..e.st.number_format.clone() };
         // `log identify minor tick positions` (extra ticks): 5·10^-6 rather than 10^-5.3
         if base_text == "10" && keys::flag(e, "/pgfplots/log identify minor tick positions") {
             let j = exp.floor();
             let m = 10f64.powf(exp - j);
             let i = m.round();
             if (exp - exp.round()).abs() > 1e-4 && (2.0..=9.0).contains(&i) && (m - i).abs() < 1e-3 * i {
-                let sci = NumberFormat { style: super::number::Style::Sci, ..e.st.number_format.clone() };
+                let sci = NumberFormat { style: tikra_engine::engine::number::Style::Sci, ..e.st.number_format.clone() };
                 return Ok(tex::string_tokens(&format!("${}$", sci.print(i * 10f64.powf(j)))));
             }
         }
         if keys::flag(e, "/pgfplots/@log fixed point") {
             let v = (exp * (base_text.parse::<f64>().unwrap_or(10.0)).ln()).exp();
-            let ff = NumberFormat { style: super::number::Style::FixedRelative, precision: 3, ..e.st.number_format.clone() };
+            let ff = NumberFormat { style: tikra_engine::engine::number::Style::FixedRelative, precision: 3, ..e.st.number_format.clone() };
             return Ok(tex::string_tokens(&format!("${}$", ff.print(v))));
         }
         return Ok(tex::string_tokens(&format!("${base_text}^{{{}}}$", fmt.print(exp))));
     }
     if let Some(name) = super::symbolic::label(e, c, t) {
-        return Ok(super::super::tikra_tokens(&name));
+        return Ok(tikra_engine::engine::tikra_tokens(&name));
     }
     // `scaled y ticks=manual:{label}{code}`: the code maps the tick (#1) to \pgfmathresult
     if let Some((_, code)) = manual_scale(e, c) {
-        let body = tex::substitute(&tex::parse_body(code), &[toks(&super::super::pgf_number(t))]);
+        let body = tex::substitute(&tex::parse_body(code), &[toks(&tikra_engine::engine::pgf_number(t))]);
         e.begin_group();
         let r = e.run_tokens(body).and_then(|_| e.tex.expand_to_string(vec![Token::cs("pgfmathresult")]));
         let v = r.ok().and_then(|s| e.number(s.trim()).ok());
@@ -2412,8 +2330,8 @@ fn split_labels(list: &[Token]) -> Vec<Vec<Token>> {
     let mut depth = 0usize;
     for t in list {
         match t {
-            Token::Char(_, crate::tex::Cat::Begin) => depth += 1,
-            Token::Char(_, crate::tex::Cat::End) => depth = depth.saturating_sub(1),
+            Token::Char(_, tikra_engine::tex::Cat::Begin) => depth += 1,
+            Token::Char(_, tikra_engine::tex::Cat::End) => depth = depth.saturating_sub(1),
             Token::Char(',', _) if depth == 0 => {
                 out.push(Vec::new());
                 continue;
@@ -2465,7 +2383,7 @@ pub(super) fn line_shift(e: &mut Engine, f: &Frame, a: usize) -> f64 {
 
 /// How far tick labels move out for the tick lines (`tick align`).
 pub(super) fn tick_offset(e: &mut Engine, a: usize) -> f64 {
-    let align = e.pv(&format!("{}tick align", axis_char(a)));
+    let align = pv(e, &format!("{}tick align", axis_char(a)));
     let len = keys::length(e, "/pgfplots/major tick length").unwrap_or(0.15);
     match align.as_str() {
         "outside" => len,
@@ -2485,7 +2403,7 @@ pub(super) fn tick_labels_at(e: &mut Engine, s: &Setup, a: usize, list: &[f64], 
     let mut factor = 1.0;
     let mut scale_label: Option<String> = None;
     if !f.log[a] && !extra {
-        let v = e.pv(&format!("scaled {c} ticks"));
+        let v = pv(e, &format!("scaled {c} ticks"));
         let above = keys::number(e, "/pgfplots/scale ticks above exponent").unwrap_or(3.0) as i32;
         let below = keys::number(e, "/pgfplots/scale ticks below exponent").unwrap_or(-1.0) as i32;
         let exponent = match v.as_str() {
@@ -2518,7 +2436,7 @@ pub(super) fn tick_labels_at(e: &mut Engine, s: &Setup, a: usize, list: &[f64], 
                 if d != 0.0 {
                     factor = 1.0 / d;
                     let default = format!("${binop} {}$", e.st.number_format.print(d));
-                    scale_label = Some(label_of(e, super::super::pgf_number(d), default));
+                    scale_label = Some(label_of(e, tikra_engine::engine::pgf_number(d), default));
                 }
             }
         }
@@ -2551,7 +2469,7 @@ pub(super) fn tick_labels_at(e: &mut Engine, s: &Setup, a: usize, list: &[f64], 
         // the number format of the tick label styles applies to the text
         e.begin_group();
         let r = (|| {
-            e.keys_tikz(&styles)?;
+            keys_tikz(e, &styles)?;
             let (t, next) = if f.ternary { (super::ternary::shown(&f, a, t), next.map(|n| super::ternary::shown(&f, a, n))) } else { (t, next) };
             tick_text(e, a, t, next, k, factor, extra)
         })();
@@ -2566,8 +2484,8 @@ pub(super) fn tick_labels_at(e: &mut Engine, s: &Setup, a: usize, list: &[f64], 
         let options = toks(&format!("anchor={anchor},{styles}"));
         // `\ticknum` in the label's options too (`name=tick no \ticknum`)
         e.begin_group();
-        e.tex.set_meaning(&Token::cs("ticknum"), super::super::macro_from(&k.to_string()), false);
-        let r = e.capture(|e| e.node(NodeSpec { options, name: None, at: Some(at), text, place: OnPath::Point(at), point: at, coordinate: false, default_pos: None }));
+        e.tex.set_meaning(&Token::cs("ticknum"), tikra_engine::engine::macro_from(&k.to_string()), false);
+        let r = capture(e, |e| e.node(NodeSpec { options, name: None, at: Some(at), text, place: OnPath::Point(at), point: at, coordinate: false, default_pos: None }));
         e.end_group();
         let (items, _, bbox) = r?;
         if let Some((lo, hi)) = bbox {
@@ -2619,7 +2537,7 @@ fn descriptions(e: &mut Engine, axis: &Axis, s: &Setup) -> Result<(), Error> {
         f.label_axis.set(a);
         let p = f.desc(0.0, 0.0);
         let options = toks(&format!("/pgfplots/every axis label,/pgfplots/every axis {c} label"));
-        let text = print_numbers(e, &text)?;
+        let text = super::print_numbers(e, &text)?;
         // `sloped` in a label is `sloped like x axis`
         e.begin_group();
         let slope = e.tex.meaning_of(&pk::macro_name(&format!("/tikz/sloped like {c} axis/.@cmd")));
@@ -2630,7 +2548,7 @@ fn descriptions(e: &mut Engine, axis: &Axis, s: &Setup) -> Result<(), Error> {
     }
     if let Some(text) = keys::value_tokens(&*e, "/pgfplots/title") {
         let p = f.desc(0.0, 0.0);
-        let text = print_numbers(e, &text)?;
+        let text = super::print_numbers(e, &text)?;
         let items =
             e.node(NodeSpec { options: toks("/pgfplots/every axis title"), name: None, at: None, text, place: OnPath::Point(p), point: p, coordinate: false, default_pos: None })?;
         e.canvas.items.extend(items);
@@ -2657,7 +2575,7 @@ fn descriptions(e: &mut Engine, axis: &Axis, s: &Setup) -> Result<(), Error> {
 }
 
 /// A filled or stroked path for a solid color (used by legend frames).
-pub fn solid(color: crate::color::Color, opacity: f64) -> Fill {
+pub fn solid(color: tikra_engine::color::Color, opacity: f64) -> Fill {
     Fill { paint: Paint::Solid(color), opacity, even_odd: false }
 }
 
@@ -2680,165 +2598,163 @@ fn in_plain_units<T>(e: &mut Engine, f: &Frame, run: impl FnOnce(&mut Engine) ->
 
 /// `axis cs`, `rel axis cs`, `axis description cs`, `ticklabel cs`: points of the axis being
 /// drawn, for TikZ statements inside it.
-impl Engine {
-    pub fn pgfplots_cs(&mut self, system: &str, args: &str) -> Option<Result<TikzCoord, Error>> {
-        let f = self.frame.clone()?;
-        let parts = crate::keys::split_top_level(args);
-        let named = |k: &str| parts.iter().find_map(|p| p.split_once('=').filter(|(a, _)| a.trim() == k).map(|(_, b)| b.trim().to_string()));
-        let positional = parts.iter().all(|p| !p.contains('='));
-        let value = |e: &mut Engine, i: usize, k: &str| -> Result<Option<f64>, Error> {
-            let t = if positional { parts.get(i).cloned() } else { named(k) };
-            match t {
-                // a name of a symbolic axis, or a date
-                Some(t) if !t.trim().is_empty() && i < 3 && super::symbolic::index(e, axis_char(i), &t).is_some() => Ok(super::symbolic::index(e, axis_char(i), &t)),
-                Some(t) if !t.trim().is_empty() => Ok(Some(e.number(crate::keys::strip_braces(t.trim()))?)),
-                _ => Ok(None),
-            }
-        };
-        let r = (|| -> Result<Point, Error> {
-            match system {
-                "cartesian" if f.ternary => {
-                    let x = value(self, 0, "x")?.unwrap_or(0.0);
-                    let y = value(self, 1, "y")?.unwrap_or(0.0);
-                    Ok(super::ternary::cartesian(&f, x, y))
-                }
-                "cartesian" if f.smith => {
-                    let x = value(self, 0, "x")?.unwrap_or(0.0);
-                    let y = value(self, 1, "y")?.unwrap_or(0.0);
-                    Ok(super::smith::canvas(&f, x, y))
-                }
-                "axis" => {
-                    let x = value(self, 0, "x")?.unwrap_or(0.0);
-                    let y = value(self, 1, "y")?.unwrap_or(0.0);
-                    // a ternary axis deduces a missing z
-                    let z = value(self, 2, "z")?.unwrap_or(if f.ternary { f64::NAN } else { 0.0 });
-                    let l = [f.logical(0, x), f.logical(1, y), if f.three_d { f.logical(2, z) } else { f.min[2] }];
-                    Ok(f.at(l))
-                }
-                "rel axis" => {
-                    let x = value(self, 0, "x")?.unwrap_or(0.0);
-                    let y = value(self, 1, "y")?.unwrap_or(0.0);
-                    let z = value(self, 2, "z")?.unwrap_or(0.0);
-                    Ok(f.rel([x, y, z]))
-                }
-                "axis description" => {
-                    let x = value(self, 0, "x")?.unwrap_or(0.0);
-                    let y = value(self, 1, "y")?.unwrap_or(0.0);
-                    Ok(f.desc(x, y))
-                }
-                "boxplot" | "boxplot box" | "boxplot whisker" => {
-                    let parts = crate::keys::split_top_level(args);
-                    let a = parts.first().map(|p| self.number(p.trim())).transpose()?.unwrap_or(0.0);
-                    let b = parts.get(1).map(|p| self.number(p.trim())).transpose()?.unwrap_or(0.0);
-                    match super::boxplot::cs(system, a, b) {
-                        Some([x, y]) => Ok(f.at([x, y, f.min[2]])),
-                        None => Err(Error::Figure(format!("{system} cs outside a box plot"))),
-                    }
-                }
-                "axis direction" => {
-                    let x = value(self, 0, "x")?.unwrap_or(0.0);
-                    let y = value(self, 1, "y")?.unwrap_or(0.0);
-                    let z = value(self, 2, "z")?.unwrap_or(0.0);
-                    let o = f.at(f.min);
-                    let l = [f.min[0] + x, f.min[1] + y, f.min[2] + z];
-                    Ok(f.at(l).minus(o))
-                }
-                "ticklabel" | "ticklabel*" | "xticklabel" | "yticklabel" | "zticklabel" | "xticklabel*" | "yticklabel*" | "zticklabel*" => {
-                    let a = match system.trim_end_matches('*') {
-                        "xticklabel" => 0,
-                        "yticklabel" => 1,
-                        "zticklabel" => 2,
-                        _ => f.label_axis.get(),
-                    };
-                    let t = parts.first().map(|p| self.number(p)).transpose()?.unwrap_or(0.5);
-                    let extra = match parts.get(1) {
-                        Some(p) => self.length(p)?,
-                        None => 0.0,
-                    };
-                    let base = if f.ternary {
-                        super::ternary::edge(&f, a, t)
-                    } else if f.three_d {
-                        // a point of the line that holds the tick labels
-                        let line = f.label_line[a];
-                        let l = [0, 1, 2].map(|k| match line[k] {
-                            b'v' => f.min[k] + t * (f.max[k] - f.min[k]),
-                            b'1' => f.max[k],
-                            b'2' => f.zero[k],
-                            _ => f.min[k],
-                        });
-                        f.at(l)
-                    } else {
-                        let b = if a == 0 { 1 } else { 0 };
-                        let side = f.label_side[a];
-                        let bv = if side > 0 {
-                            f.max[b]
-                        } else if side == 0 {
-                            f.zero[b]
-                        } else {
-                            f.min[b]
-                        };
-                        let mut l = f.min;
-                        l[a] = f.min[a] + t * (f.max[a] - f.min[a]);
-                        l[b] = bv;
-                        f.at(l)
-                    };
-                    let shift = if system.ends_with('*') { extra } else { f.tick_dim.borrow()[a] + extra + f.label_shift[a] };
-                    Ok(base.plus(f.normal(a).scale(shift)))
-                }
-                _ => Err(Error::Figure(String::new())),
-            }
-        })();
-        match r {
-            Ok(p) => Some(Ok(TikzCoord { p, node: None })),
-            Err(err) if err.to_string() == "figure: " => None,
-            Err(err) => Some(Err(err)),
+pub fn pgfplots_cs(e: &mut Engine, system: &str, args: &str) -> Option<Result<TikzCoord, Error>> {
+    let f = super::fig(e).frame.clone()?;
+    let parts = tikra_engine::keys::split_top_level(args);
+    let named = |k: &str| parts.iter().find_map(|p| p.split_once('=').filter(|(a, _)| a.trim() == k).map(|(_, b)| b.trim().to_string()));
+    let positional = parts.iter().all(|p| !p.contains('='));
+    let value = |e: &mut Engine, i: usize, k: &str| -> Result<Option<f64>, Error> {
+        let t = if positional { parts.get(i).cloned() } else { named(k) };
+        match t {
+            // a name of a symbolic axis, or a date
+            Some(t) if !t.trim().is_empty() && i < 3 && super::symbolic::index(e, axis_char(i), &t).is_some() => Ok(super::symbolic::index(e, axis_char(i), &t)),
+            Some(t) if !t.trim().is_empty() => Ok(Some(e.number(tikra_engine::keys::strip_braces(t.trim()))?)),
+            _ => Ok(None),
         }
+    };
+    let r = (|| -> Result<Point, Error> {
+        match system {
+            "cartesian" if f.ternary => {
+                let x = value(e, 0, "x")?.unwrap_or(0.0);
+                let y = value(e, 1, "y")?.unwrap_or(0.0);
+                Ok(super::ternary::cartesian(&f, x, y))
+            }
+            "cartesian" if f.smith => {
+                let x = value(e, 0, "x")?.unwrap_or(0.0);
+                let y = value(e, 1, "y")?.unwrap_or(0.0);
+                Ok(super::smith::canvas(&f, x, y))
+            }
+            "axis" => {
+                let x = value(e, 0, "x")?.unwrap_or(0.0);
+                let y = value(e, 1, "y")?.unwrap_or(0.0);
+                // a ternary axis deduces a missing z
+                let z = value(e, 2, "z")?.unwrap_or(if f.ternary { f64::NAN } else { 0.0 });
+                let l = [f.logical(0, x), f.logical(1, y), if f.three_d { f.logical(2, z) } else { f.min[2] }];
+                Ok(f.at(l))
+            }
+            "rel axis" => {
+                let x = value(e, 0, "x")?.unwrap_or(0.0);
+                let y = value(e, 1, "y")?.unwrap_or(0.0);
+                let z = value(e, 2, "z")?.unwrap_or(0.0);
+                Ok(f.rel([x, y, z]))
+            }
+            "axis description" => {
+                let x = value(e, 0, "x")?.unwrap_or(0.0);
+                let y = value(e, 1, "y")?.unwrap_or(0.0);
+                Ok(f.desc(x, y))
+            }
+            "boxplot" | "boxplot box" | "boxplot whisker" => {
+                let parts = tikra_engine::keys::split_top_level(args);
+                let a = parts.first().map(|p| e.number(p.trim())).transpose()?.unwrap_or(0.0);
+                let b = parts.get(1).map(|p| e.number(p.trim())).transpose()?.unwrap_or(0.0);
+                match super::boxplot::cs(e, system, a, b) {
+                    Some([x, y]) => Ok(f.at([x, y, f.min[2]])),
+                    None => Err(Error::Figure(format!("{system} cs outside a box plot"))),
+                }
+            }
+            "axis direction" => {
+                let x = value(e, 0, "x")?.unwrap_or(0.0);
+                let y = value(e, 1, "y")?.unwrap_or(0.0);
+                let z = value(e, 2, "z")?.unwrap_or(0.0);
+                let o = f.at(f.min);
+                let l = [f.min[0] + x, f.min[1] + y, f.min[2] + z];
+                Ok(f.at(l).minus(o))
+            }
+            "ticklabel" | "ticklabel*" | "xticklabel" | "yticklabel" | "zticklabel" | "xticklabel*" | "yticklabel*" | "zticklabel*" => {
+                let a = match system.trim_end_matches('*') {
+                    "xticklabel" => 0,
+                    "yticklabel" => 1,
+                    "zticklabel" => 2,
+                    _ => f.label_axis.get(),
+                };
+                let t = parts.first().map(|p| e.number(p)).transpose()?.unwrap_or(0.5);
+                let extra = match parts.get(1) {
+                    Some(p) => e.length(p)?,
+                    None => 0.0,
+                };
+                let base = if f.ternary {
+                    super::ternary::edge(&f, a, t)
+                } else if f.three_d {
+                    // a point of the line that holds the tick labels
+                    let line = f.label_line[a];
+                    let l = [0, 1, 2].map(|k| match line[k] {
+                        b'v' => f.min[k] + t * (f.max[k] - f.min[k]),
+                        b'1' => f.max[k],
+                        b'2' => f.zero[k],
+                        _ => f.min[k],
+                    });
+                    f.at(l)
+                } else {
+                    let b = if a == 0 { 1 } else { 0 };
+                    let side = f.label_side[a];
+                    let bv = if side > 0 {
+                        f.max[b]
+                    } else if side == 0 {
+                        f.zero[b]
+                    } else {
+                        f.min[b]
+                    };
+                    let mut l = f.min;
+                    l[a] = f.min[a] + t * (f.max[a] - f.min[a]);
+                    l[b] = bv;
+                    f.at(l)
+                };
+                let shift = if system.ends_with('*') { extra } else { f.tick_dim.borrow()[a] + extra + f.label_shift[a] };
+                Ok(base.plus(f.normal(a).scale(shift)))
+            }
+            _ => Err(Error::Figure(String::new())),
+        }
+    })();
+    match r {
+        Ok(p) => Some(Ok(TikzCoord { p, node: None })),
+        Err(err) if err.to_string() == "figure: " => None,
+        Err(err) => Some(Err(err)),
     }
+}
 
-    /// A plain `(x,y)` in an axis: `axis cs` (compat 1.11 on) or the description system.
-    pub fn pgfplots_plain(&mut self, parts: &[String]) -> Option<Result<Point, Error>> {
-        let f = self.frame.clone()?;
-        match f.cs.get() {
-            // plain coordinates of a ternary axis are cartesian
-            Cs::Plain if f.ternary => {
-                let r = (|| -> Result<Point, Error> {
-                    let x = self.number(crate::keys::strip_braces(parts.first().map_or("0", |p| p.trim())))?;
-                    let y = self.number(crate::keys::strip_braces(parts.get(1).map_or("0", |p| p.trim())))?;
-                    Ok(super::ternary::cartesian(&f, x, y))
-                })();
-                Some(r)
-            }
-            // a coordinate with units (`(1cm,0pt)`) stays TikZ's
-            Cs::Plain if parts.iter().any(|p| has_unit(p)) => None,
-            // before compat 1.11, the coordinates of the data scale transformation: 10^E times the
-            // data, less the smallest data value (`\pgfplots@set@optimal@datatrafo@for@`)
-            Cs::Plain if !f.polar && !f.smith => {
-                let r = (|| -> Result<Point, Error> {
-                    let mut l = [f.min[0], f.min[1], f.min[2]];
-                    for (a, la) in l.iter_mut().enumerate().take(if f.three_d { 3 } else { 2 }) {
-                        // an empty coordinate (`\pgfkeysvalueof{/pgfplots/xmin}` unset) is 0, as TeX recovers
-                        let v = match crate::keys::strip_braces(parts.get(a).map_or("0", |p| p.trim())) {
-                            "" => 0.0,
-                            p => self.number(p)?,
-                        };
-                        let (factor, shift) = data_scale_trafo(self, &f, a);
-                        *la = shift + v / factor;
-                    }
-                    Ok(f.at(l))
-                })();
-                Some(r)
-            }
-            Cs::Plain => None,
-            cs => {
-                let r = (|| -> Result<Point, Error> {
-                    let mut v = [0.0; 3];
-                    for (i, p) in parts.iter().enumerate().take(3) {
-                        v[i] = self.number(crate::keys::strip_braces(p.trim()))?;
-                    }
-                    Ok(if cs == Cs::Axis { f.at([f.logical(0, v[0]), f.logical(1, v[1]), if f.three_d { f.logical(2, v[2]) } else { f.min[2] }]) } else { f.desc(v[0], v[1]) })
-                })();
-                Some(r)
-            }
+/// A plain `(x,y)` in an axis: `axis cs` (compat 1.11 on) or the description system.
+pub fn pgfplots_plain(e: &mut Engine, parts: &[String]) -> Option<Result<Point, Error>> {
+    let f = super::fig(e).frame.clone()?;
+    match f.cs.get() {
+        // plain coordinates of a ternary axis are cartesian
+        Cs::Plain if f.ternary => {
+            let r = (|| -> Result<Point, Error> {
+                let x = e.number(tikra_engine::keys::strip_braces(parts.first().map_or("0", |p| p.trim())))?;
+                let y = e.number(tikra_engine::keys::strip_braces(parts.get(1).map_or("0", |p| p.trim())))?;
+                Ok(super::ternary::cartesian(&f, x, y))
+            })();
+            Some(r)
+        }
+        // a coordinate with units (`(1cm,0pt)`) stays TikZ's
+        Cs::Plain if parts.iter().any(|p| has_unit(p)) => None,
+        // before compat 1.11, the coordinates of the data scale transformation: 10^E times the
+        // data, less the smallest data value (`\pgfplots@set@optimal@datatrafo@for@`)
+        Cs::Plain if !f.polar && !f.smith => {
+            let r = (|| -> Result<Point, Error> {
+                let mut l = [f.min[0], f.min[1], f.min[2]];
+                for (a, la) in l.iter_mut().enumerate().take(if f.three_d { 3 } else { 2 }) {
+                    // an empty coordinate (`\pgfkeysvalueof{/pgfplots/xmin}` unset) is 0, as TeX recovers
+                    let v = match tikra_engine::keys::strip_braces(parts.get(a).map_or("0", |p| p.trim())) {
+                        "" => 0.0,
+                        p => e.number(p)?,
+                    };
+                    let (factor, shift) = data_scale_trafo(e, &f, a);
+                    *la = shift + v / factor;
+                }
+                Ok(f.at(l))
+            })();
+            Some(r)
+        }
+        Cs::Plain => None,
+        cs => {
+            let r = (|| -> Result<Point, Error> {
+                let mut v = [0.0; 3];
+                for (i, p) in parts.iter().enumerate().take(3) {
+                    v[i] = e.number(tikra_engine::keys::strip_braces(p.trim()))?;
+                }
+                Ok(if cs == Cs::Axis { f.at([f.logical(0, v[0]), f.logical(1, v[1]), if f.three_d { f.logical(2, v[2]) } else { f.min[2] }]) } else { f.desc(v[0], v[1]) })
+            })();
+            Some(r)
         }
     }
 }

@@ -6,11 +6,11 @@
 //! Colors given with `mapped color` (`draw=mapped color!80!black`) are linear in it: each is found
 //! by setting the style with `mapped color` black, then white.
 
-use crate::canvas::{Fill, Item, Paint, Stroke};
-use crate::color::Color;
-use crate::scene::{Point, Segment};
-use crate::tex::Token;
-use crate::Error;
+use tikra_engine::canvas::{Fill, Item, Paint, Stroke};
+use tikra_engine::color::Color;
+use tikra_engine::scene::{Point, Segment};
+use tikra_engine::tex::Token;
+use tikra_engine::Error;
 
 use super::draw::Frame;
 use super::keys;
@@ -35,7 +35,7 @@ impl Linear {
 }
 
 /// The state's colors as functions of `mapped color`: (draw, fill) after `f` runs in a group.
-pub fn mapped_colors(e: &mut Engine, mut f: impl FnMut(&mut Engine) -> Result<(), Error>) -> Result<(Linear, Linear, super::super::GState), Error> {
+pub fn mapped_colors(e: &mut Engine, mut f: impl FnMut(&mut Engine) -> Result<(), Error>) -> Result<(Linear, Linear, tikra_engine::engine::GState), Error> {
     let mut states = Vec::new();
     // (pgfplots's `mapped color` is an rgb color)
     for m in [Color::rgb(0.0, 0.0, 0.0), Color::rgb(1.0, 1.0, 1.0)] {
@@ -381,8 +381,14 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, style: &[Toke
                     let flat = c.minus(b.plus(d).minus(a)).norm() < 1e-6 * (b.minus(a).norm() + d.minus(a).norm() + 1e-12);
                     if flat && !same(ma, mb) {
                         let (u, v) = (b.minus(a), d.minus(a));
-                        let transform =
-                            crate::scene::Transform { a: u.x / 100.0, b: u.y / 100.0, c: v.x / 100.0, d: v.y / 100.0, e: a.x + 0.5 * (u.x + v.x), f: a.y + 0.5 * (u.y + v.y) };
+                        let transform = tikra_engine::scene::Transform {
+                            a: u.x / 100.0,
+                            b: u.y / 100.0,
+                            c: v.x / 100.0,
+                            d: v.y / 100.0,
+                            e: a.x + 0.5 * (u.x + v.x),
+                            f: a.y + 0.5 * (u.y + v.y),
+                        };
                         let (lo_m, hi_m) = (f.meta[0], f.meta[1]);
                         let mut metas_at: Vec<f64> = vec![ma, mb];
                         for (p, _) in cm.normalized() {
@@ -391,13 +397,13 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, style: &[Toke
                                 metas_at.push(m);
                             }
                         }
-                        let mut stops: Vec<crate::canvas::Stop> = metas_at.iter().map(|m| ((m - ma) / (mb - ma), fill.at(map(f, *m)))).collect();
+                        let mut stops: Vec<tikra_engine::canvas::Stop> = metas_at.iter().map(|m| ((m - ma) / (mb - ma), fill.at(map(f, *m)))).collect();
                         stops.sort_by(|x, y| x.0.total_cmp(&y.0));
                         let segs = vec![Segment::MoveTo(a), Segment::LineTo(b), Segment::LineTo(c), Segment::LineTo(d), Segment::Close];
                         if !e.canvas_frozen {
                             e.canvas.include_path(&segs);
                         }
-                        let paint = Paint::Shading(crate::canvas::Shading::Axial { transform, stops });
+                        let paint = Paint::Shading(tikra_engine::canvas::Shading::Axial { transform, stops });
                         e.canvas.push(Item::Path { segments: segs, fill: Some(Fill { paint, opacity: opacity.1, even_odd: false }), stroke: None });
                         continue;
                     }
@@ -432,7 +438,8 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, style: &[Toke
                     if !e.canvas_frozen {
                         e.canvas.include_path(&segs);
                     }
-                    let stroke = Stroke { color: c, width: 0.3 * crate::PT, dash: None, cap: st.pen.cap, join: st.pen.join, miter_limit: st.pen.miter_limit, opacity: opacity.0 };
+                    let stroke =
+                        Stroke { color: c, width: 0.3 * tikra_engine::PT, dash: None, cap: st.pen.cap, join: st.pen.join, miter_limit: st.pen.miter_limit, opacity: opacity.0 };
                     e.canvas.push(Item::Path { segments: segs, fill: Some(Fill { paint: Paint::Solid(c), opacity: opacity.1, even_odd: false }), stroke: Some(stroke) });
                 }
             }
@@ -488,7 +495,7 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, style: &[Toke
         }
         if closes && shader == "interp" && interp_ok && (corners.len() == 4 || corners.len() == 3) {
             let size = (0..corners.len()).map(|i| corners[i].minus(corners[(i + 1) % corners.len()]).norm()).fold(0.0, f64::max);
-            let n = if size > 12.0 * crate::PT { ((size / (3.0 * crate::PT)).ceil() as usize).clamp(1, 64) } else { 1 };
+            let n = if size > 12.0 * tikra_engine::PT { ((size / (3.0 * tikra_engine::PT)).ceil() as usize).clamp(1, 64) } else { 1 };
             if n > 1 {
                 // a point and its color from weights of the corners
                 let at = |w: &[f64]| -> (Point, Color) {
@@ -562,7 +569,8 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, style: &[Toke
                     if !e.canvas_frozen {
                         e.canvas.include_path(&segs);
                     }
-                    let stroke = Stroke { color: c, width: 0.5 * crate::PT, dash: None, cap: st.pen.cap, join: st.pen.join, miter_limit: st.pen.miter_limit, opacity: opacity.0 };
+                    let stroke =
+                        Stroke { color: c, width: 0.5 * tikra_engine::PT, dash: None, cap: st.pen.cap, join: st.pen.join, miter_limit: st.pen.miter_limit, opacity: opacity.0 };
                     e.canvas.push(Item::Path { segments: segs, fill: Some(Fill { paint: Paint::Solid(c), opacity: opacity.1, even_odd: false }), stroke: Some(stroke) });
                 }
                 continue;
@@ -599,7 +607,7 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, style: &[Toke
         let fill_item = fill_c.map(|c| Fill { paint: Paint::Solid(c), opacity: opacity.1, even_odd: false });
         let mut stroke_item = stroke_c.map(stroke);
         if let (Some(st), true) = (stroke_item.as_mut(), surf && closes && shader == "interp") {
-            st.width = 0.2 * crate::PT;
+            st.width = 0.2 * tikra_engine::PT;
         }
         e.canvas.push(Item::Path { segments: segs, fill: fill_item, stroke: stroke_item });
     }
@@ -654,7 +662,7 @@ struct Look {
     fill: Linear,
     faceted: Linear,
     shader: String,
-    stroke: super::super::GState,
+    stroke: tikra_engine::engine::GState,
     /// `surf` or `patch` (filled), not `mesh`.
     surf: bool,
 }
@@ -803,7 +811,7 @@ fn draw_patches(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, kind: &st
                     (hi.x - lo.x).max(hi.y - lo.y)
                 };
                 let curved = !matches!(part.kind, Kind::Triangle | Kind::Bilinear | Kind::Rectangle | Kind::Polygon(_));
-                let n = ((size / (3.0 * crate::PT)).ceil() as usize).clamp(if curved { 6 } else { 1 }, 48);
+                let n = ((size / (3.0 * tikra_engine::PT)).ceil() as usize).clamp(if curved { 6 } else { 1 }, 48);
                 let mut pieces = part.pieces(n);
                 if f.three_d {
                     pieces.sort_by(|a, b| depth(&a.0).total_cmp(&depth(&b.0)));
@@ -815,7 +823,7 @@ fn draw_patches(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, kind: &st
                     segs.push(Segment::Close);
                     let stroke = Stroke {
                         color: c,
-                        width: 0.5 * crate::PT,
+                        width: 0.5 * tikra_engine::PT,
                         dash: None,
                         cap: st.pen.cap,
                         join: st.pen.join,
@@ -874,7 +882,7 @@ fn gouraud(tri: &[(Point, f64); 3], cm: &super::colormap::Colormap, range: [f64;
     // from the point of the lowest meta to that of the highest, along g
     let a = p0.plus(g.scale((lo - m0) / g2));
     let u = g.scale((hi - lo) / g2);
-    let transform = crate::scene::Transform { a: -u.y / 100.0, b: u.x / 100.0, c: u.x / 100.0, d: u.y / 100.0, e: a.x + 0.5 * u.x, f: a.y + 0.5 * u.y };
+    let transform = tikra_engine::scene::Transform { a: -u.y / 100.0, b: u.x / 100.0, c: u.x / 100.0, d: u.y / 100.0, e: a.x + 0.5 * u.x, f: a.y + 0.5 * u.y };
     let mut metas = vec![lo, hi];
     for (t, _) in cm.normalized() {
         let m = range[0] + t * (range[1] - range[0]);
@@ -884,7 +892,7 @@ fn gouraud(tri: &[(Point, f64); 3], cm: &super::colormap::Colormap, range: [f64;
     }
     metas.sort_by(f64::total_cmp);
     let stops = metas.iter().map(|&m| ((m - lo) / (hi - lo), color(m))).collect();
-    Paint::Shading(crate::canvas::Shading::Axial { transform, stops })
+    Paint::Shading(tikra_engine::canvas::Shading::Axial { transform, stops })
 }
 
 fn mean(v: &[Color]) -> Color {
@@ -906,7 +914,7 @@ fn blend(v: &[Color], w: &[f64]) -> Color {
 /// `cmyk=`, `gray=`, `wave=` (nanometres), as written or computed by the survey; None for `[]`.
 fn vertex_color(e: &Engine, p: &Plot, k: usize) -> Option<Color> {
     let Some(label) = p.coords.get(k).filter(|c| c.label != super::plot::NO_LABEL).and_then(|c| p.labels.get(c.label as usize)) else { return Some(Color::BLACK) };
-    let s = crate::tex::tokens_to_string(label);
+    let s = tikra_engine::tex::tokens_to_string(label);
     if s.trim().is_empty() {
         return None;
     }

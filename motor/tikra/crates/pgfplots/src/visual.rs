@@ -2,18 +2,18 @@
 //! (lines, `smooth`, `const plot`, `jump mark`, combs, `ybar`/`xbar`, intervals), `\closedcycle`,
 //! `fill between`, error bars, and the marks drawn afterwards, as pgf's mark handler draws them.
 
-use crate::canvas::{Fill, Item, Paint};
-use crate::keys as pk;
-use crate::scene::{Point, Segment, Transform};
-use crate::tex::{self, Token};
-use crate::{Error, PT};
+use tikra_engine::canvas::{Fill, Item, Paint};
+use tikra_engine::keys as pk;
+use tikra_engine::scene::{Point, Segment, Transform};
+use tikra_engine::tex::{self, Token};
+use tikra_engine::{Error, PT};
 
-use super::super::nodes::{NodeSpec, OnPath};
 use super::draw::Frame;
 use super::keys;
 use super::marks::{self, Use};
 use super::plot::Plot;
 use super::{toks, Engine};
+use tikra_engine::engine::nodes::{NodeSpec, OnPath};
 
 /// The marks of a plot, drawn once all plots are: its style and the canvas points.
 #[derive(Debug, Clone)]
@@ -111,7 +111,7 @@ pub fn draw_plot(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], base: &[f64], f: &F
 }
 
 fn define(e: &mut Engine, name: &str, value: &str) {
-    e.tex.set_meaning(&Token::cs(name), super::super::macro_from(value), false);
+    e.tex.set_meaning(&Token::cs(name), tikra_engine::engine::macro_from(value), false);
 }
 
 fn draw_plot_in_group(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], base: &[f64], f: &Frame, of_type: usize, index_of_type: usize) -> Result<Option<Marks>, Error> {
@@ -256,7 +256,7 @@ fn draw_plot_in_group(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], base: &[f64], 
                 let r = (|| -> Result<(), Error> {
                     if c.meta.is_finite() {
                         let t = (c.meta - f.meta[0]) / (f.meta[1] - f.meta[0]) * 1000.0;
-                        define(e, "pgfplotspointmetatransformed", &super::super::pgf_number(if t.is_finite() { t } else { 0.0 }));
+                        define(e, "pgfplotspointmetatransformed", &tikra_engine::engine::pgf_number(if t.is_finite() { t } else { 0.0 }));
                         if f.colormap.is_some() {
                             e.colors.insert("mapped color".into(), super::mesh::map(f, c.meta));
                         }
@@ -271,7 +271,7 @@ fn draw_plot_in_group(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], base: &[f64], 
                     e.st.apply_pending();
                     e.use_path(segs, "addplot")
                 })();
-                e.colors.insert("mapped color".into(), crate::color::Color::BLACK);
+                e.colors.insert("mapped color".into(), tikra_engine::color::Color::BLACK);
                 e.end_group();
                 r?;
             }
@@ -571,14 +571,14 @@ fn post_nodes(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], cp: &[Option<Point>], 
             }
         }
     }
-    super::attime::set(Some(tl));
+    super::attime::set(e, Some(tl));
     let r = (|| -> Result<(), Error> {
         let z = |l: [f64; 3]| if f.three_d { l } else { [l[0], l[1], f.min[2]] };
         // a scatter plot has no segments: a node goes to the point nearest its `pos`
         let snapped: Vec<[f64; 3]> =
             if e.st.plot.only_marks { pts.iter().copied().filter(|l| l.iter().take(if f.three_d { 3 } else { 2 }).all(|v| v.is_finite())).collect() } else { Vec::new() };
         for (item, t, a, b, frac) in placed {
-            super::attime::set_time(t);
+            super::attime::set_time(e, t);
             let (a, b, frac) = match snapped.len() {
                 0 => (a, b, frac),
                 n => {
@@ -595,7 +595,7 @@ fn post_nodes(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], cp: &[Option<Point>], 
             e.run_tokens(code)?;
         }
         if ends {
-            super::attime::set_time(1.0);
+            super::attime::set_time(e, 1.0);
             // a box plot without outliers starts its path at the origin
             let origin = (p.boxplot.is_some()).then(|| f.at(f.min));
             if let Some(last) = cp.iter().rev().flatten().next().copied().or(origin).as_ref() {
@@ -607,7 +607,7 @@ fn post_nodes(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], cp: &[Option<Point>], 
         }
         Ok(())
     })();
-    super::attime::set(None);
+    super::attime::set(e, None);
     r
 }
 
@@ -615,7 +615,7 @@ fn post_nodes(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], cp: &[Option<Point>], 
 /// move the node too.
 fn with_options(item: &[Token], prefix: &[Token]) -> Vec<Token> {
     let opts: Vec<Token> = {
-        let t = crate::keys::trim(prefix);
+        let t = tikra_engine::keys::trim(prefix);
         match (t.first(), t.last()) {
             (Some(a), Some(b)) if a.is_char('[') && b.is_char(']') && t.len() > 2 => t[1..t.len() - 1].to_vec(),
             _ => return item.to_vec(),
@@ -707,7 +707,7 @@ fn node_options(item: &[Token]) -> Option<(usize, usize)> {
 fn node_time(e: &mut Engine, item: &[Token]) -> Option<f64> {
     let (a, b) = node_options(item)?;
     let mut time = None;
-    for it in crate::keys::split_list(&item[a + 1..b]) {
+    for it in tikra_engine::keys::split_list(&item[a + 1..b]) {
         let t = match it.key.trim() {
             "pos" => it.value.and_then(|v| e.number_of(v).ok()),
             "at start" => Some(0.0),
@@ -730,7 +730,7 @@ fn node_time(e: &mut Engine, item: &[Token]) -> Option<f64> {
 fn with_pos(item: &[Token], frac: f64) -> Vec<Token> {
     let Some((_, b)) = node_options(item) else { return item.to_vec() };
     let mut out = item[..b].to_vec();
-    out.extend(toks(&format!(",pos={}", super::super::pgf_number(frac))));
+    out.extend(toks(&format!(",pos={}", tikra_engine::engine::pgf_number(frac))));
     out.extend(item[b..].iter().cloned());
     out
 }
@@ -745,7 +745,7 @@ const ANCHORS: &[&str] =
 #[allow(clippy::too_many_arguments)]
 fn near_nodes(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], base: &[f64], f: &Frame, handler: &str, bar_shift: f64) -> Result<(Vec<Token>, Vec<NearNode>), Error> {
     let Some(text) = keys::value_tokens(e, "/pgfplots/@nodes near coords") else { return Ok((Vec::new(), Vec::new())) };
-    if crate::keys::trim(&text).is_empty() {
+    if tikra_engine::keys::trim(&text).is_empty() {
         return Ok((Vec::new(), Vec::new()));
     }
     let source = keys::value(e, "/pgfplots/point meta");
@@ -836,7 +836,7 @@ pub fn draw_near_nodes(e: &mut Engine, m: &Marks) -> Result<(), Error> {
             let r = (|| -> Result<(), Error> {
                 let meta = match &n.label {
                     Some(l) if !n.meta.is_finite() => tex::tokens_to_string(l),
-                    _ => super::super::pgf_number(n.meta),
+                    _ => tikra_engine::engine::pgf_number(n.meta),
                 };
                 define(e, "pgfplotspointmeta", &meta);
                 define(e, "coordindex", &n.index.to_string());
@@ -844,14 +844,14 @@ pub fn draw_near_nodes(e: &mut Engine, m: &Marks) -> Result<(), Error> {
                     define(e, name, value);
                 }
                 for (k, c) in ['x', 'y', 'z'].iter().enumerate() {
-                    super::keys::set(e, &format!("/data point/{c}"), &super::super::pgf_number(n.data[k]));
+                    super::keys::set(e, &format!("/data point/{c}"), &tikra_engine::engine::pgf_number(n.data[k]));
                 }
                 // symbolic point meta is shown as written
                 let text = match (&n.label, default && !n.meta.is_finite()) {
                     (Some(l), true) => l.clone(),
                     _ => {
                         // `\pgfmathprintnumber\pgfplotspointmeta` takes the macro, then the rest
-                        let t = super::draw::print_numbers(e, &m.node_text)?;
+                        let t = super::print_numbers(e, &m.node_text)?;
                         e.tex.expand_fully(t)?
                     }
                 };
@@ -1046,7 +1046,7 @@ pub fn draw_marks(e: &mut Engine, m: &Marks, f: &Frame) -> Result<(), Error> {
         let indices: Vec<usize> = match keys::value_tokens(e, "/tikz/mark indices") {
             Some(v) => {
                 let list = e.tex.expand_fully(v)?;
-                super::super::foreach_items(&list).into_iter().filter_map(|i| tex::tokens_to_string(&i).trim().parse().ok()).collect()
+                tikra_engine::engine::foreach_items(&list).into_iter().filter_map(|i| tex::tokens_to_string(&i).trim().parse().ok()).collect()
             }
             None => e.st.plot.mark_indices.clone().unwrap_or_default(),
         };
@@ -1073,8 +1073,8 @@ pub fn draw_marks(e: &mut Engine, m: &Marks, f: &Frame) -> Result<(), Error> {
                     e.begin_group();
                     let r = (|| -> Result<(), Error> {
                         let t = (meta - f.meta[0]) / (f.meta[1] - f.meta[0]) * 1000.0;
-                        define(e, "pgfplotspointmetatransformed", &super::super::pgf_number(if t.is_finite() { t } else { 0.0 }));
-                        define(e, "pgfplotspointmeta", &super::super::pgf_number(meta));
+                        define(e, "pgfplotspointmetatransformed", &tikra_engine::engine::pgf_number(if t.is_finite() { t } else { 0.0 }));
+                        define(e, "pgfplotspointmeta", &tikra_engine::engine::pgf_number(meta));
                         define(e, "tikra@scatter@usemapped", "0");
                         for (name, value) in m.deps.get(i).into_iter().flatten() {
                             define(e, name, value);
@@ -1107,7 +1107,7 @@ pub fn draw_marks(e: &mut Engine, m: &Marks, f: &Frame) -> Result<(), Error> {
                         if let Some(v) = keys::value_tokens(e, "/pgfplots/scatter/use mapped color") {
                             e.process_keys(v, Some("/tikz"))?;
                         }
-                        e.colors.insert("mapped color".into(), crate::color::Color::BLACK);
+                        e.colors.insert("mapped color".into(), tikra_engine::color::Color::BLACK);
                     }
                     if cube {
                         draw_cubes(e, &name, e.st.plot.mark_size, f, std::iter::once(p))?;
@@ -1224,7 +1224,7 @@ pub fn draw_mark_set(e: &mut Engine, name: &str, size: f64, local: &Transform, p
     let lin = Transform { e: 0.0, f: 0.0, ..*local };
     for p in points {
         let t = Transform::translation(p.x, p.y).compose(&lin);
-        let segs = crate::canvas::transform_segments(&shape, &t);
+        let segs = tikra_engine::canvas::transform_segments(&shape, &t);
         if !e.canvas_frozen {
             e.canvas.include_path(&segs);
         }

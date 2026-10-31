@@ -3,12 +3,12 @@
 //! their values when it is drawn. The keys whose code does work
 //! (`compat`, `axis x line`, `/pgf/number format/…`, the plot handlers) are native.
 
-use crate::keys;
-use crate::tex::{self, Meaning, Token};
-use crate::Error;
+use tikra_engine::keys;
+use tikra_engine::tex::{self, Meaning, Token};
+use tikra_engine::Error;
 
-use super::super::{options::KeyFn, tikra_tokens, Engine, NATIVE_KEY_BASE};
-use super::number::{SciStyle, Style};
+use tikra_engine::engine::number::{SciStyle, Style};
+use tikra_engine::engine::{options::KeyFn, tikra_tokens, Engine, NATIVE_KEY_BASE};
 
 /// Keys that hold a value, and the value each starts with.
 const VALUES: &[(&str, &str)] = &[
@@ -999,7 +999,7 @@ fn put(s: &mut String, name: &str, handler: &str, value: &str) {
 }
 
 /// The pgfplots keys as TeX, built once from the tables.
-fn definitions() -> &'static str {
+pub(crate) fn definitions() -> &'static str {
     static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     TEXT.get_or_init(|| {
         let mut s = String::from(PRELUDE);
@@ -1218,7 +1218,7 @@ keyfn!(k_visualization_depends_on, |e, v| {
     list.push(Token::Char('{', tex::Cat::Begin));
     list.extend(v.unwrap_or_default());
     list.push(Token::Char('}', tex::Cat::End));
-    e.tex.set_meaning(&Token::cs(&path), super::super::macro_tokens(list), false);
+    e.tex.set_meaning(&Token::cs(&path), tikra_engine::engine::macro_tokens(list), false);
     Ok(())
 });
 
@@ -1497,7 +1497,7 @@ fn current_key_axis(e: &Engine) -> char {
 // equally spaced colors.
 keyfn!(k_colormap_unknown, |e, _v| {
     let name = e.tex.expand_to_string(vec![Token::cs("pgfkeyscurrentname")])?;
-    let Some(colors) = crate::color::brewer::colormap(&name) else {
+    let Some(colors) = tikra_engine::color::brewer::colormap(&name) else {
         e.warn(format!("option '{name}' not supported: ignored"));
         return Ok(());
     };
@@ -1533,7 +1533,7 @@ keyfn!(k_contour_filled, |e, v| {
 // Its options: `execute for upside down={…}` (kept for after the node's other options, as
 // pgfplots runs it when the node is placed), `allow upside down`, `reset nontranslations=false`.
 fn sloped_like(e: &mut Engine, a: usize, v: Option<Vec<Token>>) -> Result<(), Error> {
-    let Some(f) = e.frame.clone() else { return Ok(()) };
+    let Some(f) = super::fig(e).frame.clone() else { return Ok(()) };
     let (code, allow, reset) = super::smith::sloped_options(&v.unwrap_or_default());
     // the direction at the tick being labelled (a smith chart's circle), else the axis'
     let d = f.slope.get().unwrap_or_else(|| f.e[a].scale(if f.max[a] < f.min[a] { -1.0 } else { 1.0 }));
@@ -1544,9 +1544,9 @@ fn sloped_like(e: &mut Engine, a: usize, v: Option<Vec<Token>>) -> Result<(), Er
     if d.x < 0.0 {
         if let Some(code) = code {
             // `\tikzset{anchor=…}`: its keys
-            let t = crate::keys::trim(&code).to_vec();
+            let t = tikra_engine::keys::trim(&code).to_vec();
             let keys = match t.split_first() {
-                Some((first, rest)) if first.is_cs("tikzset") => crate::tex::strip_outer_braces(crate::keys::trim(rest).to_vec()),
+                Some((first, rest)) if first.is_cs("tikzset") => tikra_engine::tex::strip_outer_braces(tikra_engine::keys::trim(rest).to_vec()),
                 _ => t,
             };
             f.upside_down.replace(Some(keys));
@@ -1556,8 +1556,8 @@ fn sloped_like(e: &mut Engine, a: usize, v: Option<Vec<Token>>) -> Result<(), Er
         }
     }
     let p = e.st.pending;
-    let base = if reset { crate::scene::Transform { a: 1.0, b: 0.0, c: 0.0, d: 1.0, ..p } } else { p };
-    e.st.pending = base.compose(&crate::scene::Transform::rotation(d.y.atan2(d.x).to_degrees()));
+    let base = if reset { tikra_engine::scene::Transform { a: 1.0, b: 0.0, c: 0.0, d: 1.0, ..p } } else { p };
+    e.st.pending = base.compose(&tikra_engine::scene::Transform::rotation(d.y.atan2(d.x).to_degrees()));
     Ok(())
 }
 keyfn!(k_sloped_x, |e, v| sloped_like(e, 0, v));
@@ -1632,14 +1632,14 @@ keyfn!(k_group_size, |e, v| {
 keyfn!(k_set_meta, |e, v| {
     if keys::value(&e.tex, "/pgfplots/point meta").is_none_or(|m| keys::trim(&m).is_empty() || tex::tokens_to_string(&m).trim() == "none") {
         let value = v.unwrap_or_default();
-        e.tex.set_meaning(&Token::cs(&keys::macro_name("/pgfplots/point meta")), super::super::macro_tokens(value), false);
+        e.tex.set_meaning(&Token::cs(&keys::macro_name("/pgfplots/point meta")), tikra_engine::engine::macro_tokens(value), false);
     }
     Ok(())
 });
 
 // ------------------------------------------------------------------ /pgf/number format
 
-fn nf(e: &mut Engine) -> &mut super::number::NumberFormat {
+fn nf(e: &mut Engine) -> &mut tikra_engine::engine::number::NumberFormat {
     &mut e.st.number_format
 }
 
@@ -1797,7 +1797,7 @@ fn native(e: &mut Engine, path: &str, f: KeyFn) {
 /// Defines the pgfplots keys (after TikZ's).
 pub fn define(e: &mut Engine) {
     // what the colormap gives each point; set while a plot is drawn
-    e.colors.insert("mapped color".into(), crate::color::Color::rgb(0.0, 0.0, 0.0));
+    e.colors.insert("mapped color".into(), tikra_engine::color::Color::rgb(0.0, 0.0, 0.0));
     for (path, f) in NATIVE {
         native(e, path, *f);
     }
@@ -1813,11 +1813,11 @@ pub fn define(e: &mut Engine) {
         ("skip 0.", "true"),
         ("retain unit mantissa", "true"),
     ] {
-        e.tex.set_meaning(&Token::cs(&keys::macro_name(&format!("/pgf/number format/{k}/.@def"))), super::super::macro_from(v), false);
+        e.tex.set_meaning(&Token::cs(&keys::macro_name(&format!("/pgf/number format/{k}/.@def"))), tikra_engine::engine::macro_from(v), false);
     }
-    let saved = e.st.key_path.clone();
-    e.st.key_path = "/pgfplots".into();
-    let mut lexer = crate::tex::Tex::new_lexer();
+    // after TikZ's definitions and under its own path: as `mark options`, these replace TikZ's keys
+    let saved = std::mem::replace(&mut e.st.key_path, "/pgfplots".into());
+    let mut lexer = tikra_engine::tex::Tex::new_lexer();
     lexer.push_text(definitions());
     let mut tokens = Vec::new();
     while let Some(t) = lexer.get_token() {

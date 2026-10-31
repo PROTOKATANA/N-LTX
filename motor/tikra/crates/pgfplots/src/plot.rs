@@ -3,8 +3,8 @@
 //! `table`, `expression` (`{…}`, `(x(t),y(t))`), `file`, `fill between`, and `\addplot3`.
 //! The survey computes the coordinates; [`super::draw`] draws them.
 
-use crate::tex::{self, Cat, Token};
-use crate::Error;
+use tikra_engine::tex::{self, Cat, Token};
+use tikra_engine::Error;
 
 use super::keys;
 use super::table::{self, Table};
@@ -33,17 +33,10 @@ pub struct Coord {
 /// No label.
 pub const NO_LABEL: u32 = u32::MAX;
 
-thread_local! {
-    /// The labels of the plot being read.
-    static LABELS: std::cell::RefCell<Vec<Vec<Token>>> = const { std::cell::RefCell::new(Vec::new()) };
-}
-
-fn add_label(tokens: Vec<Token>) -> u32 {
-    LABELS.with(|l| {
-        let mut l = l.borrow_mut();
-        l.push(tokens);
-        (l.len() - 1) as u32
-    })
+fn add_label(e: &mut Engine, tokens: Vec<Token>) -> u32 {
+    let l = &mut super::fig(e).labels;
+    l.push(tokens);
+    (l.len() - 1) as u32
 }
 
 impl Coord {
@@ -102,7 +95,7 @@ pub struct Plot {
     /// The formula it was sampled from (`\addplot {x^2}`), for the figure's description.
     pub expression: String,
     /// `\addplot graphics`: the image and where it goes.
-    pub graphics: Option<Box<super::graphics::Graphics>>,
+    pub graphics: Option<Box<tikra_engine::engine::graphics::Graphics>>,
 }
 
 /// Letters following in the input: a word like `coordinates`.
@@ -164,7 +157,7 @@ pub fn addplot(e: &mut Engine) -> Result<(), Error> {
         }
     }
     let (index, cycle) = {
-        let a = e.axis.as_ref().expect("in an axis");
+        let a = super::fig(e).axis.as_ref().expect("in an axis");
         (a.numplots, a.numplots)
     };
     let user_options = user.clone().unwrap_or_default();
@@ -212,7 +205,7 @@ pub fn addplot(e: &mut Engine) -> Result<(), Error> {
         } else {
             Vec::new()
         };
-        let a = e.axis.as_mut().expect("in an axis");
+        let a = super::fig(e).axis.as_mut().expect("in an axis");
         a.numplots += 1;
         if classes.is_empty() {
             a.images.push(spec);
@@ -225,7 +218,7 @@ pub fn addplot(e: &mut Engine) -> Result<(), Error> {
             }
         }
     }
-    e.axis.as_mut().expect("in an axis").entries.push(Entry::Plot(Box::new(plot)));
+    super::fig(e).axis.as_mut().expect("in an axis").entries.push(Entry::Plot(Box::new(plot)));
     Ok(())
 }
 
@@ -240,7 +233,7 @@ fn style_for_classes(spec: &[Token]) -> Vec<Token> {
 pub fn cycle_entry(e: &mut Engine, k: usize) -> Result<Vec<Token>, Error> {
     let name = keys::value(e, "/pgfplots/cycle list name");
     let shift = keys::number(e, "/pgfplots/cycle list shift").unwrap_or(0.0) as i64;
-    let Some(list) = crate::keys::value(&e.tex, &format!("/pgfplots/@cycle lists/{name}")) else {
+    let Some(list) = tikra_engine::keys::value(&e.tex, &format!("/pgfplots/@cycle lists/{name}")) else {
         e.warn(format!("cycle list '{name}' not defined"));
         return Ok(Vec::new());
     };
@@ -284,12 +277,12 @@ pub fn cycle_entry(e: &mut Engine, k: usize) -> Result<Vec<Token>, Error> {
 /// A list of `cycle multi list`: a cycle list's name (`[2 of]mark list`: its first two entries)
 /// or the entries themselves.
 fn multi_part(e: &mut Engine, part: &[Token]) -> Vec<Vec<Token>> {
-    let text = tex::tokens_to_string(crate::keys::trim(part)).trim().to_string();
+    let text = tex::tokens_to_string(tikra_engine::keys::trim(part)).trim().to_string();
     let (limit, name) = match text.strip_prefix('[').and_then(|r| r.split_once(" of]")) {
         Some((n, rest)) => (n.trim().parse::<usize>().ok(), rest.trim().to_string()),
         None => (None, text.clone()),
     };
-    if let Some(list) = crate::keys::value(&e.tex, &format!("/pgfplots/@cycle lists/{name}")) {
+    if let Some(list) = tikra_engine::keys::value(&e.tex, &format!("/pgfplots/@cycle lists/{name}")) {
         let mut entries = split_cycle_list(&list);
         if let Some(n) = limit {
             entries.truncate(n.max(1));
@@ -319,7 +312,7 @@ pub fn split_cycle_list(list: &[Token]) -> Vec<Vec<Token>> {
         cur.push(t.clone());
     }
     out.push(cur);
-    out.into_iter().map(|v| tex::strip_outer_braces(crate::keys::trim(&v).to_vec())).filter(|v| !v.is_empty()).collect()
+    out.into_iter().map(|v| tex::strip_outer_braces(tikra_engine::keys::trim(&v).to_vec())).filter(|v| !v.is_empty()).collect()
 }
 
 /// Reads the plot's input and trailing path, with its keys set (inside the plot's group).
@@ -330,9 +323,9 @@ fn survey(e: &mut Engine, style: &[Token], three_d: bool) -> Result<Plot, Error>
         e.run_tokens(code)?;
     }
     let mut plot = Plot { three_d, ..Default::default() };
-    LABELS.with(|l| l.borrow_mut().clear());
+    super::fig(e).labels.clear();
     let r = survey_input(e, &mut plot, three_d);
-    plot.labels = LABELS.with(|l| std::mem::take(&mut *l.borrow_mut()));
+    plot.labels = std::mem::take(&mut super::fig(e).labels);
     r?;
     Ok(plot)
 }
@@ -350,7 +343,7 @@ fn survey_input(e: &mut Engine, plot: &mut Plot, three_d: bool) -> Result<(), Er
     plot.late = keys::value_tokens(e, "/pgfplots/late options").unwrap_or_default();
     plot.scatter = keys::flag(e, "/pgfplots/scatter");
     plot.handler = keys::value(e, "/tikz/@plot handler");
-    let axis_options = e.axis.as_ref().map(|a| tex::tokens_to_string(&a.options)).unwrap_or_default();
+    let axis_options = super::fig(e).axis.as_ref().map(|a| tex::tokens_to_string(&a.options)).unwrap_or_default();
     plot.bar_shift_given = axis_options.contains("bar shift");
     // a prepared contour: its level is z in 3d, the third column (point meta=explicit) in 2d
     if plot.handler == "contour prepared" && keys::value(e, "/pgfplots/point meta").is_empty() {
@@ -370,7 +363,7 @@ fn survey_input(e: &mut Engine, plot: &mut Plot, three_d: bool) -> Result<(), Er
     let t = e.tex.next_nonspace().ok_or_else(|| Error::Figure("\\addplot without input".into()))?;
     match &t {
         Token::Char('(', _) => {
-            let tokens = super::super::coords::read_coordinate_tokens(e)?;
+            let tokens = tikra_engine::engine::coords::read_coordinate_tokens(e)?;
             let parts = split_commas(&tokens);
             plot.coords = sample(e, &parts, plot)?;
         }
@@ -415,7 +408,7 @@ fn survey_input(e: &mut Engine, plot: &mut Plot, three_d: bool) -> Result<(), Er
                     let _ = e.optional()?;
                     let name = e.argument_string()?;
                     let search = search_path(e);
-                    match table::read_file(&name, &search) {
+                    match tikra_engine::files::read_file(&name, &search) {
                         Ok(text) => {
                             let t = Table::parse(&text, table::ColSep::Space, "false", 0, "");
                             plot.coords = table_coords(e, &t, three_d)?;
@@ -466,7 +459,7 @@ fn survey_input(e: &mut Engine, plot: &mut Plot, three_d: bool) -> Result<(), Er
     }
     data_cs(e, plot);
     // `is smithchart cs`: the input is in the unit circle's plane
-    if e.axis.as_ref().is_some_and(|a| a.kind == "smithchart") && keys::flag(e, "/pgfplots/is smithchart cs") {
+    if super::fig(e).axis.as_ref().is_some_and(|a| a.kind == "smithchart") && keys::flag(e, "/pgfplots/is smithchart cs") {
         for c in plot.coords.iter_mut() {
             (c.x, c.y) = super::smith::impedance(c.x, c.y);
         }
@@ -515,7 +508,7 @@ fn patch_table(e: &mut Engine, plot: &mut Plot) {
     let text = text.replace("\\\\", "\n");
     let trimmed = text.trim();
     let text = if !trimmed.contains('\n') && !trimmed.contains(' ') && trimmed.chars().any(|c| c.is_alphabetic()) {
-        match table::read_file(trimmed, &search_path(e)) {
+        match tikra_engine::files::read_file(trimmed, &search_path(e)) {
             Ok(t) => t,
             Err(m) => {
                 e.warn(format!("patch table: {m}"));
@@ -579,16 +572,16 @@ pub fn split_commas(tokens: &[Token]) -> Vec<Vec<Token>> {
             l.push(t.clone());
         }
     }
-    out.into_iter().map(|p| tex::strip_outer_braces(crate::keys::trim(&p).to_vec())).collect()
+    out.into_iter().map(|p| tex::strip_outer_braces(tikra_engine::keys::trim(&p).to_vec())).collect()
 }
 
 /// The domain and samples of an expression plot.
 fn sample_points(e: &mut Engine, domain_key: &str, samples_key: &str, log: bool) -> Result<Vec<f64>, Error> {
-    let at = crate::keys::value(&e.tex, "/pgfplots/samples at").filter(|v| !crate::keys::trim(v).is_empty());
+    let at = tikra_engine::keys::value(&e.tex, "/pgfplots/samples at").filter(|v| !tikra_engine::keys::trim(v).is_empty());
     if let Some(list) = at.filter(|_| domain_key == "/pgfplots/domain") {
         let list = e.tex.expand_fully(list)?;
         let mut v = Vec::new();
-        for item in super::super::foreach_items(&list) {
+        for item in tikra_engine::engine::foreach_items(&list) {
             v.push(e.number_of(item)?);
         }
         return Ok(v);
@@ -676,7 +669,7 @@ fn sample(e: &mut Engine, parts: &[Vec<Token>], plot: &mut Plot) -> Result<Vec<C
     let var_y = keys::value(e, "/pgfplots/variable y").trim_start_matches('\\').to_string();
     // the variables read as names in the expressions
     for (name, value) in [(var.as_str(), var.clone()), (var_y.as_str(), var_y.clone())] {
-        e.tex.set_meaning(&Token::cs(name), super::super::macro_from(&value), false);
+        e.tex.set_meaning(&Token::cs(name), tikra_engine::engine::macro_from(&value), false);
     }
     let texts: Vec<String> = parts.iter().map(|p| e.math_string(p.clone())).collect::<Result<_, _>>()?;
     let xlog = keys::value(e, "/pgfplots/xmode") == "log";
@@ -693,8 +686,8 @@ fn sample(e: &mut Engine, parts: &[Vec<Token>], plot: &mut Plot) -> Result<Vec<C
     // a point pgfplots cannot compute is unbounded (NaN); the first error is kept, to tell it when
     // no point at all could be
     let failed: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(None);
-    let eval = |text: &str, vars: &crate::expr::Variables| {
-        crate::expr::eval(text, vars).unwrap_or_else(|err| {
+    let eval = |text: &str, vars: &tikra_engine::expr::Variables| {
+        tikra_engine::expr::eval(text, vars).unwrap_or_else(|err| {
             failed.borrow_mut().get_or_insert_with(|| err.to_string());
             f64::NAN
         })
@@ -769,8 +762,8 @@ fn axis_value(e: &mut Engine, c: char, tokens: &[Token]) -> f64 {
 }
 
 /// pgfmath's variables for pgfplots' math, which runs with the fpu on.
-fn fpu_vars(e: &Engine) -> crate::expr::Variables {
-    crate::expr::Variables { fpu: true, ..e.vars() }
+fn fpu_vars(e: &Engine) -> tikra_engine::expr::Variables {
+    tikra_engine::expr::Variables { fpu: true, ..e.vars() }
 }
 
 fn value(e: &mut Engine, tokens: &[Token]) -> f64 {
@@ -779,7 +772,7 @@ fn value(e: &mut Engine, tokens: &[Token]) -> f64 {
         return v;
     }
     let tokens = tokens.to_vec();
-    e.math_string(tokens).and_then(|t| crate::expr::eval(&t, &fpu_vars(e))).unwrap_or(f64::NAN)
+    e.math_string(tokens).and_then(|t| tikra_engine::expr::eval(&t, &fpu_vars(e))).unwrap_or(f64::NAN)
 }
 
 /// `coordinates {(x,y) (x,y) +- (ex,ey) [meta] …}`.
@@ -886,7 +879,7 @@ fn coordinates(e: &mut Engine, list: Vec<Token>) -> Result<(Vec<Coord>, Vec<usiz
                 if !explicit_symbolic {
                     c.meta = value(e, written);
                 }
-                c.label = add_label(crate::keys::trim(written).to_vec());
+                c.label = add_label(e, tikra_engine::keys::trim(written).to_vec());
                 j = k + 1;
             }
             i = j;
@@ -901,11 +894,6 @@ fn coordinates(e: &mut Engine, list: Vec<Token>) -> Result<(Vec<Coord>, Vec<usiz
 fn search_path(e: &mut Engine) -> Vec<String> {
     let s = keys::value(e, "/pgfplots/table/@search path");
     s.split(',').map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect()
-}
-
-thread_local! {
-    /// Tables `\pgfplotstableread` keeps, by macro name: their text and their options.
-    static READ_TABLES: std::cell::RefCell<std::collections::HashMap<String, (String, Vec<Token>)>> = std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
 /// `[options]{file or data}` with line ends as characters (rows), and the data as text.
@@ -1002,7 +990,7 @@ pub fn table_read(e: &mut Engine) -> Result<(), Error> {
         e.warn("\\pgfplotstableread without a macro to keep the table: ignored");
         return Ok(());
     }
-    READ_TABLES.with(|t| t.borrow_mut().insert(name, (text, opts.unwrap_or_default())));
+    super::fig(e).tables.insert(name, (text, opts.unwrap_or_default()));
     Ok(())
 }
 
@@ -1017,7 +1005,7 @@ fn read_table(e: &mut Engine, three_d: bool) -> Result<(Vec<Coord>, Vec<usize>),
 /// (under `/pgfplots/table`); none (with a warning) if it cannot be read.
 fn load_table(e: &mut Engine, opts: Option<Vec<Token>>, mut text: String, what: &str) -> Result<Option<Table>, Error> {
     // a table `\pgfplotstableread` kept: its options, then the plot's
-    let kept = text.trim().strip_prefix('\\').map(|n| n.trim().to_string()).and_then(|n| READ_TABLES.with(|t| t.borrow().get(&n).cloned()));
+    let kept = text.trim().strip_prefix('\\').map(|n| n.trim().to_string()).and_then(|n| super::fig(e).tables.get(&n).cloned());
     let mut all_opts = Vec::new();
     if let Some((t, o)) = kept {
         text = t;
@@ -1048,7 +1036,7 @@ fn load_table(e: &mut Engine, opts: Option<Vec<Token>>, mut text: String, what: 
         let content = e.tex.expand_to_string(vec![Token::cs(&written)])?;
         Table::parse(&content, sep, &header, skip, &comment)
     } else if is_file {
-        match table::read_file(trimmed, &search_path(e)) {
+        match tikra_engine::files::read_file(trimmed, &search_path(e)) {
             Ok(content) => Table::parse(&content, sep, &header, skip, &comment),
             Err(m) => {
                 e.warn(format!("{what}: {m}"));
@@ -1072,10 +1060,10 @@ pub fn table_typeset(e: &mut Engine) -> Result<(), Error> {
     // `columns` is pgfplotstable's own; the rest is for reading the table
     let mut columns: Option<Vec<String>> = None;
     let mut rest = Vec::new();
-    for item in crate::keys::split_list(&opts.unwrap_or_default()) {
+    for item in tikra_engine::keys::split_list(&opts.unwrap_or_default()) {
         if item.key.trim() == "columns" {
             let v = item.value.map(|v| tex::tokens_to_string(&v)).unwrap_or_default();
-            columns = Some(crate::keys::split_top_level(&v).iter().map(|c| crate::keys::strip_braces(c.trim()).trim().to_string()).collect());
+            columns = Some(tikra_engine::keys::split_top_level(&v).iter().map(|c| tikra_engine::keys::strip_braces(c.trim()).trim().to_string()).collect());
             continue;
         }
         rest.extend(super::toks(&item.key));
@@ -1171,7 +1159,7 @@ fn table_coords(e: &mut Engine, t: &Table, three_d: bool) -> Result<Vec<Coord>, 
     let symbolic = symbolic_meta(e);
     let quiver = keys::flag(e, "/pgfplots/@quiver");
     let t_table = t;
-    let smeta = match crate::keys::value(&e.tex, "/pgfplots/point meta") {
+    let smeta = match tikra_engine::keys::value(&e.tex, "/pgfplots/point meta") {
         _ if symbolic.is_some() => Src::None,
         Some(v) if tex::tokens_to_string(&v).contains("\\thisrow") => Src::Expr(v),
         _ => pick(e, "meta", None),
@@ -1205,7 +1193,7 @@ fn table_coords(e: &mut Engine, t: &Table, three_d: bool) -> Result<Vec<Coord>, 
     let seym = pick(e, "y error minus", None);
     let sexp = pick(e, "x error plus", None);
     let sexm = pick(e, "x error minus", None);
-    let box_filter = match e.tex.meaning_of(&crate::keys::macro_name("/pgfplots/boxplot/data filter/.@cmd")) {
+    let box_filter = match e.tex.meaning_of(&tikra_engine::keys::macro_name("/pgfplots/boxplot/data filter/.@cmd")) {
         tex::Meaning::Macro(m) if !m.body.is_empty() && !keys::value(e, "/pgfplots/@boxplot").is_empty() => Some(m.body.clone()),
         _ => None,
     };
@@ -1225,7 +1213,7 @@ fn table_coords(e: &mut Engine, t: &Table, three_d: bool) -> Result<Vec<Coord>, 
                     for (n, v) in known.borrow().iter() {
                         vars.insert((*n).into(), *v);
                     }
-                    e.math_string(replaced).and_then(|s| crate::expr::eval(&s, &vars)).unwrap_or(f64::NAN)
+                    e.math_string(replaced).and_then(|s| tikra_engine::expr::eval(&s, &vars)).unwrap_or(f64::NAN)
                 }
             }
         };
@@ -1247,7 +1235,7 @@ fn table_coords(e: &mut Engine, t: &Table, three_d: bool) -> Result<Vec<Coord>, 
         c.meta = get(e, &smeta);
         if let Src::Col(Some(col)) = &smeta {
             if let Some(cell) = t.cell(r, *col) {
-                c.label = add_label(tex::string_tokens(cell));
+                c.label = add_label(e, tex::string_tokens(cell));
             }
         }
         if quiver {
@@ -1258,7 +1246,7 @@ fn table_coords(e: &mut Engine, t: &Table, three_d: bool) -> Result<Vec<Coord>, 
                     vars.insert("x".into(), x);
                     vars.insert("y".into(), y);
                     vars.insert("z".into(), z);
-                    c.uvw[k] = e.math_string(replaced).and_then(|s| crate::expr::eval(&s, &vars)).unwrap_or(f64::NAN);
+                    c.uvw[k] = e.math_string(replaced).and_then(|s| tikra_engine::expr::eval(&s, &vars)).unwrap_or(f64::NAN);
                 }
             }
         }
@@ -1266,7 +1254,7 @@ fn table_coords(e: &mut Engine, t: &Table, three_d: bool) -> Result<Vec<Coord>, 
             let replaced = replace_thisrow(tokens, t, r);
             let text = e.tex.expand_to_string(replaced).unwrap_or_default();
             let l = symbolic_label(e, &text, *mathparse, [x, y, z]);
-            c.label = add_label(tex::string_tokens(&l));
+            c.label = add_label(e, tex::string_tokens(&l));
         }
         let ey = get(e, &sey);
         let ex = get(e, &sex);
@@ -1302,7 +1290,7 @@ fn table_coords(e: &mut Engine, t: &Table, three_d: bool) -> Result<Vec<Coord>, 
                 _ => &mut c.y,
             };
             if v.is_finite() {
-                let text = super::super::pgf_number(*v);
+                let text = tikra_engine::engine::pgf_number(*v);
                 let code = replace_thisrow_as(&tex::substitute(body, &[tex::string_tokens(&text)]), t, r, true);
                 e.begin_group();
                 e.tex.define_string("pgfmathresult", &text, false);
@@ -1318,7 +1306,7 @@ fn table_coords(e: &mut Engine, t: &Table, three_d: bool) -> Result<Vec<Coord>, 
         }
         out.extend(other);
     }
-    FILTER_ROWS.with(|f| *f.borrow_mut() = Some((t.clone(), rows)));
+    super::fig(e).filter_rows = Some((t.clone(), rows));
     Ok(out)
 }
 
@@ -1327,7 +1315,7 @@ fn table_coords(e: &mut Engine, t: &Table, three_d: bool) -> Result<Vec<Coord>, 
 /// and intercept are kept in `\pgfplotstableregressiona` and `\pgfplotstableregressionb`.
 fn linear_regression(e: &mut Engine, t: &Table, options: &str) -> Vec<f64> {
     let mut opt = std::collections::HashMap::new();
-    for part in crate::keys::split_top_level(options) {
+    for part in tikra_engine::keys::split_top_level(options) {
         if let Some((k, v)) = part.split_once('=') {
             opt.insert(k.trim().to_string(), v.trim().trim_start_matches('{').trim_end_matches('}').trim().to_string());
         }
@@ -1475,15 +1463,9 @@ fn replace_thisrow_as(tokens: &[Token], t: &Table, row: usize, raw: bool) -> Vec
     out
 }
 
-thread_local! {
-    /// The table the plot's coordinates were read from, and each coordinate's row: `\thisrow`
-    /// in coordinate filters.
-    static FILTER_ROWS: std::cell::RefCell<Option<(Table, Vec<usize>)>> = const { std::cell::RefCell::new(None) };
-}
-
 /// The code of a key (`x filter/.code`), if it has some: its macro.
 fn filter_code(e: &Engine, path: &str) -> Option<Token> {
-    let name = crate::keys::macro_name(&format!("{path}/.@cmd"));
+    let name = tikra_engine::keys::macro_name(&format!("{path}/.@cmd"));
     match e.tex.meaning_of(&name) {
         tex::Meaning::Macro(m) if !m.body.is_empty() => Some(Token::cs(&name)),
         _ => None,
@@ -1494,31 +1476,31 @@ fn filter_code(e: &Engine, path: &str) -> Option<Token> {
 /// code (`\pgfmathresult` in and out, empty to drop the point) and as expressions (`x`, `y`,
 /// `rawx`…, `\coordindex`, `\thisrow`), then `restrict expr to domain`.
 fn coordinate_filters(e: &mut Engine, plot: &mut Plot) -> Result<(), Error> {
-    let rows = FILTER_ROWS.with(|f| f.borrow_mut().take()).filter(|(_, r)| r.len() == plot.coords.len());
+    let rows = super::fig(e).filter_rows.take().filter(|(_, r)| r.len() == plot.coords.len());
     let dims = if plot.three_d { 3 } else { 2 };
     let mut codes: Vec<Option<Token>> = Vec::new();
     let mut exprs: Vec<Vec<Vec<Token>>> = Vec::new();
     for c in ['x', 'y', 'z'].iter().take(dims) {
         let path = format!("/pgfplots/{c} filter");
         codes.push(filter_code(e, &path));
-        let list = crate::keys::value(&e.tex, &format!("{path}/@expressions")).unwrap_or_default();
+        let list = tikra_engine::keys::value(&e.tex, &format!("{path}/@expressions")).unwrap_or_default();
         exprs.push(split_groups(&list));
     }
     let restrict = keys::value_tokens(e, "/pgfplots/@restrict expr").zip(Some(keys::value(e, "/pgfplots/@restrict expr domain")));
-    let conditions = split_groups(&crate::keys::value(&e.tex, "/pgfplots/coordinate style/@conditions").unwrap_or_default());
+    let conditions = split_groups(&tikra_engine::keys::value(&e.tex, "/pgfplots/coordinate style/@conditions").unwrap_or_default());
     let from = keys::value_tokens(e, "/pgfplots/coordinate style/@from");
     let classes = if plot.scatter { scatter_classes(e) } else { Vec::new() };
     // `visualization depends on`: (expression, verbatim, macro)
-    let deps: Vec<(Vec<Token>, bool, String)> = split_groups(&crate::keys::value(&e.tex, "/pgfplots/@visualization depends on").unwrap_or_default())
+    let deps: Vec<(Vec<Token>, bool, String)> = split_groups(&tikra_engine::keys::value(&e.tex, "/pgfplots/@visualization depends on").unwrap_or_default())
         .into_iter()
         .filter_map(|d| {
             let at = d.iter().position(|t| t.is_cs("as"))?;
             let name = d[at + 1..].iter().find_map(|t| if let Token::Cs(n) = t { Some(n.to_string()) } else { None })?;
-            let mut expr = crate::keys::trim(&d[..at]).to_vec();
+            let mut expr = tikra_engine::keys::trim(&d[..at]).to_vec();
             let text = tex::tokens_to_string(&expr);
             let verbatim = text.trim_start().starts_with("value");
             if verbatim {
-                expr = tex::strip_outer_braces(crate::keys::trim(&super::toks(text.trim_start().trim_start_matches("value"))).to_vec());
+                expr = tex::strip_outer_braces(tikra_engine::keys::trim(&super::toks(text.trim_start().trim_start_matches("value"))).to_vec());
             }
             Some((expr, verbatim, name))
         })
@@ -1533,7 +1515,7 @@ fn coordinate_filters(e: &mut Engine, plot: &mut Plot) -> Result<(), Error> {
     {
         return Ok(());
     }
-    let number = |v: f64| super::super::pgf_number(v);
+    let number = |v: f64| tikra_engine::engine::pgf_number(v);
     let mut drop = vec![false; plot.coords.len()];
     for k in 0..plot.coords.len() {
         let raw = plot.coords[k];
@@ -1562,7 +1544,7 @@ fn coordinate_filters(e: &mut Engine, plot: &mut Plot) -> Result<(), Error> {
                 vars.insert((*n).into(), cur[i]);
                 vars.insert(format!("raw{n}"), [raw.x, raw.y, raw.z][i]);
             }
-            e.math_string(tokens).and_then(|s| crate::expr::eval(&s, &vars)).unwrap_or(f64::NAN)
+            e.math_string(tokens).and_then(|s| tikra_engine::expr::eval(&s, &vars)).unwrap_or(f64::NAN)
         };
         for a in 0..dims {
             if let Some(code) = &codes[a] {
@@ -1599,7 +1581,7 @@ fn coordinate_filters(e: &mut Engine, plot: &mut Plot) -> Result<(), Error> {
         // `.from` (a table cell), then the conditions that hold
         let mut style = Vec::new();
         // (the labels are still being collected)
-        let label = (raw.label != NO_LABEL).then(|| LABELS.with(|l| l.borrow().get(raw.label as usize).cloned())).flatten();
+        let label = (raw.label != NO_LABEL).then(|| super::fig(e).labels.get(raw.label as usize).cloned()).flatten();
         if let Some(l) = label {
             let name = tex::tokens_to_string(&l);
             if let Some((_, s)) = classes.iter().find(|(n, _)| *n == name.trim()) {
@@ -1631,7 +1613,7 @@ fn coordinate_filters(e: &mut Engine, plot: &mut Plot) -> Result<(), Error> {
         let mut values = Vec::new();
         for (expr, verbatim, name) in &deps {
             let tokens = substitute(expr, cur[0]);
-            let v = if *verbatim { e.tex.expand_to_string(tokens)?.trim().to_string() } else { super::super::pgf_number(eval(e, tokens, cur)) };
+            let v = if *verbatim { e.tex.expand_to_string(tokens)?.trim().to_string() } else { tikra_engine::engine::pgf_number(eval(e, tokens, cur)) };
             values.push((name.clone(), v));
         }
         if !values.is_empty() {
@@ -1658,7 +1640,7 @@ fn coordinate_filters(e: &mut Engine, plot: &mut Plot) -> Result<(), Error> {
 /// `scatter/classes={a={mark=square*,blue},b={…}}`: each class' name and style.
 pub fn scatter_classes(e: &mut Engine) -> Vec<(String, Vec<Token>)> {
     let Some(v) = keys::value_tokens(e, "/pgfplots/scatter/classes") else { return Vec::new() };
-    crate::keys::split_list(&v).into_iter().map(|i| (i.key.trim().to_string(), i.value.map(tex::strip_outer_braces).unwrap_or_default())).collect()
+    tikra_engine::keys::split_list(&v).into_iter().map(|i| (i.key.trim().to_string(), i.value.map(tex::strip_outer_braces).unwrap_or_default())).collect()
 }
 
 /// The brace groups of a list (`{a}{b}`).
@@ -1752,7 +1734,7 @@ fn quiver_vectors(e: &mut Engine, plot: &mut Plot) {
         for (u, text) in c.uvw.iter_mut().zip(&texts) {
             if !u.is_finite() {
                 *u = match text {
-                    Some(t) if !t.trim().is_empty() => crate::expr::eval(&balanced(t), &vars).unwrap_or(f64::NAN),
+                    Some(t) if !t.trim().is_empty() => tikra_engine::expr::eval(&balanced(t), &vars).unwrap_or(f64::NAN),
                     _ => 0.0,
                 };
             }
@@ -1799,7 +1781,7 @@ fn histogram(e: &mut Engine, plot: &mut Plot) -> Result<(), Error> {
             vars.insert("x".into(), c.x);
             vars.insert("y".into(), c.y);
             vars.insert("z".into(), c.z);
-            crate::expr::eval(&value_expr, &vars).unwrap_or(f64::NAN)
+            tikra_engine::expr::eval(&value_expr, &vars).unwrap_or(f64::NAN)
         } else {
             match data.as_str() {
                 "x" => c.x,
@@ -1809,7 +1791,7 @@ fn histogram(e: &mut Engine, plot: &mut Plot) -> Result<(), Error> {
                     vars.insert("x".into(), c.x);
                     vars.insert("y".into(), c.y);
                     vars.insert("z".into(), c.z);
-                    crate::expr::eval(other, &vars).unwrap_or(f64::NAN)
+                    tikra_engine::expr::eval(other, &vars).unwrap_or(f64::NAN)
                 }
             }
         };
@@ -1861,8 +1843,8 @@ fn histogram(e: &mut Engine, plot: &mut Plot) -> Result<(), Error> {
 /// `point meta={symbolic={R,G,B}}`: the text of each point's meta, and whether
 /// `mesh/color input=explicit mathparse` evaluates it.
 fn symbolic_meta(e: &mut Engine) -> Option<(Vec<Token>, bool)> {
-    let raw = crate::keys::value(&e.tex, "/pgfplots/point meta")?;
-    let items = crate::keys::split_list(crate::keys::trim(&raw));
+    let raw = tikra_engine::keys::value(&e.tex, "/pgfplots/point meta")?;
+    let items = tikra_engine::keys::split_list(tikra_engine::keys::trim(&raw));
     let item = items.first().filter(|i| i.key == "symbolic" && items.len() == 1)?;
     let mathparse = keys::value(e, "/pgfplots/mesh/color input") == "explicit mathparse";
     Some((item.value.clone().unwrap_or_default(), mathparse))
@@ -1881,8 +1863,10 @@ fn symbolic_label(e: &mut Engine, text: &str, mathparse: bool, xyz: [f64; 3]) ->
         Some((m, r)) if m.trim().chars().all(|c| c.is_ascii_alphanumeric()) => (format!("{}=", m.trim()), r),
         _ => (String::new(), text),
     };
-    let parts: Vec<String> =
-        crate::keys::split_top_level(rest).iter().map(|p| crate::expr::eval(p.trim(), &vars).map(|v| format!("{v}")).unwrap_or_else(|_| p.trim().to_string())).collect();
+    let parts: Vec<String> = tikra_engine::keys::split_top_level(rest)
+        .iter()
+        .map(|p| tikra_engine::expr::eval(p.trim(), &vars).map(|v| format!("{v}")).unwrap_or_else(|_| p.trim().to_string()))
+        .collect();
     format!("{model}{}", parts.join(","))
 }
 
@@ -1895,14 +1879,14 @@ fn point_meta(e: &mut Engine, plot: &mut Plot) -> Result<(), Error> {
             for i in 0..plot.coords.len() {
                 let c = plot.coords[i];
                 let l = symbolic_label(e, &text, mathparse, [c.x, c.y, c.z]);
-                plot.coords[i].label = add_label(tex::string_tokens(&l));
+                plot.coords[i].label = add_label(e, tex::string_tokens(&l));
             }
         }
         plot.has_meta = false;
         return Ok(());
     }
-    let raw = crate::keys::value(&e.tex, "/pgfplots/point meta").unwrap_or_default();
-    let source = tex::tokens_to_string(crate::keys::trim(&raw)).trim().to_string();
+    let raw = tikra_engine::keys::value(&e.tex, "/pgfplots/point meta").unwrap_or_default();
+    let source = tex::tokens_to_string(tikra_engine::keys::trim(&raw)).trim().to_string();
     match source.as_str() {
         "" | "none" => {}
         "x" => plot.coords.iter_mut().for_each(|c| c.meta = c.x),
@@ -1928,7 +1912,7 @@ fn point_meta(e: &mut Engine, plot: &mut Plot) -> Result<(), Error> {
                     vars.insert("x".into(), c.x);
                     vars.insert("y".into(), c.y);
                     vars.insert("z".into(), c.z);
-                    c.meta = crate::expr::eval(&balanced(&text), &vars).unwrap_or(f64::NAN);
+                    c.meta = tikra_engine::expr::eval(&balanced(&text), &vars).unwrap_or(f64::NAN);
                 }
             }
         }

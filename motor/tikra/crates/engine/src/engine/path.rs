@@ -2041,7 +2041,7 @@ fn plot(e: &mut Engine, b: &mut Builder, depth: Option<usize>, continues: bool) 
                     }
                     _ => return Err(Error::Figure(format!("plot {w} not supported"))),
                 };
-                let text = super::pgfplots::table::read_file(&name, &[]).map_err(|m| Error::Figure(format!("plot {w}: {m}")))?;
+                let text = crate::files::read_file(&name, &[]).map_err(|m| Error::Figure(format!("plot {w}: {m}")))?;
                 for line in text.lines() {
                     let line = line.trim();
                     if line.is_empty() || line.starts_with('#') || line.starts_with('%') {

@@ -5,7 +5,7 @@
 //! uniformly`, implied by `unit vector ratio`), the axis limits then enlarged so that the box
 //! keeps (about) its size.
 
-use crate::scene::Point;
+use tikra_engine::scene::Point;
 
 /// How the limits follow a rescaled unit vector (`unit rescale keep size`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

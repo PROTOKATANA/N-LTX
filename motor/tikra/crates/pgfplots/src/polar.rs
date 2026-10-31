@@ -6,13 +6,13 @@
 
 use std::f64::consts::PI;
 
-use crate::scene::{Point, Segment};
-use crate::{Error, PT};
+use tikra_engine::scene::{Point, Segment};
+use tikra_engine::{Error, PT};
 
-use super::super::nodes::{NodeSpec, OnPath};
 use super::draw::{axis_char, tick_offset, visible, Frame, Setup};
 use super::keys;
 use super::{toks, Engine};
+use tikra_engine::engine::nodes::{NodeSpec, OnPath};
 
 /// sin and cos of degrees, exact at multiples of 90.
 pub fn sin_cos(deg: f64) -> (f64, f64) {
@@ -126,8 +126,8 @@ pub fn ticks(e: &mut Engine, a: usize, f: &Frame) -> Option<(Vec<f64>, f64)> {
         return None;
     }
     // given ticks are read as usual
-    let raw = crate::keys::value(&e.tex, "/pgfplots/xtick").unwrap_or_default();
-    if !crate::keys::trim(&raw).is_empty() || keys::number(e, "/pgfplots/xtick distance").is_some() {
+    let raw = tikra_engine::keys::value(&e.tex, "/pgfplots/xtick").unwrap_or_default();
+    if !tikra_engine::keys::trim(&raw).is_empty() || keys::number(e, "/pgfplots/xtick distance").is_some() {
         return None;
     }
     let (xmin, xmax) = (f.min[0], f.max[0]);
@@ -169,14 +169,14 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
     // grid: rays at the angles, arcs at the radii
     if keys::flag(e, "/pgfplots/xmajorgrids") {
         let segs: Vec<Segment> = xt.iter().flat_map(|t| [Segment::MoveTo(f.at([*t, ymin, 0.0])), Segment::LineTo(f.at([*t, ymax, 0.0]))]).collect();
-        e.draw_with("/pgfplots/every axis grid,/pgfplots/every major grid,/pgfplots/every axis x grid,/pgfplots/every major x grid", segs)?;
+        super::draw::draw_with(e, "/pgfplots/every axis grid,/pgfplots/every major grid,/pgfplots/every axis x grid,/pgfplots/every major x grid", segs)?;
     }
     if keys::flag(e, "/pgfplots/ymajorgrids") {
         let mut segs = Vec::new();
         for t in &yt {
             arc(&f, *t, xmin, xmax, &mut segs, true);
         }
-        e.draw_with("/pgfplots/every axis grid,/pgfplots/every major grid,/pgfplots/every axis y grid,/pgfplots/every major y grid", segs)?;
+        super::draw::draw_with(e, "/pgfplots/every axis grid,/pgfplots/every major grid,/pgfplots/every axis y grid,/pgfplots/every major y grid", segs)?;
     }
     // axis lines: the arcs at ymin and ymax, the rays at xmin and xmax
     let mut segs = Vec::new();
@@ -185,7 +185,7 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
         arc(&f, ymin, xmin, xmax, &mut segs, true);
     }
     if !s.hide[0] {
-        e.draw_with("/pgfplots/every outer x axis line", segs)?;
+        super::draw::draw_with(e, "/pgfplots/every outer x axis line", segs)?;
     }
     if !s.hide[1] {
         let mut segs = Vec::new();
@@ -193,7 +193,7 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
             segs.push(Segment::MoveTo(f.at([a, ymin, 0.0])));
             segs.push(Segment::LineTo(f.at([a, ymax, 0.0])));
         }
-        e.draw_with("/pgfplots/every outer y axis line", segs)?;
+        super::draw::draw_with(e, "/pgfplots/every outer y axis line", segs)?;
     }
     // tick labels: angles outside the circle, radii along the first ray
     for (a, list) in [(0usize, &xt), (1usize, &yt)] {
@@ -203,8 +203,8 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
         let c = axis_char(a);
         let styles = format!("/pgfplots/every tick label,/pgfplots/every {c} tick label");
         let off = tick_offset(e, a);
-        let sloped = match e.tex.meaning_of(&crate::keys::macro_name(&format!("/pgfplots/every {c} tick label/.@cmd"))) {
-            crate::tex::Meaning::Macro(m) => crate::tex::tokens_to_string(&crate::tex::substitute(&m.body, &[])).contains("sloped"),
+        let sloped = match e.tex.meaning_of(&tikra_engine::keys::macro_name(&format!("/pgfplots/every {c} tick label/.@cmd"))) {
+            tikra_engine::tex::Meaning::Macro(m) => tikra_engine::tex::tokens_to_string(&tikra_engine::tex::substitute(&m.body, &[])).contains("sloped"),
             _ => false,
         };
         for (k, t) in list.iter().enumerate() {
@@ -220,7 +220,7 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
             let shown = if a == 0 && *t > 360.0 { t.rem_euclid(360.0) } else { *t };
             e.begin_group();
             let r = (|| {
-                e.keys_tikz(&styles)?;
+                super::draw::keys_tikz(e, &styles)?;
                 super::draw::tick_text_for(e, a, shown, k)
             })();
             e.end_group();

@@ -466,7 +466,7 @@ pub struct GState {
     /// nodes made by quotes in `to`/`edge` options: text and options
     pub quoted: Vec<(Vec<crate::tex::Token>, Vec<crate::tex::Token>)>,
     /// `/pgf/number format`: how `\pgfmathprintnumber` writes numbers
-    pub number_format: super::pgfplots::number::NumberFormat,
+    pub number_format: super::number::NumberFormat,
 }
 
 impl Default for GState {

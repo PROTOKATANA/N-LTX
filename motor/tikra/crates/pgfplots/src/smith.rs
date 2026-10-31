@@ -8,14 +8,14 @@
 
 use std::collections::HashMap;
 
-use crate::scene::{Point, Segment};
-use crate::tex::Token;
-use crate::{Error, PT};
+use tikra_engine::scene::{Point, Segment};
+use tikra_engine::tex::Token;
+use tikra_engine::{Error, PT};
 
-use super::super::nodes::{NodeSpec, OnPath};
 use super::draw::{axis_char, minor_ticks, number_list, tick_labels_at, tick_offset, unit, visible, Frame, Setup};
 use super::keys;
 use super::{toks, Engine};
+use tikra_engine::engine::nodes::{NodeSpec, OnPath};
 
 /// `(a + jb) / (c + jd)`.
 fn divide(a: f64, b: f64, c: f64, d: f64) -> (f64, f64) {
@@ -350,13 +350,13 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
                     y_arc(&f, *t, stop, &mut segs);
                 }
             }
-            e.draw_with(&format!("/pgfplots/every axis grid,/pgfplots/every {kind} grid,/pgfplots/every axis {c} grid,/pgfplots/every {kind} {c} grid"), segs)?;
+            super::draw::draw_with(e, &format!("/pgfplots/every axis grid,/pgfplots/every {kind} grid,/pgfplots/every axis {c} grid,/pgfplots/every {kind} {c} grid"), segs)?;
         }
     }
     // ticks: across the diameter and across the circle
     for a in 0..2 {
         let c = axis_char(a);
-        let align = e.pv(&format!("{c}tick align"));
+        let align = super::draw::pv(e, &format!("{c}tick align"));
         for (kind, list) in [("minor", &minor[a]), ("major", &major[a])] {
             if !keys::flag(e, &format!("/pgfplots/{c}{kind}ticks")) || list.is_empty() {
                 continue;
@@ -379,18 +379,18 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
                 segs.push(Segment::MoveTo(p.plus(n.scale(from))));
                 segs.push(Segment::LineTo(p.plus(n.scale(to))));
             }
-            e.draw_with(&format!("/pgfplots/every tick,/pgfplots/every {kind} tick,/pgfplots/every {c} tick,/pgfplots/every {kind} {c} tick"), segs)?;
+            super::draw::draw_with(e, &format!("/pgfplots/every tick,/pgfplots/every {kind} tick,/pgfplots/every {c} tick,/pgfplots/every {kind} {c} tick"), segs)?;
         }
     }
     // the axis lines: the diameter and the outer circle
     if !s.hide[0] {
         let segs = vec![Segment::MoveTo(canvas(&f, -1.0, 0.0)), Segment::LineTo(canvas(&f, 1.0, 0.0))];
-        e.draw_with("/pgfplots/every inner x axis line", segs)?;
+        super::draw::draw_with(e, "/pgfplots/every inner x axis line", segs)?;
     }
     if !s.hide[1] {
         let mut segs = Vec::new();
         x_circle(&f, 0.0, None, &mut segs);
-        e.draw_with("/pgfplots/every outer y axis line", segs)?;
+        super::draw::draw_with(e, "/pgfplots/every outer y axis line", segs)?;
     }
     // tick labels: above the diameter, around the circle
     if !s.hide[0] && keys::flag(e, "/pgfplots/xmajorticks") {
@@ -417,7 +417,7 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
             f.upside_down.replace(None);
             e.begin_group();
             let r = (|| {
-                e.keys_tikz(styles)?;
+                super::draw::keys_tikz(e, styles)?;
                 super::draw::tick_text_for(e, 1, *t, k)
             })();
             e.end_group();
@@ -467,9 +467,9 @@ pub fn sloped_options(v: &[Token]) -> (Option<Vec<Token>>, bool, bool) {
     let mut code = None;
     let mut allow = false;
     let mut reset = true;
-    for item in crate::keys::split_list(v) {
+    for item in tikra_engine::keys::split_list(v) {
         let value = item.value.clone().unwrap_or_default();
-        let text = crate::tex::tokens_to_string(&value);
+        let text = tikra_engine::tex::tokens_to_string(&value);
         match item.key.trim() {
             "execute for upside down" => code = Some(value),
             "allow upside down" => allow = text.trim() != "false",

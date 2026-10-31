@@ -9,8 +9,8 @@
 //! background, and tick labels go on lines of the projected box's outline
 //! (`\pgfplots@init@ticklabelaxisspec`).
 
-use crate::scene::{Point, Segment};
-use crate::Error;
+use tikra_engine::scene::{Point, Segment};
+use tikra_engine::Error;
 
 use super::draw::{axis_char, line_shift, minor_ticks, number_list, tick_labels_at, tick_offset, unit, visible, Frame, Setup};
 use super::keys;
@@ -148,7 +148,7 @@ pub fn prepare(e: &mut Engine, f: &mut Frame, dir: [bool; 3], lines: &[String; 3
     for (a, line) in lines.iter().enumerate() {
         let c = axis_char(a);
         let num = lines_num(line);
-        let tickpos = tick_pos_num(&e.pv(&format!("{c}tick pos")));
+        let tickpos = tick_pos_num(&super::draw::pv(e, &format!("{c}tick pos")));
         // 'l' or 'u'
         let pos = if num != 0 {
             if tickpos == 3 {
@@ -157,7 +157,7 @@ pub fn prepare(e: &mut Engine, f: &mut Frame, dir: [bool; 3], lines: &[String; 3
                 b'l'
             }
         } else {
-            match e.pv(&format!("{c}ticklabel pos")).as_str() {
+            match super::draw::pv(e, &format!("{c}ticklabel pos")).as_str() {
                 "upper" | "right" | "top" => b'u',
                 "lower" | "left" | "bottom" => b'l',
                 _ => {
@@ -325,11 +325,11 @@ impl Ctx<'_> {
         let line = |t: f64| vec![Segment::MoveTo(surf.at(f, t, f.min[surf.b])), Segment::LineTo(surf.at(f, t, f.max[surf.b]))];
         if keys::flag(e, &format!("/pgfplots/{c}minorgrids")) && !extra {
             let segs: Vec<Segment> = minor_ticks(e, self.s, surf.a, list).into_iter().flat_map(line).collect();
-            e.draw_with(&format!("/pgfplots/every axis grid,/pgfplots/every minor grid,/pgfplots/every axis {c} grid,/pgfplots/every minor {c} grid"), segs)?;
+            super::draw::draw_with(e, &format!("/pgfplots/every axis grid,/pgfplots/every minor grid,/pgfplots/every axis {c} grid,/pgfplots/every minor {c} grid"), segs)?;
         }
         if keys::flag(e, &format!("/pgfplots/{c}majorgrids")) {
             let segs: Vec<Segment> = visible(f, surf.a, list).into_iter().flat_map(|(_, t)| line(t)).collect();
-            e.draw_with(&format!("/pgfplots/every axis grid,/pgfplots/every major grid,/pgfplots/every axis {c} grid,/pgfplots/every major {c} grid"), segs)?;
+            super::draw::draw_with(e, &format!("/pgfplots/every axis grid,/pgfplots/every major grid,/pgfplots/every axis {c} grid,/pgfplots/every major {c} grid"), segs)?;
         }
         Ok(())
     }
@@ -358,7 +358,7 @@ impl Ctx<'_> {
         }
         let lower_b = if pos == 2 { f.zero[b] } else { f.min[b] };
         let ub = unit(f.e[b]);
-        let align = e.pv(&format!("{c}tick align"));
+        let align = super::draw::pv(e, &format!("{c}tick align"));
         let mut kinds = Vec::new();
         if keys::flag(e, &format!("/pgfplots/{c}minorticks")) && !extra {
             let m = minor_ticks(e, self.s, a, list);
@@ -391,7 +391,7 @@ impl Ctx<'_> {
                 }
             }
             if !segs.is_empty() {
-                e.draw_with(&format!("/pgfplots/every tick,/pgfplots/every {kind} tick,/pgfplots/every {c} tick,/pgfplots/every {kind} {c} tick"), segs)?;
+                super::draw::draw_with(e, &format!("/pgfplots/every tick,/pgfplots/every {kind} tick,/pgfplots/every {c} tick,/pgfplots/every {kind} {c} tick"), segs)?;
             }
         }
         Ok(())
@@ -418,13 +418,13 @@ impl Ctx<'_> {
             let mut inner = *surf;
             inner.value = f.zero[surf.n];
             let segs = vec![Segment::MoveTo(inner.at(f, f.min[a], f.zero[b])), Segment::LineTo(inner.at(f, f.max[a], f.zero[b]))];
-            return e.draw_with(&format!("/pgfplots/every inner {c} axis line"), segs);
+            return super::draw::draw_with(e, &format!("/pgfplots/every inner {c} axis line"), segs);
         }
         for (bval, bv) in [(b'0', f.min[b]), (b'1', f.max[b])] {
             if self.drawn(surf, bval) {
                 let sh = self.line_shift(e, surf, bval);
                 let segs = vec![Segment::MoveTo(surf.at(f, f.min[a], bv).plus(sh)), Segment::LineTo(surf.at(f, f.max[a], bv).plus(sh))];
-                e.draw_with(&format!("/pgfplots/every outer {c} axis line"), segs)?;
+                super::draw::draw_with(e, &format!("/pgfplots/every outer {c} axis line"), segs)?;
             }
         }
         Ok(())
@@ -461,8 +461,8 @@ impl Ctx<'_> {
     fn extra(&self, e: &mut Engine, surf: &Surf, labels: bool) -> Result<(), Error> {
         let a = surf.a;
         let c = axis_char(a);
-        let list = crate::keys::value(&e.tex, &format!("/pgfplots/extra {c} ticks")).unwrap_or_default();
-        if crate::keys::trim(&list).is_empty() {
+        let list = tikra_engine::keys::value(&e.tex, &format!("/pgfplots/extra {c} ticks")).unwrap_or_default();
+        if tikra_engine::keys::trim(&list).is_empty() {
             return Ok(());
         }
         let f = self.f();
@@ -488,9 +488,9 @@ impl Ctx<'_> {
 pub(super) fn draw(e: &mut Engine, s: &Setup, post: bool) -> Result<(), Error> {
     let f = s.frame.clone();
     let nums = s.line.clone().map(|l| lines_num(&l));
-    let tickpos = [0, 1, 2].map(|a| tick_pos_num(&e.pv(&format!("{}tick pos", axis_char(a)))));
-    let dir = [e.pv("x dir") == "reverse", e.pv("y dir") == "reverse", e.pv("z dir") == "reverse"];
-    let choice = e.pv("3d box");
+    let tickpos = [0, 1, 2].map(|a| tick_pos_num(&super::draw::pv(e, &format!("{}tick pos", axis_char(a)))));
+    let dir = [super::draw::pv(e, "x dir") == "reverse", super::draw::pv(e, "y dir") == "reverse", super::draw::pv(e, "z dir") == "reverse"];
+    let choice = super::draw::pv(e, "3d box");
     if post && (choice == "background" || nums.iter().any(|n| *n != 0)) {
         return Ok(());
     }

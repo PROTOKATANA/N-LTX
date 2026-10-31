@@ -355,6 +355,95 @@ impl NumberFormat {
     }
 }
 
+use super::Engine;
+use crate::tex::{self, Token};
+use crate::Error;
+
+/// Replaces `\pgfmathprintnumber[options]{x}` in `tokens` by the number as printed.
+/// A piece's commands in the text of a node run in their place, in this same pass.
+pub fn print_numbers(e: &mut Engine, tokens: &[Token]) -> Result<Vec<Token>, Error> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < tokens.len() {
+        if let Token::Cs(name) = &tokens[i] {
+            if let Some(command) = e.node_text_command(name) {
+                i = command(e, tokens, i)?;
+                continue;
+            }
+        }
+        if tokens[i].is_cs("pgfmathprintnumber") {
+            let mut j = i + 1;
+            let mut opts = Vec::new();
+            while j < tokens.len() && tokens[j].is_space() {
+                j += 1;
+            }
+            if j < tokens.len() && tokens[j].is_char('[') {
+                let k = tokens[j..].iter().position(|t| t.is_char(']')).map_or(tokens.len(), |p| j + p);
+                opts = tokens[j + 1..k.min(tokens.len())].to_vec();
+                j = k + 1;
+            }
+            while j < tokens.len() && tokens[j].is_space() {
+                j += 1;
+            }
+            let (mut arg, mut end) = group_at(tokens, j);
+            // an expanded `\pgfmathprintnumber\tick`: the number's characters, unbraced
+            let numeric = |t: &Token, first: bool| match t {
+                Token::Char(c, tex::Cat::Other | tex::Cat::Letter) => c.is_ascii_digit() || matches!(c, '-' | '+' | '.') || (!first && matches!(c, 'e' | 'E')),
+                _ => false,
+            };
+            if arg.len() == 1 && numeric(&arg[0], true) && numeric(&tokens[j], true) {
+                let mut k = j;
+                while k < tokens.len() && numeric(&tokens[k], k == j) {
+                    k += 1;
+                }
+                // the longest prefix that is a number (`1--4` is 1, then `--4`)
+                while k > j + 1 && tex::tokens_to_string(&tokens[j..k]).trim().parse::<f64>().is_err() {
+                    k -= 1;
+                }
+                arg = tokens[j..k].to_vec();
+                end = k;
+            }
+            let saved = e.st.number_format.clone();
+            if !opts.is_empty() {
+                e.process_keys(opts, Some("/pgf/number format"))?;
+            }
+            let v = e.number_of(arg).unwrap_or(f64::NAN);
+            let s = e.st.number_format.print(v);
+            e.st.number_format = saved;
+            out.extend(tex::string_tokens(&s));
+            i = end;
+            continue;
+        }
+        out.push(tokens[i].clone());
+        i += 1;
+    }
+    Ok(out)
+}
+
+/// The argument at `j`: a group's content or one token; and the index after it.
+pub fn group_at(tokens: &[Token], j: usize) -> (Vec<Token>, usize) {
+    if j >= tokens.len() {
+        return (Vec::new(), j);
+    }
+    if matches!(tokens[j], Token::Char(_, crate::tex::Cat::Begin)) {
+        let mut depth = 0;
+        for (k, t) in tokens.iter().enumerate().skip(j) {
+            match t {
+                Token::Char(_, crate::tex::Cat::Begin) => depth += 1,
+                Token::Char(_, crate::tex::Cat::End) => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return (tokens[j + 1..k].to_vec(), k + 1);
+                    }
+                }
+                _ => {}
+            }
+        }
+        return (tokens[j + 1..].to_vec(), tokens.len());
+    }
+    (vec![tokens[j].clone()], j + 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

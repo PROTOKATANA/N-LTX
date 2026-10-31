@@ -4,14 +4,14 @@
 //! its level); labels with the level go every `contour/label distance` along it, the first one
 //! sooner, a line too short for one still gets one on its last segment.
 
-use crate::scene::{Point, Segment};
-use crate::Error;
+use tikra_engine::scene::{Point, Segment};
+use tikra_engine::Error;
 
-use super::super::nodes::{NodeSpec, OnPath};
 use super::draw::Frame;
 use super::keys;
 use super::plot::{Coord, Plot};
 use super::{toks, Engine};
+use tikra_engine::engine::nodes::{NodeSpec, OnPath};
 
 /// `contour prepared format=matlab`: `(level, count)` headers each followed by `count` points.
 pub fn from_matlab(plot: &mut Plot) {
@@ -63,7 +63,7 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame) -> Result<(),
     let fill_color = keys::value(e, "/pgfplots/contour/fill color");
     let filled = keys::flag(e, "/pgfplots/contour/filled");
     let labels = keys::flag(e, "/pgfplots/contour/labels");
-    let dist = keys::length(e, "/pgfplots/contour/label distance").unwrap_or(70.0 * crate::PT);
+    let dist = keys::length(e, "/pgfplots/contour/label distance").unwrap_or(70.0 * tikra_engine::PT);
     let mut pending: Vec<(Point, Point, f64)> = Vec::new();
     for (meta, run) in runs(p, pts) {
         let canvas: Vec<Point> = run.iter().map(|&i| f.at(pts[i])).collect();
@@ -106,7 +106,7 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame) -> Result<(),
             }
         }
     }
-    e.colors.insert("mapped color".into(), crate::color::Color::BLACK);
+    e.colors.insert("mapped color".into(), tikra_engine::color::Color::BLACK);
     if pending.is_empty() {
         return Ok(());
     }
@@ -121,7 +121,7 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame) -> Result<(),
                 0.0
             }
         };
-        e.tex.set_meaning(&crate::tex::Token::cs("pgfplotspointmetarangeexponent"), super::super::macro_from(&super::super::pgf_number(exp)), false);
+        e.tex.set_meaning(&tikra_engine::tex::Token::cs("pgfplotspointmetarangeexponent"), tikra_engine::engine::macro_from(&tikra_engine::engine::pgf_number(exp)), false);
         e.st.key_path = "/tikz".into();
         e.process_keys(toks("/pgfplots/contour/every contour label"), Some("/tikz"))?;
         for (a, b, meta) in pending {
@@ -137,13 +137,13 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame) -> Result<(),
                 if d.x < 0.0 {
                     angle += 180.0;
                 }
-                let text = super::draw::print_numbers(e, &toks(&format!("\\pgfmathprintnumber{{{}}}", super::super::pgf_number(meta))))?;
+                let text = super::print_numbers(e, &toks(&format!("\\pgfmathprintnumber{{{}}}", tikra_engine::engine::pgf_number(meta))))?;
                 let options = toks(&format!("rotate={angle}"));
                 let items = e.node(NodeSpec { options, name: None, at: Some(at), text, place: OnPath::Point(at), point: at, coordinate: false, default_pos: None })?;
                 e.canvas.items.extend(items);
                 Ok(())
             })();
-            e.colors.insert("mapped color".into(), crate::color::Color::BLACK);
+            e.colors.insert("mapped color".into(), tikra_engine::color::Color::BLACK);
             e.end_group();
             r?;
         }
@@ -155,7 +155,7 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame) -> Result<(),
 
 /// The bands of `contour filled`: the level where each band begins and its color
 /// (`contour/levels`, `levels from colormap`, or `number` colors of the colormap over the meta range).
-fn bands(e: &mut Engine, f: &Frame) -> Vec<(f64, crate::color::Color)> {
+fn bands(e: &mut Engine, f: &Frame) -> Vec<(f64, tikra_engine::color::Color)> {
     let (lo, hi) = (f.meta[0], f.meta[1]);
     let Some(cm) = f.colormap.clone() else { return Vec::new() };
     let levels = keys::value(e, "/pgfplots/contour/levels");
@@ -254,9 +254,10 @@ pub fn draw_filled(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame) -> Res
             e.canvas.include_path(&segs);
         }
         // a hairline of the band's color hides the seams between the pieces
-        let stroke = crate::canvas::Stroke { color, width: 0.3 * crate::PT, dash: None, cap: e.st.pen.cap, join: e.st.pen.join, miter_limit: e.st.pen.miter_limit, opacity };
-        let fill = crate::canvas::Fill { paint: crate::canvas::Paint::Solid(color), opacity, even_odd: false };
-        e.canvas.push(crate::canvas::Item::Path { segments: segs, fill: Some(fill), stroke: Some(stroke) });
+        let stroke =
+            tikra_engine::canvas::Stroke { color, width: 0.3 * tikra_engine::PT, dash: None, cap: e.st.pen.cap, join: e.st.pen.join, miter_limit: e.st.pen.miter_limit, opacity };
+        let fill = tikra_engine::canvas::Fill { paint: tikra_engine::canvas::Paint::Solid(color), opacity, even_odd: false };
+        e.canvas.push(tikra_engine::canvas::Item::Path { segments: segs, fill: Some(fill), stroke: Some(stroke) });
     }
     Ok(())
 }

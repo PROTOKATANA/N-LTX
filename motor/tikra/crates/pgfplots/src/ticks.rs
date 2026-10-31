@@ -165,14 +165,14 @@ fn clean(v: f64, h: f64) -> f64 {
 
 /// A value as a TeX dimension, in sp.
 fn to_sp(v: f64) -> i64 {
-    let max = crate::tex::dimen::MAX_DIMEN as f64;
+    let max = tikra_engine::tex::dimen::MAX_DIMEN as f64;
     (v * 65536.0).round().clamp(-max, max) as i64
 }
 
 /// `0.4343\dimen`: a length in natural logarithms in decades, as pgfplots' ticks compute it (1/ln 10
 /// is 0.4343 in its fpu, `log from display log`).
 fn by_one_over_ln10(sp: i64) -> i64 {
-    crate::tex::dimen::xn_over_d(sp, crate::tex::dimen::round_decimals(&[4, 3, 4, 3]), 65536).0
+    tikra_engine::tex::dimen::xn_over_d(sp, tikra_engine::tex::dimen::round_decimals(&[4, 3, 4, 3]), 65536).0
 }
 
 /// Logarithmic ticks, in natural logarithms: (ticks, distance, uniform). `uniform` is true when

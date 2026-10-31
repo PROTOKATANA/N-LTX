@@ -1,0 +1,9 @@
+[package]
+name = "tikra_pgfplots"
+version = "1.8.1"
+publish = false
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+tikra_engine = { path = "../engine" }

@@ -4,8 +4,8 @@
 //! across the values' direction (`draw direction=x`: values along x), `box extend` wide, the
 //! whiskers `whisker extend` wide, as `boxplot/draw/…` draw them.
 
-use crate::scene::{Point, Segment};
-use crate::Error;
+use tikra_engine::scene::{Point, Segment};
+use tikra_engine::Error;
 
 use super::draw::Frame;
 use super::keys;
@@ -54,15 +54,10 @@ pub fn variable_widths(plots: &[&BoxStats]) {
     }
 }
 
-thread_local! {
-    /// The box plot being drawn, for `boxplot cs` and its friends: its geometry (logical).
-    static CURRENT: std::cell::Cell<Option<Geometry>> = const { std::cell::Cell::new(None) };
-}
-
 /// `boxplot cs:v,b`, `boxplot box cs:v,b`, `boxplot whisker cs:v,b`: logical (x, y) of the box
 /// plot being drawn.
-pub fn cs(system: &str, value: f64, b: f64) -> Option<[f64; 2]> {
-    let g = CURRENT.with(|c| c.get())?;
+pub fn cs(e: &mut Engine, system: &str, value: f64, b: f64) -> Option<[f64; 2]> {
+    let g = super::fig(e).boxplot?;
     let off = match system {
         "boxplot box" => (b - g.anchor) * g.box_extend,
         "boxplot whisker" => (b - g.anchor) * g.whisker_extend,
@@ -137,7 +132,7 @@ pub fn survey(e: &mut Engine, plot: &mut Plot, prepared: bool) {
     let box_extend = keys::number(e, "/pgfplots/boxplot/box extend").unwrap_or(0.8);
     let mut stats = BoxStats {
         // unexpanded: `\plotnumofactualtype` is known when the plot is drawn
-        position: crate::keys::value(&e.tex, "/pgfplots/boxplot/draw position").map(|v| crate::tex::tokens_to_string(&v)).unwrap_or_default(),
+        position: tikra_engine::keys::value(&e.tex, "/pgfplots/boxplot/draw position").map(|v| tikra_engine::tex::tokens_to_string(&v)).unwrap_or_default(),
         box_extend,
         whisker_extend: keys::number(e, "/pgfplots/boxplot/whisker extend").unwrap_or(box_extend * 0.8),
         anchor: keys::number(e, "/pgfplots/boxplot/draw relative anchor").unwrap_or(0.5),
@@ -210,7 +205,7 @@ pub fn survey(e: &mut Engine, plot: &mut Plot, prepared: bool) {
 /// `boxplot/draw position`, for the plot `index` of its kind.
 pub fn draw_position(e: &mut Engine, expr: &str, index: usize) -> f64 {
     e.begin_group();
-    e.tex.set_meaning(&crate::tex::Token::cs("plotnumofactualtype"), super::super::macro_from(&index.to_string()), false);
+    e.tex.set_meaning(&tikra_engine::tex::Token::cs("plotnumofactualtype"), tikra_engine::engine::macro_from(&index.to_string()), false);
     let v = e.number(if expr.is_empty() { "1+\\plotnumofactualtype" } else { expr }).unwrap_or(1.0 + index as f64);
     e.end_group();
     v
@@ -227,7 +222,7 @@ fn place(vertical: bool, value: f64, pos: f64) -> [f64; 2] {
 
 /// The geometry keys of the box plot being drawn.
 #[derive(Debug, Clone, Copy)]
-struct Geometry {
+pub struct Geometry {
     vertical: bool,
     position: f64,
     box_extend: f64,
@@ -275,7 +270,7 @@ pub fn draw(e: &mut Engine, p: &Plot, f: &Frame, index: usize) -> Result<(), Err
     let Some(stats) = p.boxplot.as_deref() else { return Ok(()) };
     let g = geometry(e, stats, index);
     // `\boxplotvalue{…}` and the box plot coordinate systems, for what follows the plot
-    let num = |v: Option<f64>| v.map(super::super::pgf_number).unwrap_or_default();
+    let num = |v: Option<f64>| v.map(tikra_engine::engine::pgf_number).unwrap_or_default();
     for (k, v) in [
         ("lower whisker", stats.lower_whisker),
         ("lower quartile", stats.lower_quartile),
@@ -286,8 +281,8 @@ pub fn draw(e: &mut Engine, p: &Plot, f: &Frame, index: usize) -> Result<(), Err
     ] {
         keys::set(e, &format!("/pgfplots/boxplot/{k}"), &num(v));
     }
-    keys::set(e, "/pgfplots/boxplot/draw position", &super::super::pgf_number(g.position));
-    CURRENT.with(|c| c.set(Some(g)));
+    keys::set(e, "/pgfplots/boxplot/draw position", &tikra_engine::engine::pgf_number(g.position));
+    super::fig(e).boxplot = Some(g);
     let pt = |value: f64, b: f64| -> Point {
         let [x, y] = place(g.vertical, value, g.position + b);
         f.at([x, y, f.min[2]])
@@ -303,15 +298,15 @@ pub fn draw(e: &mut Engine, p: &Plot, f: &Frame, index: usize) -> Result<(), Err
     for (whisker, quartile) in [(stats.lower_whisker, lq), (stats.upper_whisker, uq)] {
         let (Some(w), Some(q)) = (whisker, quartile) else { continue };
         let segs = vec![Segment::MoveTo(pt(q, 0.0)), Segment::LineTo(pt(w, 0.0)), Segment::MoveTo(pt(w, whiskerb(0.0))), Segment::LineTo(pt(w, whiskerb(1.0)))];
-        e.draw_with("/pgfplots/boxplot/every whisker/.try", segs)?;
+        super::draw::draw_with(e, "/pgfplots/boxplot/every whisker/.try", segs)?;
     }
     if let (true, Some(a), Some(b)) = (has_box, lq, uq) {
         let (p0, p1) = (pt(a, boxb(0.0)), pt(b, boxb(1.0)));
         let segs = vec![Segment::MoveTo(p0), Segment::LineTo(Point::new(p1.x, p0.y)), Segment::LineTo(p1), Segment::LineTo(Point::new(p0.x, p1.y)), Segment::Close];
-        e.draw_with("/pgfplots/boxplot/every box/.try", segs)?;
+        super::draw::draw_with(e, "/pgfplots/boxplot/every box/.try", segs)?;
     }
     if let Some(m) = stats.median {
-        e.draw_with("/pgfplots/boxplot/every median/.try", vec![Segment::MoveTo(pt(m, boxb(0.0))), Segment::LineTo(pt(m, boxb(1.0)))])?;
+        super::draw::draw_with(e, "/pgfplots/boxplot/every median/.try", vec![Segment::MoveTo(pt(m, boxb(0.0))), Segment::LineTo(pt(m, boxb(1.0)))])?;
     }
     if let Some(avg) = stats.average {
         let at = pt(avg, boxb(0.5));
@@ -321,7 +316,7 @@ pub fn draw(e: &mut Engine, p: &Plot, f: &Frame, index: usize) -> Result<(), Err
             e.process_keys(super::toks("/pgfplots/boxplot/every average/.try"), Some("/tikz"))?;
             if let Some(name) = e.st.plot.plot_mark.clone() {
                 let size = e.st.plot.mark_size;
-                super::visual::draw_mark_set(e, &name, size, &crate::scene::Transform::default(), std::iter::once(at))?;
+                super::visual::draw_mark_set(e, &name, size, &tikra_engine::scene::Transform::default(), std::iter::once(at))?;
             }
             Ok(())
         })();

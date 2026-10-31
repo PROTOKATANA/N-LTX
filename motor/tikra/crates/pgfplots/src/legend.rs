@@ -3,10 +3,10 @@
 //! The matrix is laid out as TikZ does: the cells of a column share their origin's x, those of
 //! a row their origin's y, columns and rows as wide and high as their largest cell.
 
-use crate::canvas::Item;
-use crate::scene::{Point, Segment, Transform};
-use crate::tex::{self, Token};
-use crate::{Error, PT};
+use tikra_engine::canvas::Item;
+use tikra_engine::scene::{Point, Segment, Transform};
+use tikra_engine::tex::{self, Token};
+use tikra_engine::{Error, PT};
 
 use super::draw::Frame;
 use super::keys;
@@ -222,7 +222,7 @@ fn image_cell(e: &mut Engine, spec: &[Token]) -> Result<Cell, Error> {
 fn image(e: &mut Engine, spec: &[Token]) -> Result<(), Error> {
     e.st.mode = Default::default();
     e.st.pending = Transform::default();
-    e.st.paint.fill_color = Some(crate::color::Color::BLACK);
+    e.st.paint.fill_color = Some(tikra_engine::color::Color::BLACK);
     let mut style = toks("/tikz/draw,/pgfplots/every axis plot except legend/.code={},");
     style.extend(spec.iter().cloned());
     style.extend(toks(",/pgfplots/every legend image post"));
@@ -299,16 +299,16 @@ fn image(e: &mut Engine, spec: &[Token]) -> Result<(), Error> {
 fn text_cell(e: &mut Engine, entry: &LegendEntry) -> Result<Cell, Error> {
     let mut options = toks("/tikz/every cell,");
     options.extend(entry.options.iter().cloned());
-    let text = super::draw::print_numbers(e, &entry.text)?;
+    let text = super::print_numbers(e, &entry.text)?;
     let start = e.canvas.items.len();
     let (min, max) = (e.canvas.min.take(), e.canvas.max.take());
     let o = Point::default();
-    let r = e.node(super::super::nodes::NodeSpec {
+    let r = e.node(tikra_engine::engine::nodes::NodeSpec {
         options,
         name: None,
         at: Some(o),
         text,
-        place: super::super::nodes::OnPath::Point(o),
+        place: tikra_engine::engine::nodes::OnPath::Point(o),
         point: o,
         coordinate: false,
         default_pos: None,
@@ -327,7 +327,7 @@ fn text_cell(e: &mut Engine, entry: &LegendEntry) -> Result<Cell, Error> {
 /// `legend entries={a,b,{c,d}}`; `{0,...,20}` as `\foreach` reads it.
 fn split(list: &[Token]) -> Vec<LegendEntry> {
     if tex::tokens_to_string(list).contains("...") {
-        return super::super::foreach_items(list).into_iter().map(|v| LegendEntry { options: Vec::new(), text: tex::strip_outer_braces(v) }).collect();
+        return tikra_engine::engine::foreach_items(list).into_iter().map(|v| LegendEntry { options: Vec::new(), text: tex::strip_outer_braces(v) }).collect();
     }
     let mut out = Vec::new();
     let mut cur = Vec::new();
@@ -348,7 +348,7 @@ fn split(list: &[Token]) -> Vec<LegendEntry> {
     out.into_iter()
         .map(|v| {
             // `{[text width=25pt]Neg. Sign:}`: the braces of the list item go first
-            let (options, text) = super::split_options(tex::strip_outer_braces(crate::keys::trim(&v).to_vec()));
+            let (options, text) = super::split_options(tex::strip_outer_braces(tikra_engine::keys::trim(&v).to_vec()));
             LegendEntry { options, text: tex::strip_outer_braces(text) }
         })
         .collect()

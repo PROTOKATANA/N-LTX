@@ -5,6 +5,7 @@ use std::fmt;
 
 pub mod dates;
 pub mod expr;
+pub mod files;
 pub mod fpu;
 pub mod keys;
 pub mod metrics;

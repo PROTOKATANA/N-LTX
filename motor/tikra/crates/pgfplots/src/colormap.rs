@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use crate::color::{self, Color};
+use tikra_engine::color::{self, Color};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Colormap {
@@ -203,7 +203,7 @@ impl Colormap {
 
 /// `\pgfplotscolormaptodatafile[options]{name}{file}`: the colormap's stops as lines `position,r,g,b`
 /// (`output format=csv`), kept for `table {file}` to read.
-pub fn to_data_file(e: &mut super::Engine) -> Result<(), crate::Error> {
+pub fn to_data_file(e: &mut super::Engine) -> Result<(), tikra_engine::Error> {
     let _ = e.optional()?;
     let name = e.argument_string()?;
     let file = e.argument_string()?;
@@ -211,7 +211,7 @@ pub fn to_data_file(e: &mut super::Engine) -> Result<(), crate::Error> {
         e.warn(format!("\\pgfplotscolormaptodatafile: colormap '{}' not defined", name.trim()));
         return Ok(());
     };
-    let n = super::super::pgf_number;
+    let n = tikra_engine::engine::pgf_number;
     let lines: Vec<String> = cm.positions().iter().zip(&cm.stops).map(|(p, (_, c))| format!("{},{},{},{}", n(*p), n(c.r), n(c.g), n(c.b))).collect();
     e.tex.define_string(&format!("tikra@file@{}", file.trim()), &lines.join("\n"), true);
     Ok(())
@@ -219,17 +219,17 @@ pub fn to_data_file(e: &mut super::Engine) -> Result<(), crate::Error> {
 
 /// `\pgfplotscolormaptoshadingspec{name}{length}\macro`: `\macro` holds the colormap as a PGF
 /// shading's color specification `rgb(0pt)=(…); rgb(…pt)=(…)` over the length.
-pub fn to_shading_spec(e: &mut super::Engine) -> Result<(), crate::Error> {
+pub fn to_shading_spec(e: &mut super::Engine) -> Result<(), tikra_engine::Error> {
     let name = e.argument_string()?;
     let length = e.argument_string()?;
     let target = e.argument()?;
-    let Some(crate::tex::Token::Cs(target)) = target.into_iter().find(|t| !t.is_space()) else { return Ok(()) };
+    let Some(tikra_engine::tex::Token::Cs(target)) = target.into_iter().find(|t| !t.is_space()) else { return Ok(()) };
     let Some(cm) = named(e, name.trim()) else {
         e.warn(format!("\\pgfplotscolormaptoshadingspec: colormap '{}' not defined", name.trim()));
         return Ok(());
     };
-    let total = e.length(&length)? / crate::PT;
-    let n = super::super::pgf_number;
+    let total = e.length(&length)? / tikra_engine::PT;
+    let n = tikra_engine::engine::pgf_number;
     let parts: Vec<String> = cm.positions().iter().zip(&cm.stops).map(|(p, (_, c))| format!("rgb({}pt)=({},{},{})", n(p / 1000.0 * total), n(c.r), n(c.g), n(c.b))).collect();
     e.tex.define_string(&target, &parts.join("; "), false);
     Ok(())
@@ -245,7 +245,7 @@ fn rgb(v: &str, scale: f64) -> Option<Color> {
 }
 
 fn length_cm(s: &str) -> Option<f64> {
-    crate::expr::eval_length(s.trim(), &crate::expr::Variables::new()).ok().map(|(v, unit)| if unit { v } else { v * crate::PT })
+    tikra_engine::expr::eval_length(s.trim(), &tikra_engine::expr::Variables::new()).ok().map(|(v, unit)| if unit { v } else { v * tikra_engine::PT })
 }
 
 #[cfg(test)]

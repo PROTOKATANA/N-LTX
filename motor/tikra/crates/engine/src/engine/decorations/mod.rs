@@ -707,21 +707,6 @@ impl Engine {
         if let Some(decoration) = self.piece_decoration(name.trim()) {
             return decoration(self, segs);
         }
-        // pgfplots' `soft clip`: the path cut to `soft clip path`
-        if name.trim() == "soft clip" {
-            let spec = keys::value(&self.tex, "/pgf/decoration/soft clip path").map(|v| tex::tokens_to_string(&v)).unwrap_or_default();
-            return Ok(match crate::engine::pgfplots::fillbetween::soft_clip_region(self, &spec) {
-                Some(r) => {
-                    // it starts where the path started
-                    let start = segs.iter().find_map(|s| if let Segment::MoveTo(p) = s { Some(*p) } else { None });
-                    start.map(Segment::MoveTo).into_iter().chain(crate::engine::pgfplots::fillbetween::clip_lines(segs, r)).collect()
-                }
-                None => {
-                    self.warn(format!("soft clip path '{}' not understood: path drawn unclipped", spec.trim()));
-                    segs.to_vec()
-                }
-            });
-        }
         if library::resolve_meta(self, &name).is_none() && library::resolve(self, &name).is_none() {
             self.warn(format!("decoration '{name}' not supported: path drawn undecorated"));
             return Ok(segs.to_vec());

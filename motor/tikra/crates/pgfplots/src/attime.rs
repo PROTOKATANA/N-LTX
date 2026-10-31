@@ -4,14 +4,13 @@
 //! follows it; `\pgfplotspointplotattime` in a node's text sets `/data point/x` and its friends
 //! to that point.
 
-use std::cell::RefCell;
-
-use crate::tex::Token;
-use crate::Error;
+use tikra_engine::tex::Token;
+use tikra_engine::Error;
 
 use super::Engine;
 
 /// The plot whose nodes are being placed.
+#[derive(Clone)]
 pub struct Timeline {
     /// Logical points (None at jumps).
     pub points: Vec<Option<[f64; 3]>>,
@@ -22,20 +21,14 @@ pub struct Timeline {
     pub time: f64,
 }
 
-thread_local! {
-    static CURRENT: RefCell<Option<Timeline>> = const { RefCell::new(None) };
+pub fn set(e: &mut Engine, t: Option<Timeline>) {
+    super::fig(e).timeline = t;
 }
 
-pub fn set(t: Option<Timeline>) {
-    CURRENT.with(|c| *c.borrow_mut() = t);
-}
-
-pub fn set_time(time: f64) {
-    CURRENT.with(|c| {
-        if let Some(t) = c.borrow_mut().as_mut() {
-            t.time = time;
-        }
-    });
+pub fn set_time(e: &mut Engine, time: f64) {
+    if let Some(t) = super::fig(e).timeline.as_mut() {
+        t.time = time;
+    }
 }
 
 /// A point along a plot: where it is, the ends of the segment it is on and how far along that
@@ -85,13 +78,13 @@ pub fn run(e: &mut Engine, tokens: &[Token], i: usize) -> Result<usize, Error> {
     while j < tokens.len() && tokens[j].is_space() {
         j += 1;
     }
-    let (arg, end) = if j < tokens.len() && matches!(tokens[j], Token::Char(_, crate::tex::Cat::Begin)) {
+    let (arg, end) = if j < tokens.len() && matches!(tokens[j], Token::Char(_, tikra_engine::tex::Cat::Begin)) {
         let mut depth = 0;
         let mut k = j;
         while k < tokens.len() {
             match tokens[k] {
-                Token::Char(_, crate::tex::Cat::Begin) => depth += 1,
-                Token::Char(_, crate::tex::Cat::End) => {
+                Token::Char(_, tikra_engine::tex::Cat::Begin) => depth += 1,
+                Token::Char(_, tikra_engine::tex::Cat::End) => {
                     depth -= 1;
                     if depth == 0 {
                         break;
@@ -109,12 +102,12 @@ pub fn run(e: &mut Engine, tokens: &[Token], i: usize) -> Result<usize, Error> {
         Some(a) => Some(e.number_of(a)?),
         None => None,
     };
-    let point = CURRENT.with(|c| c.borrow().as_ref().and_then(|tl| tl.at(t.unwrap_or(tl.time)).map(|r| (r.0, tl.log))));
+    let point = super::fig(e).timeline.as_ref().and_then(|tl| tl.at(t.unwrap_or(tl.time)).map(|r| (r.0, tl.log)));
     match point {
         Some((p, log)) => {
             for (k, c) in ['x', 'y', 'z'].iter().enumerate() {
                 let v = if log[k] { p[k].exp() } else { p[k] };
-                let text = super::symbolic::label(e, *c, v).unwrap_or_else(|| super::super::pgf_number(v));
+                let text = super::symbolic::label(e, *c, v).unwrap_or_else(|| tikra_engine::engine::pgf_number(v));
                 super::keys::set(e, &format!("/data point/{c}"), &text);
             }
         }

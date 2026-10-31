@@ -4,6 +4,8 @@
 pub use tikra_canvas::{canvas, color, scene};
 pub use tikra_label::{label, times};
 pub use tikra_tex::dates as tex_dates;
+pub use tikra_tex::files;
+pub use tikra_tex::fpu;
 pub use tikra_tex::{expr, keys, tex, Error, PT};
 
 pub mod describe;

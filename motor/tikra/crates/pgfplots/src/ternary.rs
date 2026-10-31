@@ -7,8 +7,8 @@
 //! the tick labels are percentages. Plain coordinates inside the axis are cartesian, in units of
 //! the side (`cartesian cs`).
 
-use crate::scene::{Point, Segment};
-use crate::Error;
+use tikra_engine::scene::{Point, Segment};
+use tikra_engine::Error;
 
 use super::draw::{axis_char, minor_ticks, tick_labels_at, tick_offset, unit, visible, Frame, Setup};
 use super::keys;
@@ -130,15 +130,15 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
         };
         if keys::flag(e, &format!("/pgfplots/{c}minorgrids")) {
             let segs: Vec<Segment> = minor.iter().flat_map(|t| line(*t)).collect();
-            e.draw_with(&format!("/pgfplots/every axis grid,/pgfplots/every minor grid,/pgfplots/every axis {c} grid,/pgfplots/every minor {c} grid"), segs)?;
+            super::draw::draw_with(e, &format!("/pgfplots/every axis grid,/pgfplots/every minor grid,/pgfplots/every axis {c} grid,/pgfplots/every minor {c} grid"), segs)?;
         }
         if keys::flag(e, &format!("/pgfplots/{c}majorgrids")) {
             let segs: Vec<Segment> = major.iter().flat_map(|t| line(*t)).collect();
-            e.draw_with(&format!("/pgfplots/every axis grid,/pgfplots/every major grid,/pgfplots/every axis {c} grid,/pgfplots/every major {c} grid"), segs)?;
+            super::draw::draw_with(e, &format!("/pgfplots/every axis grid,/pgfplots/every major grid,/pgfplots/every axis {c} grid,/pgfplots/every major {c} grid"), segs)?;
         }
         // tick lines along the grid lines' direction, outwards
         let d = outward(&f, a);
-        let align = e.pv(&format!("{c}tick align"));
+        let align = super::draw::pv(e, &format!("{c}tick align"));
         let mut kinds = Vec::new();
         if keys::flag(e, &format!("/pgfplots/{c}minorticks")) && !minor.is_empty() {
             kinds.push(("minor", minor.clone(), keys::length(e, "/pgfplots/minor tick length").unwrap_or(0.1)));
@@ -159,7 +159,7 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
                     [Segment::MoveTo(p.plus(d.scale(from))), Segment::LineTo(p.plus(d.scale(to)))]
                 })
                 .collect();
-            e.draw_with(&format!("/pgfplots/every tick,/pgfplots/every {kind} tick,/pgfplots/every {c} tick,/pgfplots/every {kind} {c} tick"), segs)?;
+            super::draw::draw_with(e, &format!("/pgfplots/every tick,/pgfplots/every {kind} tick,/pgfplots/every {c} tick,/pgfplots/every {kind} {c} tick"), segs)?;
         }
         // tick labels at the ticks' outer ends
         if keys::flag(e, &format!("/pgfplots/{c}majorticks")) {
@@ -169,12 +169,12 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
         }
     }
     if s.hide.iter().all(|h| !h) {
-        e.draw_with("/pgfplots/every outer x axis line,/pgfplots/every outer y axis line", outline(&f))?;
+        super::draw::draw_with(e, "/pgfplots/every outer x axis line,/pgfplots/every outer y axis line", outline(&f))?;
     } else {
         let [y, z, x] = corners(&f);
         for (a, p, q) in [(0usize, z, x), (1, x, y), (2, y, z)] {
             if !s.hide[a] {
-                e.draw_with(&format!("/pgfplots/every outer {} axis line", axis_char(a)), vec![Segment::MoveTo(p), Segment::LineTo(q)])?;
+                super::draw::draw_with(e, &format!("/pgfplots/every outer {} axis line", axis_char(a)), vec![Segment::MoveTo(p), Segment::LineTo(q)])?;
             }
         }
     }

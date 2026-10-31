@@ -16,7 +16,7 @@ use crate::scene::{Label, Point, Segment, Transform};
 use crate::tex::{self, Token};
 use crate::{Error, PT};
 
-use super::pgfplots::graphics;
+use super::graphics;
 use super::shapes::{self, Border, BoxSize, Geometry, Layer, ShapeText, Usage};
 use super::{tikra_tokens, Engine};
 use crate::extension::{LineCap, ShapePaint};
@@ -432,8 +432,8 @@ impl Engine {
     pub fn node(&mut self, spec: NodeSpec) -> Result<Vec<Item>, Error> {
         // `\pgfmathprintnumber{…}` in a node's text is printed as pgf prints numbers
         let mut spec = spec;
-        if spec.text.iter().any(|t| t.is_cs("pgfmathprintnumber") || t.is_cs("pgfplotspointplotattime") || t.is_cs("pgfplotspointgetcoordinates")) {
-            spec.text = super::pgfplots::draw::print_numbers(self, &spec.text)?;
+        if spec.text.iter().any(|t| t.is_cs("pgfmathprintnumber") || matches!(t, Token::Cs(name) if self.node_text_command(name).is_some())) {
+            spec.text = super::number::print_numbers(self, &spec.text)?;
         }
         self.begin_group();
         // `transform shape` given to a scope or a path holds for its nodes
@@ -915,10 +915,7 @@ impl Engine {
             anchor = auto_anchor(direction, (side == 'r') != self.st.swap).to_string();
         }
         let anchor = anchor.trim();
-        // pgfplots' `near ticklabel` anchors face the axis
-        let align = crate::keys::value(&self.tex, "/pgfplots/near ticklabel align").map(|v| crate::tex::tokens_to_string(&v)).unwrap_or_default();
-        let near = self.frame.as_ref().and_then(|f| f.near_point(anchor, &self.st.pending, &align, &|n| info.anchor_local(n)));
-        let near = near.or_else(|| self.piece_anchor(anchor, &|n| info.anchor_local(n)));
+        let near = self.piece_anchor(anchor, &|n| info.anchor_local(n));
         let a_local = near.or_else(|| info.anchor_local(anchor)).unwrap_or_else(|| {
             self.warn(format!("unknown anchor '{anchor}': center used"));
             info.geometry.center

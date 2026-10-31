@@ -401,10 +401,6 @@ const POINTS: &[&str] = &[
     "pgfpointtransformed",
     "pgfpointarcaxesattime",
     "pgfpointintersectionsolution",
-    "pgfplotspointaxisxy",
-    "pgfplotspointaxisxyz",
-    "pgfplotspointaxisdirectionxy",
-    "pgfplotspointaxisdirectionxyz",
 ];
 
 pub fn define(e: &mut Engine) {
@@ -433,6 +429,13 @@ pub struct PgfPath {
     pub start: Option<Point>,
     /// built by the quick commands only (`\pgfpathqmoveto`…): it does not make the picture larger
     pub quick: bool,
+}
+
+/// The soft path a macro holds, if it holds one.
+pub fn softpath_of(e: &Engine, macro_name: &Token) -> Option<Vec<Segment>> {
+    let tex::Meaning::Macro(m) = e.tex.meaning(macro_name) else { return None };
+    let text: String = m.body.iter().filter_map(|b| if let tex::Body::Tok(t) = b { Some(tex::tokens_to_string(std::slice::from_ref(t))) } else { None }).collect();
+    text.starts_with("@softpath").then(|| e.saved_paths.get(&text).cloned()).flatten()
 }
 
 impl Engine {
@@ -536,24 +539,6 @@ impl Engine {
                 let z = arg(self)?;
                 let (x, y, z) = (self.number_of(x)?, self.number_of(y)?, self.number_of(z)?);
                 self.st.x.scale(x).plus(self.st.y.scale(y)).plus(self.st.z.scale(z))
-            }
-            // pgfplots: a point of the axis being drawn (`axis cs`), or a direction in it
-            "pgfplotspointaxisxy" | "pgfplotspointaxisxyz" | "pgfplotspointaxisdirectionxy" | "pgfplotspointaxisdirectionxyz" => {
-                let n = if name.ends_with("xyz") { 3 } else { 2 };
-                let mut v = [0.0; 3];
-                for x in v.iter_mut().take(n) {
-                    let a = arg(self)?;
-                    *x = self.number_of(a)?;
-                }
-                let Some(f) = self.frame.clone() else { return Err(Error::Figure(format!("\\{name} outside an axis"))) };
-                let inverse = self.st.transform.inverse();
-                if name.contains("direction") {
-                    let d = (0..n).fold(Point::default(), |p, a| p.plus(f.e[a].scale(v[a])));
-                    inverse.apply(d).minus(inverse.apply(Point::default()))
-                } else {
-                    let l = [f.logical(0, v[0]), f.logical(1, v[1]), if n == 3 { f.logical(2, v[2]) } else { f.min[2] }];
-                    inverse.apply(f.at(l))
-                }
             }
             "pgfpointpolarxy" => {
                 let a = arg(self)?;
@@ -1500,11 +1485,8 @@ impl Engine {
                 let name = m.iter().find_map(|t| if let Token::Cs(n) = t { Some(n.to_string()) } else { None }).unwrap_or_default();
                 if cmd == B::GetPath {
                     self.saved_paths.insert(format!("pgf@{name}"), self.pgf_path.segments.clone());
-                } else if let Some(segs) = m
-                    .iter()
-                    .find(|t| matches!(t, Token::Cs(_)))
-                    .and_then(|t| super::pgfplots::fillbetween::softpath_of(self, t))
-                    .or_else(|| self.saved_paths.get(&format!("pgf@{name}")).cloned())
+                } else if let Some(segs) =
+                    m.iter().find(|t| matches!(t, Token::Cs(_))).and_then(|t| softpath_of(self, t)).or_else(|| self.saved_paths.get(&format!("pgf@{name}")).cloned())
                 {
                     self.pgf_path = PgfPath::default();
                     for s in segs {

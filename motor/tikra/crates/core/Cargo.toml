@@ -19,6 +19,7 @@ tikra_libraries = { path = "../libraries" }
 tikra_datavis = { path = "../datavis" }
 tikra_canvas = { path = "../canvas" }
 tikra_engine = { path = "../engine" }
+tikra_pgfplots = { path = "../pgfplots" }
 tikra_graphs = { path = "../graphs" }
 tikra_label = { path = "../label" }
 tikra_tex = { path = "../tex" }

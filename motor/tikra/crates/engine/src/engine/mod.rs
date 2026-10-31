@@ -11,6 +11,7 @@ pub mod coords;
 pub mod decorations;
 pub mod fadings;
 pub mod functional;
+pub mod graphics;
 pub mod intersections;
 pub mod libraries;
 pub mod lsystem;
@@ -19,11 +20,11 @@ pub mod matrix;
 pub mod mindmap;
 pub mod nodes;
 pub mod nonlinear;
+pub mod number;
 pub mod options;
 pub mod output;
 pub mod path;
 pub mod patterns;
-pub mod pgfplots;
 pub mod pics;
 pub mod piece;
 pub mod saveboxes;
@@ -542,11 +543,6 @@ pub struct Engine {
     keys_capped: bool,
     /// the full path of the native key being run (natives that share code tell keys apart by it)
     pub current_key: String,
-    /// the `axis` environment being read, and the one being drawn
-    pub axis: Option<Box<pgfplots::Axis>>,
-    pub frame: Option<std::rc::Rc<pgfplots::Frame>>,
-    /// the `groupplot` environment being read
-    pub plot_group: Option<Box<pgfplots::group::Group>>,
     /// node sets (`new set`, `set=`): a node with `set=` joins the set once it has a name
     pub node_sets: nodes::NodeSets,
     /// the open spy scopes, innermost last
@@ -694,9 +690,6 @@ impl Clone for Engine {
             words: self.words.clone(),
             saved_boxes: self.saved_boxes.clone(),
             current_key: self.current_key.clone(),
-            axis: self.axis.clone(),
-            frame: self.frame.clone(),
-            plot_group: self.plot_group.clone(),
             node_sets: self.node_sets.clone(),
             spy_scopes: self.spy_scopes.clone(),
             facts: self.facts.clone(),
@@ -838,9 +831,6 @@ impl Engine {
             words: Vec::new(),
             saved_boxes: HashMap::new(),
             current_key: String::new(),
-            axis: None,
-            frame: None,
-            plot_group: None,
             node_sets: nodes::NodeSets::default(),
             spy_scopes: Vec::new(),
             facts: Default::default(),
@@ -866,7 +856,6 @@ impl Engine {
         for piece in pieces {
             (piece.after_tikz)(&mut e);
         }
-        pgfplots::define(&mut e);
         e
     }
 
@@ -1416,14 +1405,7 @@ impl Engine {
         if lsystem::is_lsystem(id) {
             return self.lsystem_command(id);
         }
-        if pgfplots::is_command(id) {
-            return self.pgfplots_command(id);
-        }
         let Some(&(name, cmd)) = COMMANDS.iter().find(|(_, c)| *c as u16 == id) else { return Ok(()) };
-        if self.axis.is_some() && pgfplots::is_deferred(name) {
-            // inside an axis, TikZ statements wait until the axis is set up
-            return self.defer_statement(t);
-        }
         if let Some(r) = self.filtered_statement(name, t) {
             return r;
         }
@@ -2311,7 +2293,7 @@ impl Engine {
 
     // ---------------------------------------------------------------- pictures and environments
 
-    fn begin_picture(&mut self, o: Option<Vec<Token>>) -> Result<(), Error> {
+    pub fn begin_picture(&mut self, o: Option<Vec<Token>>) -> Result<(), Error> {
         if self.depth >= MAX_DEPTH {
             return Err(Error::Figure(format!("scope/\\foreach nesting went past {MAX_DEPTH} levels")));
         }
@@ -2470,7 +2452,7 @@ impl Engine {
         Ok(())
     }
 
-    fn end_picture(&mut self) {
+    pub fn end_picture(&mut self) {
         // execute at end picture, while the picture is still open
         let end = self.scope_ends.pop().unwrap_or_default();
         if let Err(e) = self.run_tokens(end) {
@@ -2627,12 +2609,10 @@ impl Engine {
                 let o = self.optional()?;
                 self.open_tikz_scope(o, true)
             }
-            n if pgfplots::is_axis(n) => self.begin_axis(n),
             n if self.piece_environment(n).is_some() => match self.piece_environment(n) {
                 Some((begin, _)) => begin(self, n),
                 None => Ok(()),
             },
-            "groupplot" => self.begin_groupplot(),
             "pgfonlayer" => {
                 let layer = self.argument_string()?;
                 self.begin_on_layer(layer);
@@ -2726,13 +2706,11 @@ impl Engine {
     fn close_environment(&mut self, name: &str) -> Result<(), Error> {
         match name {
             "tikzpicture" | "pgfpicture" => self.end_picture(),
-            n if pgfplots::is_axis(n) => self.end_axis()?,
             n if self.piece_environment(n).is_some() => {
                 if let Some((_, end)) = self.piece_environment(n) {
                     end(self, n)?;
                 }
             }
-            "groupplot" => self.end_groupplot()?,
             "pgfscope" | "pgfviewboxscope" => {
                 self.end_scope();
                 self.end_group();
@@ -3540,7 +3518,7 @@ pub fn run_document_in(code: &str, parts: piece::Parts<'_>) -> Result<(Canvas, V
     crate::expr::reset_random();
     // tikra's margin around a figure, unless a standalone border says otherwise
     e.canvas.margin = 2.0 * crate::PT;
-    let (code, files) = pgfplots::table::split_filecontents(code);
+    let (code, files) = crate::files::split_filecontents(code);
     for (name, lines) in files {
         e.tex.define_string(&format!("tikra@file@{name}"), &lines, true);
     }

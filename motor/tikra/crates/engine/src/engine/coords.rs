@@ -155,7 +155,7 @@ impl Engine {
         // `(\pgfkeysvalueof{/pgfplots/xmin},0)` with xmin unset: an empty part of a plain point in an axis
         if colon.is_none() && !t.contains(['(', '{', '[']) && t.split(',').any(|p| p.trim().is_empty()) && t.split(',').count() > 1 {
             let parts: Vec<String> = t.split(',').map(|p| p.trim().to_string()).collect();
-            if let Some(p) = self.pgfplots_plain(&parts).or_else(|| self.piece_plain_coordinate(&parts)) {
+            if let Some(p) = self.piece_plain_coordinate(&parts) {
                 return Ok(Coord { p: p?, node: None });
             }
         }
@@ -218,7 +218,7 @@ impl Engine {
             } else {
                 self.st.x.scale(rx * c).plus(self.st.y.scale(ry * s))
             }
-        } else if let Some(p) = self.pgfplots_plain(&commas).or_else(|| self.piece_plain_coordinate(&commas)) {
+        } else if let Some(p) = self.piece_plain_coordinate(&commas) {
             // inside an axis: axis or description coordinates
             return Ok(Coord { p: p?, node: None });
         } else {
@@ -345,7 +345,7 @@ impl Engine {
                 let p = self.point_of(body[start..].to_vec())?;
                 Ok(Coord { p: self.st.transform.apply(p), node: None })
             }
-            other => match self.pgfplots_cs(other, args).or_else(|| self.piece_coordinate(other, args)) {
+            other => match self.piece_coordinate(other, args) {
                 Some(r) => r,
                 None => match self.three_d_coordinate(other, &items)? {
                     Some(c) => Ok(c),

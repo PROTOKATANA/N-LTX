@@ -3,8 +3,8 @@
 
 use std::f64::consts::FRAC_1_SQRT_2;
 
-use crate::engine::path::arc_segments;
-use crate::scene::{Point, Segment, Transform};
+use tikra_engine::engine::path::arc_segments;
+use tikra_engine::scene::{Point, Segment, Transform};
 
 /// How a mark is used: `\pgfusepathqstroke`, `qfill` or `qfillstroke`.
 #[derive(Debug, Clone, Copy, PartialEq)]
