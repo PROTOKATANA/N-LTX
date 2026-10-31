@@ -1,10 +1,12 @@
 //! Genera la frontera con C++ y deja a mano lo que necesita CMake para compilarla en el runner.
+//!
+//! `bridge` sin `compile`: el C++ se compila una sola vez, en el runner.
 
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 fn main() {
-    cxx_build::bridge("src/puente.rs").std("c++17").compile("pintor-puente");
+    let _ = cxx_build::bridge("src/puente.rs");
     println!("cargo:rerun-if-changed=src/puente.rs");
     exportar_a_cmake();
 }
@@ -31,9 +33,13 @@ fn exportar_a_cmake() {
     copiar(&cabecera, &destino.join("include/cxx.h"));
 }
 
+/// Solo reescribe lo que cambió: si no, CMake lo recompilaría todo cada vez.
 fn copiar(origen: &Path, destino: &Path) {
     fs::create_dir_all(destino.parent().expect("carpeta")).expect("carpeta de cxx-pintor");
     // los archivos generados pueden ser enlaces simbólicos
     let contenido = fs::read(origen).unwrap_or_else(|e| panic!("{}: {e}", origen.display()));
+    if fs::read(destino).is_ok_and(|actual| actual == contenido) {
+        return;
+    }
     fs::write(destino, contenido).expect("copia de cxx");
 }
