@@ -8,53 +8,24 @@
 // The engine's parts: public for tikra's own tests, not an API (they change with any release).
 // What is kept stable is `convert`, `png` and `extension`.
 #[doc(hidden)]
-pub mod canvas;
-#[doc(hidden)]
-pub mod color;
-#[doc(hidden)]
 pub mod describe;
 #[doc(hidden)]
 pub mod driver;
 #[doc(hidden)]
 pub mod engine;
-#[doc(hidden)]
-pub mod expr;
 pub mod extension;
-#[doc(hidden)]
-pub mod keys;
-#[doc(hidden)]
-pub mod label;
-#[doc(hidden)]
-pub mod scene;
-#[doc(hidden)]
-pub mod tex;
-mod times;
 
 use std::fmt;
 
-/// Centimeters per TeX point.
-pub const PT: f64 = 2.54 / 72.27;
+#[doc(hidden)]
+pub use tikra_canvas::{canvas, color, scene};
+#[doc(hidden)]
+pub use tikra_label::{label, times};
+#[doc(hidden)]
+pub use tikra_tex::{expr, keys, tex};
+pub use tikra_tex::{Error, PT};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Error {
-    Expression(String),
-    Figure(String),
-    Png(String),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::Expression(m) => write!(f, "expression: {m}"),
-            Error::Figure(m) => write!(f, "figure: {m}"),
-            Error::Png(m) => write!(f, "png: {m}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// The language the figure is told in (its `alt` and `description`): mathra's 16 languages. The
 /// drawing is the same in all of them.

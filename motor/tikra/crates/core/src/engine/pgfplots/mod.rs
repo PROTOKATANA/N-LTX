@@ -13,7 +13,7 @@ pub mod cube;
 pub mod dateplot;
 pub mod draw;
 pub mod fillbetween;
-pub mod fpu;
+pub use tikra_tex::fpu;
 pub mod graphics;
 pub mod group;
 pub mod keys;

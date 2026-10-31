@@ -57,8 +57,8 @@ fn unit_cm_in(u: &str, vars: &Variables) -> Option<f64> {
     let f = unit_cm(u)?;
     let scale = vars.font_scale.unwrap_or(1.0);
     let f = match u {
-        "em" => f * scale * crate::label::quad(10.0 * scale, vars.sans),
-        "ex" => f * scale * crate::label::x_height(vars.sans) / crate::label::x_height(false),
+        "em" => f * scale * crate::metrics::quad(10.0 * scale, vars.sans),
+        "ex" => f * scale * crate::metrics::x_height(vars.sans) / crate::metrics::x_height(false),
         _ => f,
     };
     Some(if vars.in_pt { f / (2.54 / 72.27) } else { f })
@@ -645,10 +645,10 @@ impl Parser<'_> {
             "acos" => a.acos().to_degrees(),
             "atan" => a.atan().to_degrees(),
             "atan2" => args.get(1).map_or(0.0, |x| a.atan2(*x).to_degrees()),
-            "sqrt" if self.vars.fpu => crate::engine::pgfplots::fpu::sqrt(a),
+            "sqrt" if self.vars.fpu => crate::fpu::sqrt(a),
             "sqrt" => a.sqrt(),
             "abs" => a.abs(),
-            "exp" if self.vars.fpu => crate::engine::pgfplots::fpu::exp(a),
+            "exp" if self.vars.fpu => crate::fpu::exp(a),
             "exp" => a.exp(),
             "ln" => a.ln(),
             "log10" => a.log10(),
@@ -664,7 +664,7 @@ impl Parser<'_> {
             // `Mod` never negative: Mod(-7,3) = 2, where mod(-7,3) = -1
             "Mod" => a.rem_euclid(args.get(1).copied().unwrap_or(1.0)),
             // the fpu's veclen is its sqrt(a^2 + b^2)
-            "veclen" if self.vars.fpu => crate::engine::pgfplots::fpu::sqrt(a * a + args.get(1).map_or(0.0, |b| b * b)),
+            "veclen" if self.vars.fpu => crate::fpu::sqrt(a * a + args.get(1).map_or(0.0, |b| b * b)),
             "veclen" => a.hypot(args.get(1).copied().unwrap_or(0.0)),
             // n! of the integer part, as pgfmath has it
             "factorial" => (1..=a.trunc().max(0.0) as u64).map(|k| k as f64).product(),

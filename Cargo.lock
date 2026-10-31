@@ -1196,8 +1196,32 @@ dependencies = [
  "mathra",
  "resvg",
  "serde_json",
+ "tikra_canvas",
+ "tikra_label",
+ "tikra_tex",
  "ttf-parser",
 ]
+
+[[package]]
+name = "tikra_canvas"
+version = "1.8.1"
+dependencies = [
+ "mathra",
+]
+
+[[package]]
+name = "tikra_label"
+version = "1.8.1"
+dependencies = [
+ "mathra",
+ "tikra_canvas",
+ "tikra_tex",
+ "ttf-parser",
+]
+
+[[package]]
+name = "tikra_tex"
+version = "1.8.1"
 
 [[package]]
 name = "tiny-skia"

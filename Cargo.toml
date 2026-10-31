@@ -9,6 +9,9 @@ members = [
     "adaptador",
     "ejemplo/native/hub",
     "motor/tikra/crates/core",
+    "motor/tikra/crates/canvas",
+    "motor/tikra/crates/label",
+    "motor/tikra/crates/tex",
     "motor/mathra/crates/core",
     "motor/voltik/crates/core",
 ]
