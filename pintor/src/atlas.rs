@@ -3,6 +3,8 @@
 //! Cada una guarda aquí su copia completa y apunta qué filas cambiaron, para subir solo esas.
 
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 
 use primitivas::{Color, Parada};
 
@@ -188,12 +190,13 @@ impl Rampas {
 
     /// Dónde está la rampa de `paradas`, entre 0 y 1. Si no quedan filas, se reutiliza la última.
     pub fn fila(&mut self, paradas: &[Parada]) -> f32 {
-        let clave = paradas.iter().fold(FNV, |h, p| {
-            let h = mezclar(h, p.posicion.to_bits());
-            let h = mezclar(h, p.color.r.to_bits());
-            let h = mezclar(h, p.color.g.to_bits());
-            mezclar(h, p.color.b.to_bits())
-        });
+        let mut huella = DefaultHasher::new();
+        for p in paradas {
+            for v in [p.posicion, p.color.r, p.color.g, p.color.b] {
+                huella.write_u64(v.to_bits());
+            }
+        }
+        let clave = huella.finish();
         let fila = match self.conocidas.get(&clave) {
             Some(f) => *f,
             None => {
@@ -222,12 +225,6 @@ impl Rampas {
     pub fn tomar_sucio(&mut self) -> Sucio {
         self.sucio.tomar(&self.pixeles, (ANCHO_RAMPA * 4) as usize)
     }
-}
-
-pub(crate) const FNV: u64 = 0xcbf2_9ce4_8422_2325;
-
-pub(crate) fn mezclar(h: u64, v: u64) -> u64 {
-    (h ^ v).wrapping_mul(0x0000_0100_0000_01b3)
 }
 
 /// Antes de la primera parada y después de la última, el color se queda fijo.

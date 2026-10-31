@@ -5,7 +5,9 @@
 //! atlas, porque con el MSAA el texto pequeño pierde demasiada calidad. Un recorte es geometría en
 //! el stencil y solo las capas de verdad (grupos, mezclas y máscaras) cuestan una textura aparte.
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap};
+use std::hash::Hasher;
 
 use lyon::math::Point;
 use lyon::path::{FillRule, LineCap, LineJoin};
@@ -19,7 +21,7 @@ use primitivas::{
 };
 use zeno::{Command, Format, Mask, Placement, Vector};
 
-use crate::atlas::{Atlas, Clave, Entrada, FNV, LADO_ATLAS, MAYOR_GLIFO, Rampas, SUBPIXELES, mezclar};
+use crate::atlas::{Atlas, Clave, Entrada, LADO_ATLAS, MAYOR_GLIFO, Rampas, SUBPIXELES};
 use crate::geometria::{Afin, discontinua, ruta};
 use crate::puente::ffi::{Comando, Orden, Tinta, Vertice};
 
@@ -700,9 +702,12 @@ fn alturas(vertices: &[Vertice]) -> (f32, f32) {
 
 /// `None` si el glifo no tiene nada que pintar, como el espacio.
 fn preparar(contorno: &[Segmento]) -> Option<Preparado> {
-    let (mut huella, mut x0, mut y0, mut x1, mut y1) = (FNV, f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    // las coordenadas enteras solo varían en sus bits altos: hace falta un hash que los mezcle bien
+    let mut huella = DefaultHasher::new();
+    let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
     let mut punto = |p: Punto| {
-        huella = mezclar(mezclar(huella, p.x.to_bits()), p.y.to_bits());
+        huella.write_u64(p.x.to_bits());
+        huella.write_u64(p.y.to_bits());
         (x0, y0) = (x0.min(p.x), y0.min(p.y));
         (x1, y1) = (x1.max(p.x), y1.max(p.y));
     };
@@ -717,7 +722,13 @@ fn preparar(contorno: &[Segmento]) -> Option<Preparado> {
             Segmento::Cerrar => {}
         }
     }
-    (x1 >= x0).then_some(Preparado { huella, x0, y0, x1, y1 })
+    (x1 >= x0).then_some(Preparado {
+        huella: huella.finish(),
+        x0,
+        y0,
+        x1,
+        y1,
+    })
 }
 
 /// La máscara con el origen del glifo en (`sx`, `sy`) dentro de su píxel. zeno mide el área exacta
@@ -1315,6 +1326,22 @@ mod tests {
         let l = compilada_con(&e, Afin::IDENTIDAD).lista;
         assert_eq!(l.vertices[0].tinta, TINTA_SOLIDA);
         assert!((area(&l, &l.comandos[0]) - 250000.0).abs() < 1.0);
+    }
+
+    #[test]
+    fn dos_contornos_de_coordenadas_enteras_no_comparten_huella() {
+        let mut vistas = std::collections::HashSet::new();
+        for a in 0..300 {
+            for b in 0..300 {
+                let contorno = [
+                    Segmento::Mover(p(a as f64, 0.0)),
+                    Segmento::Linea(p(700.0, b as f64)),
+                    Segmento::Linea(p(a as f64, 512.0)),
+                    Segmento::Cerrar,
+                ];
+                assert!(vistas.insert(preparar(&contorno).unwrap().huella), "{a} {b}");
+            }
+        }
     }
 
     #[test]
