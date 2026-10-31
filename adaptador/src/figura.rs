@@ -79,6 +79,8 @@ impl Compositor for FiguraTikra {
                 fondo: lienzo.page_color.as_ref().map(color),
                 primitivas: destino.primitivas,
                 contornos: destino.contornos,
+                origen: lienzo.origin.map_or(Punto::default(), punto),
+                zonas: Vec::new(),
             },
             avisos: destino.avisos,
         })

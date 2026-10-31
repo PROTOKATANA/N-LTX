@@ -1,7 +1,8 @@
 //! Lo que el modo texto lleva dentro: fórmulas y figuras compuestas por el motor.
 
+use animacion::Reproductor;
 use documento::Incrustados;
-use primitivas::{Color, Composicion, Compositor, ErrorComposicion};
+use primitivas::{Caja, Color, Composicion, Compositor, ErrorComposicion};
 
 use crate::{FiguraTikra, FormulaMathra};
 
@@ -23,5 +24,9 @@ impl Incrustados for IncrustadosMotor {
 
     fn figura(&self, fuente: &str) -> Result<Composicion, ErrorComposicion> {
         FiguraTikra::default().componer(fuente)
+    }
+
+    fn caja_de_animacion(&self, fuente: &str) -> Result<Caja, ErrorComposicion> {
+        Ok(Reproductor::nuevo(fuente, FiguraTikra::default())?.caja())
     }
 }

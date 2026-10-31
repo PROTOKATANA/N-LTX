@@ -59,6 +59,7 @@ impl Compositor for FormulaMathra {
                 fondo: None,
                 primitivas: destino.primitivas,
                 contornos: destino.contornos,
+                ..Escena::default()
             },
             avisos: destino.avisos,
         })
