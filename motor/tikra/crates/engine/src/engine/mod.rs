@@ -863,6 +863,9 @@ impl Engine {
         }
         lsystem::define(&mut e);
         options::define_keys(&mut e, pieces);
+        for piece in pieces {
+            (piece.after_tikz)(&mut e);
+        }
         pgfplots::define(&mut e);
         e
     }

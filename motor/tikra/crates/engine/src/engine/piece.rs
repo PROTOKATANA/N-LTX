@@ -70,6 +70,9 @@ pub struct Piece {
     pub node_anchors: &'static [NodeAnchorFn],
     /// What it sets up before TikZ's definitions run: registers, macros, keys.
     pub define: fn(&mut Engine),
+    /// What it sets up after them, as they would overwrite it: a key it gives its own meaning, as
+    /// `/tikz/mark options` in pgfplots.
+    pub after_tikz: fn(&mut Engine),
     /// TeX run with TikZ's definitions, with `@` a letter.
     pub definitions: fn() -> String,
 }
@@ -90,6 +93,7 @@ impl Piece {
         statement_filters: &[],
         node_anchors: &[],
         define: |_| {},
+        after_tikz: |_| {},
         definitions: String::new,
     };
 }
