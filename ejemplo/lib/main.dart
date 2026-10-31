@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import 'escena.dart';
+import 'gpu.dart';
 import 'nativo.dart';
 import 'volcado.dart';
 
@@ -258,6 +259,8 @@ class _GaleriaState extends State<Galeria> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const VistaGpu(),
+          const SizedBox(height: 16),
           _Editor(
             controlador: _editor,
             modo: _modo,

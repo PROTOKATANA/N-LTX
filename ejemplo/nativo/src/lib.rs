@@ -11,7 +11,9 @@ use std::{ptr, slice};
 
 use adaptador::{FiguraTikra, FormulaMathra, IncrustadosMotor};
 use animacion::Reproductor;
+// el pintor en C++ enlaza contra esta biblioteca: sus símbolos de `cxx` deben quedar dentro
 use documento::{Documento, Formato};
+use pintor as _;
 use primitivas::{
     Capa, Color, Composicion, Compositor, Degradado, Escena, GlifoId, Matriz, Parada, Pintura, Primitiva, Punto,
     Relleno, Remate, Segmento, Trazo, Union,

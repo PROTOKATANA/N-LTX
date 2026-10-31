@@ -1,5 +1,9 @@
 #include "my_application.h"
 
+#include "familia_ltx.h"
+#include "presentacion.h"
+#include "texturas.h"
+
 #include <flutter_linux/flutter_linux.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
@@ -62,6 +66,8 @@ static void my_application_activate(GApplication* application) {
       project, self->dart_entrypoint_arguments);
 
   FlView* view = fl_view_new(project);
+  // Antes de realizar la vista: GTK no debe ensenar un fotograma sin terminar.
+  sincronizar_presentacion(view);
   GdkRGBA background_color;
   // Background defaults to black, override it here if necessary, e.g. #00000000
   // for transparent.
@@ -77,6 +83,7 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+  registrar_texturas(view, {familia_ltx()});
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
@@ -116,6 +123,7 @@ static void my_application_shutdown(GApplication* application) {
   // MyApplication* self = MY_APPLICATION(object);
 
   // Perform any actions required at application shutdown.
+  cerrar_texturas();
 
   G_APPLICATION_CLASS(my_application_parent_class)->shutdown(application);
 }
