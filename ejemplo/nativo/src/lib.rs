@@ -5,14 +5,14 @@
 
 use std::collections::HashMap;
 use std::panic::catch_unwind;
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::{ptr, slice};
 
 use adaptador::{FiguraTikra, IncrustadosMotor};
 use animacion::Reproductor;
-use documento::{Documento, Formato};
+use documento::{Documento, Formato, Memoria};
 use pintor::Animador;
-use primitivas::{Color, Composicion, Compositor, Escena};
+use primitivas::{Color, Composicion, Escena};
 use serde_json::{Value, json};
 
 /// Bp por em del texto y de las fórmulas.
@@ -63,30 +63,22 @@ impl Animador for AnimadorTikra {
     }
 }
 
-type Maquetador = Option<(u64, Arc<Documento>)>;
-
-/// Un documento de `ancho` bp. Crearlo cuesta: se guarda el último.
-fn documento_de(ancho: f64) -> Arc<Documento> {
-    static ULTIMO: Mutex<Maquetador> = Mutex::new(None);
-    let mut ultimo = ULTIMO.lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some((bits, d)) = ultimo.as_ref()
-        && *bits == ancho.to_bits()
-    {
-        return Arc::clone(d);
-    }
-    let formato = Formato {
-        ancho,
-        tam: TAM_FORMULA,
-        color: NEGRO,
-    };
-    let nuevo = Arc::new(Documento::nuevo(formato, Box::new(IncrustadosMotor { color: NEGRO })));
-    *ultimo = Some((ancho.to_bits(), Arc::clone(&nuevo)));
-    nuevo
+/// Cargar las fuentes y componer lo incrustado es lo caro: se hace una vez para toda la aplicación.
+fn documento() -> &'static Documento {
+    static DOCUMENTO: OnceLock<Documento> = OnceLock::new();
+    DOCUMENTO.get_or_init(|| {
+        let formato = Formato {
+            tam: TAM_FORMULA,
+            color: NEGRO,
+            ..Formato::default()
+        };
+        Documento::nuevo(formato, Box::new(Memoria::nueva(IncrustadosMotor { color: NEGRO })))
+    })
 }
 
 /// Compone `fuente` y se la entrega al pintor. Devuelve el alto en bp y los avisos.
 pub fn publicar(id: u32, fuente: &str, ancho: f64) -> Value {
-    match documento_de(ancho).componer(fuente) {
+    match documento().componer_a(fuente, ancho) {
         Ok(Composicion { escena, mut avisos }) => {
             let alto = escena.caja.alto + 2.0 * pintor::MARGEN;
             avisos.extend(pintor::publicar(id, escena, Some(Arc::new(AnimadorTikra))));

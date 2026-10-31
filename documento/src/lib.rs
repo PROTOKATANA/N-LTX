@@ -9,11 +9,14 @@
 mod contornos;
 pub mod lector;
 mod maquetador;
+mod memoria;
 
 use std::sync::Mutex;
 
 use cosmic_text::{FontSystem, fontdb};
 use primitivas::{Caja, Color, Composicion, Compositor, ErrorComposicion};
+
+pub use memoria::Memoria;
 
 const LATIN_MODERN: [&[u8]; 5] = [
     include_bytes!("../fuentes/lmroman10-regular.otf"),
@@ -85,18 +88,21 @@ fn base_empaquetada() -> fontdb::Database {
     base
 }
 
-impl Compositor for Documento {
-    fn componer(&self, fuente: &str) -> Result<Composicion, ErrorComposicion> {
+impl Documento {
+    /// Compone a `ancho` bp. Reflujar no exige otro documento: cargar las fuentes es caro.
+    pub fn componer_a(&self, fuente: &str, ancho: f64) -> Result<Composicion, ErrorComposicion> {
         let lectura = lector::leer(fuente);
         let mut sistema = self
             .fuentes
             .lock()
             .map_err(|_| ErrorComposicion("el sistema de fuentes quedó envenenado".into()))?;
-        Ok(maquetador::maquetar(
-            lectura,
-            self.formato,
-            &*self.incrustados,
-            &mut sistema,
-        ))
+        let formato = Formato { ancho, ..self.formato };
+        Ok(maquetador::maquetar(lectura, formato, &*self.incrustados, &mut sistema))
+    }
+}
+
+impl Compositor for Documento {
+    fn componer(&self, fuente: &str) -> Result<Composicion, ErrorComposicion> {
+        self.componer_a(fuente, self.formato.ancho)
     }
 }

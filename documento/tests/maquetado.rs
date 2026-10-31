@@ -102,6 +102,20 @@ fn un_ancho_menor_parte_el_parrafo_en_mas_lineas() {
 }
 
 #[test]
+fn el_mismo_documento_reflujo_a_otro_ancho() {
+    let fuente = "Un párrafo con bastantes palabras para que se parta en varias líneas al estrecharlo.";
+    let d = documento(800.0);
+    let estrecho = d.componer_a(fuente, 120.0).unwrap().escena;
+    assert!(lineas(&estrecho) > 3);
+    assert_eq!(estrecho.caja.ancho, 120.0);
+    assert_eq!(
+        lineas(&d.componer(fuente).unwrap().escena),
+        1,
+        "el ancho propio no cambia"
+    );
+}
+
+#[test]
 fn una_formula_en_linea_empuja_el_texto_que_sigue() {
     let tam = Formato::default().tam;
     let x_tras = |fuente: &str| {
