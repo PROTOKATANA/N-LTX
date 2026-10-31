@@ -16,7 +16,7 @@ pub fn vertical(c: char, target: f32, e: Style) -> R<MathBox> {
         if let Some(parts) = moustache(c, f) {
             // as cmex draws it: the two halves at least, joined by extenders as tall as needed
             let least: f32 = parts.iter().filter(|p| !p.extender).map(|p| p.advance).sum::<f32>() - f.min_overlap();
-            return Ok(assemble(&parts, (target / s).max(least), s, true, f));
+            return Ok(assemble(&Assembly { parts: &parts, target: (target / s).max(least), scale: s, vertical: true }, f));
         }
     }
     let id = f.glyph(c).ok_or(Error::MissingGlyph { character: c })?;
@@ -31,7 +31,7 @@ pub fn vertical(c: char, target: f32, e: Style) -> R<MathBox> {
         }
     }
     if let Some(parts) = f.assembly(id, true) {
-        return Ok(assemble(&parts, target / s, s, true, f));
+        return Ok(assemble(&Assembly { parts: &parts, target: target / s, scale: s, vertical: true }, f));
     }
     Ok(variants.last().map_or(base, |(v, _)| glyph_id(*v, s, f)))
 }
@@ -74,64 +74,113 @@ pub fn horizontal(c: char, target: f32, e: Style) -> R<MathBox> {
         }
     }
     if let Some(parts) = f.assembly(id, false) {
-        return Ok(assemble(&parts, target / s, s, false, f));
+        return Ok(assemble(&Assembly { parts: &parts, target: target / s, scale: s, vertical: false }, f));
     }
-    if let Some(built) = composite_arrow(c, id, target, e)? {
+    if let Some(built) = composite_arrow(GlyphRef { symbol: c, id }, target, e)? {
         return Ok(built);
     }
     Ok(variants.last().map_or(glyph_id(id, s, f), |(v, _)| glyph_id(*v, s, f)))
 }
 
+/// The glyph being stretched, and the font id of that same glyph (its ink sets where a pair sits).
+struct GlyphRef {
+    symbol: char,
+    id: ttf_parser::GlyphId,
+}
+
+/// Which stretchable arrows stand in for a glyph the font draws at one size only, and how much of
+/// the target each one covers. `lower` is absent when the glyph is a single long arrow.
+struct ArrowRecipe {
+    upper: char,
+    lower: Option<char>,
+    upper_share: f32,
+    lower_share: f32,
+}
+
+/// A pair of stretchable arrows stacked inside the bounds of `source`.
+struct Stacked {
+    source: ttf_parser::GlyphId,
+    upper: char,
+    lower: char,
+    upper_share: f32,
+    lower_share: f32,
+    target: f32,
+}
+
 /// Arrows the font draws at one size only (STIX Two Math has no assembly for ⇌, ⇄ or ⟶): built
 /// from arrows it can stretch, as `\xrightleftharpoons` and mhchem's `<=>` need. A pair is stacked
 /// where the glyph has its two arrows (the upper one's top on the glyph's top, the lower one's
-/// bottom on its bottom); a long arrow is its short one stretched. The second number is the length
-/// of the upper and lower arrow, as a share of the whole (⥂ has a short lower arrow).
-fn composite_arrow(c: char, id: ttf_parser::GlyphId, target: f32, e: Style) -> R<Option<MathBox>> {
-    let (upper, lower, shares) = match c {
-        '⇌' => ('⇀', Some('↽'), (1.0, 1.0)),
-        '⇋' => ('↼', Some('⇁'), (1.0, 1.0)),
-        '⇄' => ('→', Some('←'), (1.0, 1.0)),
-        '⇆' => ('←', Some('→'), (1.0, 1.0)),
-        '⇉' => ('→', Some('→'), (1.0, 1.0)),
-        '⇇' => ('←', Some('←'), (1.0, 1.0)),
-        '⥂' => ('→', Some('←'), (1.0, 0.6)),
-        '⥄' => ('→', Some('←'), (0.6, 1.0)),
-        '⟶' => ('→', None, (1.0, 1.0)),
-        '⟵' => ('←', None, (1.0, 1.0)),
-        '⟷' => ('↔', None, (1.0, 1.0)),
-        '⟹' => ('⇒', None, (1.0, 1.0)),
-        '⟸' => ('⇐', None, (1.0, 1.0)),
-        '⟺' => ('⇔', None, (1.0, 1.0)),
-        '⟼' => ('↦', None, (1.0, 1.0)),
-        _ => return Ok(None),
+/// bottom on its bottom); a long arrow is its short one stretched.
+fn composite_arrow(glyph: GlyphRef, target: f32, e: Style) -> R<Option<MathBox>> {
+    let Some(recipe) = arrow_recipe(glyph.symbol) else {
+        return Ok(None);
     };
-    let f = e.font();
-    if [Some(upper), lower].into_iter().flatten().any(|p| f.glyph(p).and_then(|g| f.assembly(g, false)).is_none()) {
+    if !parts_stretch(e, &recipe) {
         return Ok(None);
     }
-    let Some(lower) = lower else {
-        return horizontal(upper, target, e).map(Some);
+    match recipe.lower {
+        None => horizontal(recipe.upper, target, e).map(Some),
+        Some(lower) => stack_arrows(&Stacked { source: glyph.id, upper: recipe.upper, lower, upper_share: recipe.upper_share, lower_share: recipe.lower_share, target }, e),
+    }
+}
+
+/// The second number is the length of the upper and lower arrow, as a share of the whole (⥂ has a
+/// short lower arrow).
+fn arrow_recipe(symbol: char) -> Option<ArrowRecipe> {
+    let (upper, lower, upper_share, lower_share) = match symbol {
+        '⇌' => ('⇀', Some('↽'), 1.0, 1.0),
+        '⇋' => ('↼', Some('⇁'), 1.0, 1.0),
+        '⇄' => ('→', Some('←'), 1.0, 1.0),
+        '⇆' => ('←', Some('→'), 1.0, 1.0),
+        '⇉' => ('→', Some('→'), 1.0, 1.0),
+        '⇇' => ('←', Some('←'), 1.0, 1.0),
+        '⥂' => ('→', Some('←'), 1.0, 0.6),
+        '⥄' => ('→', Some('←'), 0.6, 1.0),
+        '⟶' => ('→', None, 1.0, 1.0),
+        '⟵' => ('←', None, 1.0, 1.0),
+        '⟷' => ('↔', None, 1.0, 1.0),
+        '⟹' => ('⇒', None, 1.0, 1.0),
+        '⟸' => ('⇐', None, 1.0, 1.0),
+        '⟺' => ('⇔', None, 1.0, 1.0),
+        '⟼' => ('↦', None, 1.0, 1.0),
+        _ => return None,
     };
+    Some(ArrowRecipe { upper, lower, upper_share, lower_share })
+}
+
+/// Both stand-ins have to be arrows the font can assemble; otherwise the glyph stays at its only size.
+fn parts_stretch(e: Style, recipe: &ArrowRecipe) -> bool {
+    let f = e.font();
+    [Some(recipe.upper), recipe.lower].into_iter().flatten().all(|part| f.glyph(part).and_then(|id| f.assembly(id, false)).is_some())
+}
+
+/// Places the two arrows where the source glyph keeps them (and TeX's 2pt): the upper one's top on
+/// the glyph's top, the lower one's bottom on its bottom, shafts three rule thicknesses apart. The
+/// stretchable harpoons have taller barbs than the ones inside ⇌.
+fn stack_arrows(stacked: &Stacked, e: Style) -> R<Option<MathBox>> {
+    let f = e.font();
     let s = e.scale();
-    let (_, bottom, _, top) = f.limits(id);
-    let a = horizontal(upper, target * shares.0, e)?;
-    let b = horizontal(lower, target * shares.1, e)?;
-    let width = a.width.max(b.width).max(target);
+    let (_, bottom, _, top) = f.limits(stacked.source);
+    let above = horizontal(stacked.upper, stacked.target * stacked.upper_share, e)?;
+    let below = horizontal(stacked.lower, stacked.target * stacked.lower_share, e)?;
+    let width = above.width.max(below.width).max(stacked.target);
     let mut math_box = MathBox::space(width);
-    let (_, a_top) = ink(&a, e);
-    let (b_bottom, _) = ink(&b, e);
-    let (mut up, mut down) = (top * s - a_top, bottom * s - b_bottom);
-    // the stretchable harpoons have taller barbs than the ones inside ⇌: kept apart as the glyph
-    // keeps them (and TeX's 2pt), shafts three rule thicknesses apart
-    let apart = 3.0 * k(e, |c| c.fraction_rule_thickness());
+    let (_, above_top) = ink(&above, e);
+    let (below_bottom, _) = ink(&below, e);
+    let (up, down) = separated(top * s - above_top, bottom * s - below_bottom, 3.0 * k(e, |c| c.fraction_rule_thickness()));
+    math_box.place(&above, (width - above.width) / 2.0, up);
+    math_box.place(&below, (width - below.width) / 2.0, down);
+    Ok(Some(math_box))
+}
+
+/// Shifts the two shafts apart, equally, until the gap is at least `apart`.
+fn separated(up: f32, down: f32, apart: f32) -> (f32, f32) {
     if up - down < apart {
         let extra = (apart - (up - down)) / 2.0;
-        (up, down) = (up + extra, down - extra);
+        (up + extra, down - extra)
+    } else {
+        (up, down)
     }
-    math_box.place(&a, (width - a.width) / 2.0, up);
-    math_box.place(&b, (width - b.width) / 2.0, down);
-    Ok(Some(math_box))
 }
 
 /// Lowest and highest ink of the glyphs in a box, from their outlines. A box's height and depth
@@ -163,10 +212,29 @@ pub fn delimiter(c: char, target: f32, e: Style) -> R<MathBox> {
     Ok(math_box)
 }
 
+/// Parts of one growing glyph, the size to reach (in font units) and the style scale to draw at.
+struct Assembly<'a> {
+    parts: &'a [Part],
+    target: f32,
+    scale: f32,
+    vertical: bool,
+}
+
+/// The repeated parts and the overlap that makes them land on `target`.
+struct Fitted {
+    sequence: Vec<Part>,
+    overlap: f32,
+}
+
 /// Assembles the parts (bottom to top or left to right), repeating the extenders
 /// as few times as needed to reach the size, with overlap between connectors.
-fn assemble(parts: &[Part], target: f32, s: f32, vertical: bool, f: &Font) -> MathBox {
-    let overlap = f.min_overlap();
+fn assemble(assembly: &Assembly, font: &Font) -> MathBox {
+    place(&fit(assembly.parts, assembly.target, font), assembly, font)
+}
+
+/// Repeats the extenders until the run covers `target`, then widens the overlap to absorb the leftover.
+fn fit(parts: &[Part], target: f32, font: &Font) -> Fitted {
+    let overlap = font.min_overlap();
     let sequence = |n: usize| -> Vec<Part> { parts.iter().flat_map(|p| std::iter::repeat_n(*p, if p.extender { n } else { 1 })).collect() };
     let size = |seq: &[Part], ov: f32| -> f32 { seq.iter().map(|p| p.advance).sum::<f32>() - ov * seq.len().saturating_sub(1) as f32 };
     let mut n = 0;
@@ -179,25 +247,29 @@ fn assemble(parts: &[Part], target: f32, s: f32, vertical: bool, f: &Font) -> Ma
     let joined = seq.len().saturating_sub(1).max(1) as f32;
     let slack = seq.windows(2).map(|w| w[0].end.min(w[1].start)).fold(f32::INFINITY, f32::min);
     let excess = (size(&seq, overlap) - target).max(0.0);
-    let ov = (overlap + excess / joined).min(slack.max(overlap));
+    Fitted { sequence: seq, overlap: (overlap + excess / joined).min(slack.max(overlap)) }
+}
 
+/// Lays the fitted parts along the axis, each connector overlapping the previous one.
+fn place(fitted: &Fitted, assembly: &Assembly, font: &Font) -> MathBox {
     let mut math_box = MathBox::empty();
     let mut cursor = 0.0;
-    for p in &seq {
-        let (x0, y0, _, _) = f.limits(p.id);
-        let (x, y) = if vertical { (0.0, (cursor - y0) * s) } else { ((cursor - x0) * s, 0.0) };
-        math_box.items.push(Item::Glyph { id: p.id, x, y, scale: s, color: None, flip: false });
-        let g = glyph_id(p.id, s, f);
-        if vertical {
-            math_box.width = math_box.width.max(g.width);
+    let scale = assembly.scale;
+    for part in &fitted.sequence {
+        let (x0, y0, _, _) = font.limits(part.id);
+        let (x, y) = if assembly.vertical { (0.0, (cursor - y0) * scale) } else { ((cursor - x0) * scale, 0.0) };
+        math_box.items.push(Item::Glyph { id: part.id, x, y, scale, color: None, flip: false });
+        let glyph = glyph_id(part.id, scale, font);
+        if assembly.vertical {
+            math_box.width = math_box.width.max(glyph.width);
         } else {
-            math_box.height = math_box.height.max(g.height);
-            math_box.depth = math_box.depth.max(g.depth);
+            math_box.height = math_box.height.max(glyph.height);
+            math_box.depth = math_box.depth.max(glyph.depth);
         }
-        cursor += p.advance - ov;
+        cursor += part.advance - fitted.overlap;
     }
-    let total = (cursor + ov) * s;
-    if vertical {
+    let total = (cursor + fitted.overlap) * scale;
+    if assembly.vertical {
         math_box.height = total;
         math_box.depth = 0.0;
     } else {

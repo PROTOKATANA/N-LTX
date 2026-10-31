@@ -23,21 +23,21 @@ impl Grid {
     }
 
     /// Writes `text` ending at column `end` (exclusive), on row `row` (0 = top).
-    fn write_digits(&mut self, text: &str, end: i32, row: i32, e: Style) -> R<()> {
-        let n = text.chars().count() as i32;
-        for (i, c) in text.chars().enumerate() {
+    fn write_digits(&mut self, run: DigitRun, e: Style) -> R<()> {
+        let n = run.text.chars().count() as i32;
+        for (i, c) in run.text.chars().enumerate() {
             let g = glyph(c, e)?;
-            let col = end - n + i as i32;
+            let col = run.end - n + i as i32;
             let x = col as f32 * self.column + (self.column - g.width) / 2.0;
-            self.math_box.place(&g, x, -(row as f32) * self.step);
+            self.math_box.place(&g, x, -(run.row as f32) * self.step);
         }
         Ok(())
     }
 
-    fn sign(&mut self, c: char, col: i32, row: i32, e: Style) -> R<()> {
-        let g = glyph(c, e)?;
-        let x = col as f32 * self.column + (self.column - g.width) / 2.0;
-        self.math_box.place(&g, x, -(row as f32) * self.step);
+    fn sign(&mut self, at: SignAt, e: Style) -> R<()> {
+        let g = glyph(at.symbol, e)?;
+        let x = at.column as f32 * self.column + (self.column - g.width) / 2.0;
+        self.math_box.place(&g, x, -(at.row as f32) * self.step);
         Ok(())
     }
 
@@ -60,6 +60,20 @@ impl Grid {
         self.math_box.single_glyph = false;
         self.math_box
     }
+}
+
+/// Digits of one number, right-aligned so the run ends at `end` (exclusive) on `row` (0 = top).
+struct DigitRun<'a> {
+    text: &'a str,
+    end: i32,
+    row: i32,
+}
+
+/// One operator glyph, centered in `column` on `row`.
+struct SignAt {
+    symbol: char,
+    column: i32,
+    row: i32,
 }
 
 /// One step of the long division: where it ends, what is subtracted and what is left.
@@ -97,11 +111,11 @@ pub fn long_division(dividend: &str, divisor: &str, e: Style) -> R<MathBox> {
     let n = digits.len() as i32;
     let mut g = Grid::new(e)?;
     // row 0: dividend (columns 1..=n; column 0 is left for the minus sign) | divisor
-    g.write_digits(dividend, n + 1, 0, e)?;
+    g.write_digits(DigitRun { text: dividend, end: n + 1, row: 0 }, e)?;
     let x_brace = n + 1;
     let right_width = (divisor.len().max(quotient.len()) as i32) + 1;
-    g.write_digits(divisor, x_brace + 1 + divisor.len() as i32, 0, e)?;
-    g.write_digits(&quotient, x_brace + 1 + quotient.len() as i32, 1, e)?;
+    g.write_digits(DigitRun { text: divisor, end: x_brace + 1 + divisor.len() as i32, row: 0 }, e)?;
+    g.write_digits(DigitRun { text: &quotient, end: x_brace + 1 + quotient.len() as i32, row: 1 }, e)?;
 
     // steps below the dividend: −product, rule, remainder (with the next digit brought down)
     let mut row = 1;
@@ -112,8 +126,8 @@ pub fn long_division(dividend: &str, divisor: &str, e: Style) -> R<MathBox> {
         }
         let product = step.product.to_string();
         let width = product.len() as i32;
-        g.write_digits(&product, step.end + 1, row, e)?;
-        g.sign('−', step.end - width, row, e)?;
+        g.write_digits(DigitRun { text: &product, end: step.end + 1, row }, e)?;
+        g.sign(SignAt { symbol: '−', column: step.end - width, row }, e)?;
         g.rule(step.end - width, step.end + 1, row);
         row += 1;
         let mut remainder = step.remainder.to_string();
@@ -127,7 +141,7 @@ pub fn long_division(dividend: &str, divisor: &str, e: Style) -> R<MathBox> {
             remainder.push(char::from_digit(next_char, 10).unwrap_or('?'));
             end += 1;
         }
-        g.write_digits(&remainder, end, row, e)?;
+        g.write_digits(DigitRun { text: &remainder, end, row }, e)?;
         row += 1;
     }
 
@@ -189,23 +203,23 @@ pub fn column_arithmetic(operation: char, terms: &[String], e: Style) -> R<MathB
         }
     }
 
-    g.write_digits(&ta, width + 1, row, e)?;
+    g.write_digits(DigitRun { text: &ta, end: width + 1, row }, e)?;
     row += 1;
-    g.write_digits(&tb, width + 1, row, e)?;
-    g.sign(operation, 0, row, e)?;
+    g.write_digits(DigitRun { text: &tb, end: width + 1, row }, e)?;
+    g.sign(SignAt { symbol: operation, column: 0, row }, e)?;
     g.rule(0, width + 1, row);
     row += 1;
     if !partials.is_empty() {
         for (i, p) in partials.iter().enumerate() {
-            g.write_digits(p, width + 1 - i as i32, row, e)?;
+            g.write_digits(DigitRun { text: p, end: width + 1 - i as i32, row }, e)?;
             if i == partials.len() - 1 {
-                g.sign('+', 0, row, e)?;
+                g.sign(SignAt { symbol: '+', column: 0, row }, e)?;
                 g.rule(0, width + 1, row);
             }
             row += 1;
         }
     }
-    g.write_digits(&tr, width + 1, row, e)?;
+    g.write_digits(DigitRun { text: &tr, end: width + 1, row }, e)?;
     row += 1;
     Ok(g.finish(width + 1, row, e))
 }
