@@ -228,6 +228,9 @@ impl Engine {
     }
 
     fn coordinate_system(&mut self, system: &str, args: &str) -> Result<Coord, Error> {
+        if let Some(of_a_piece) = self.coordinate_system_of(system) {
+            return Ok(Coord { p: of_a_piece(self, args)?, node: None });
+        }
         let items: Vec<(String, String)> = split_commas(args)
             .into_iter()
             .map(|p| match p.split_once('=') {

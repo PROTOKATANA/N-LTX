@@ -762,6 +762,11 @@ fn operations(e: &mut Engine, b: &mut Builder, depth: Option<usize>) -> Result<(
                     "lindenmayer" | "l" => lindenmayer_operation(e, b, depth, &w)?,
                     "foreach" => path_foreach(e, b)?,
                     "svg" => svg_operation(e, b, depth)?,
+                    other if e.path_operation(other).is_some() => {
+                        if let Some(operation) = e.path_operation(other) {
+                            operation(e)?;
+                        }
+                    }
                     other => {
                         e.warn(format!("unrecognized path fragment: '{other}'"));
                         return skip_rest(e, depth);

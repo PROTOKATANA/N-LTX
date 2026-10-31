@@ -24,7 +24,7 @@ use tikra_engine::tex_dates::{date, easter, parse_date, weekday};
 use tikra_engine::Error;
 
 /// The calendar in an engine.
-pub static PIECE: Piece = Piece { name: "calendar", commands: COMMANDS, define, definitions: || DEFINITIONS.to_string() };
+pub static PIECE: Piece = Piece { name: "calendar", commands: COMMANDS, define, definitions: || DEFINITIONS.to_string(), ..Piece::EMPTY };
 
 const COMMANDS: &[(&str, CommandFn)] = &[
     ("calendar", |e, _| calendar(e)),

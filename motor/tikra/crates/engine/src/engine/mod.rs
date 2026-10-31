@@ -431,6 +431,8 @@ pub struct Engine {
     extension_fns: Vec<crate::extension::KeyFn>,
     /// the commands of the pieces, by id − PIECE_COMMAND_BASE
     command_fns: Vec<piece::CommandFn>,
+    /// what the pieces add to the work of the engine
+    hooks: piece::Hooks,
     /// what the pieces keep during a figure
     slots: piece::Slots,
     /// `use as bounding box` was used: the bounding box no longer grows
@@ -642,6 +644,7 @@ impl Clone for Engine {
             key_fns: self.key_fns.clone(),
             extension_fns: self.extension_fns.clone(),
             command_fns: self.command_fns.clone(),
+            hooks: self.hooks.clone(),
             slots: self.slots.clone(),
             canvas_frozen: self.canvas_frozen,
             nesting: self.nesting,
@@ -786,6 +789,7 @@ impl Engine {
             key_fns: Vec::new(),
             extension_fns: Vec::new(),
             command_fns: Vec::new(),
+            hooks: piece::Hooks::default(),
             slots: piece::Slots::default(),
             canvas_frozen: false,
             nesting: 0,
@@ -2609,15 +2613,19 @@ impl Engine {
         let o = self.optional()?;
         // a data visualization reads its data line by line: it reads its own input
         if let Some(t) = self.tex.next_nonspace() {
-            let dv = t.is_cs("datavisualization");
-            self.tex.back(t);
-            if dv {
-                let _ = self.tex.get_token();
+            if t.is_cs("datavisualization") {
                 self.begin_picture(o)?;
                 let r = self.datavisualization();
                 self.end_picture();
                 return r;
             }
+            if self.reads_its_input(&t) {
+                self.begin_picture(o)?;
+                let r = self.execute(t);
+                self.end_picture();
+                return r;
+            }
+            self.tex.back(t);
         }
         let body = self.next_statement()?;
         self.begin_picture(o)?;

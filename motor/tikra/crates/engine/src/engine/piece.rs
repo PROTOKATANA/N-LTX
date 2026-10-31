@@ -8,11 +8,18 @@ use std::any::Any;
 
 use super::{Engine, NATIVE_KEY_BASE};
 use crate::extension::Library;
+use crate::scene::Point;
 use crate::tex::{Meaning, Token};
 use crate::Error;
 
 /// A command of a piece: it reads its arguments from the input.
 pub type CommandFn = fn(&mut Engine, &Token) -> Result<(), Error>;
+
+/// A word a piece adds to paths (`graph`): it reads the rest of its operation from the input.
+pub type PathOperationFn = fn(&mut Engine) -> Result<(), Error>;
+
+/// A coordinate system a piece adds (`visualization cs`): from its options to a point.
+pub type CoordinateSystemFn = fn(&mut Engine, &str) -> Result<Point, Error>;
 
 /// The first id of the commands of the pieces (`Meaning::Native`).
 pub const PIECE_COMMAND_BASE: u16 = 1000;
@@ -21,10 +28,29 @@ pub struct Piece {
     /// Unique among the pieces of an engine, which is kept by their names.
     pub name: &'static str,
     pub commands: &'static [(&'static str, CommandFn)],
+    pub path_operations: &'static [(&'static str, PathOperationFn)],
+    pub coordinate_systems: &'static [(&'static str, CoordinateSystemFn)],
+    /// Its commands that read their own input (`\\datavisualization`, data line by line): `\\tikz`
+    /// runs them as they come, instead of reading up to the `;` first.
+    pub reading_input: &'static [&'static str],
     /// What it sets up before TikZ's definitions run: registers, macros, keys.
     pub define: fn(&mut Engine),
     /// TeX run with TikZ's definitions, with `@` a letter.
     pub definitions: fn() -> String,
+}
+
+impl Piece {
+    /// A piece with nothing: each says what it has, with `..Piece::EMPTY`.
+    pub const EMPTY: Piece = Piece { name: "", commands: &[], path_operations: &[], coordinate_systems: &[], reading_input: &[], define: |_| {}, definitions: String::new };
+}
+
+/// What the pieces add to the work of the engine. It asks here only for what it does not know, so
+/// they cost nothing to the figures that do not use them.
+#[derive(Clone, Default)]
+pub(super) struct Hooks {
+    path_operations: Vec<(&'static str, PathOperationFn)>,
+    coordinate_systems: Vec<(&'static str, CoordinateSystemFn)>,
+    reading_input: Vec<&'static str>,
 }
 
 /// What an engine is built with, besides itself.
@@ -74,7 +100,25 @@ impl Engine {
             self.tex.define(name, Meaning::Native(id as u16));
             self.command_fns.push(*command);
         }
+        self.hooks.path_operations.extend_from_slice(piece.path_operations);
+        self.hooks.coordinate_systems.extend_from_slice(piece.coordinate_systems);
+        self.hooks.reading_input.extend_from_slice(piece.reading_input);
         (piece.define)(self);
+    }
+
+    /// What a piece does with the word `word` of a path.
+    pub(super) fn path_operation(&self, word: &str) -> Option<PathOperationFn> {
+        self.hooks.path_operations.iter().find(|(w, _)| *w == word).map(|(_, operation)| *operation)
+    }
+
+    /// The coordinate system `name` of a piece.
+    pub(super) fn coordinate_system_of(&self, name: &str) -> Option<CoordinateSystemFn> {
+        self.hooks.coordinate_systems.iter().find(|(n, _)| *n == name).map(|(_, system)| *system)
+    }
+
+    /// Whether `t` is a command of a piece that reads its own input.
+    pub(super) fn reads_its_input(&self, t: &Token) -> bool {
+        matches!(t, Token::Cs(name) if self.hooks.reading_input.contains(&&**name))
     }
 
     /// The value of type `T` a piece keeps during a figure, created the first time.
@@ -118,9 +162,22 @@ mod tests {
         Ok(())
     }
 
+    /// Reads what comes after it itself, up to a `!`: no `;` for `\\tikz` to look for.
+    fn live(e: &mut Engine, _: &Token) -> Result<(), Error> {
+        let read = e.tex.read_until_char('!', false)?;
+        e.tex.define_string("livedread", &crate::tex::tokens_to_string(&read), true);
+        Ok(())
+    }
+
     static PROBE: Piece = Piece {
         name: "probe",
-        commands: &[("probecommand", twice)],
+        commands: &[("probecommand", twice), ("probelive", live)],
+        path_operations: &[("probeword", |e| {
+            e.tex.define_string("walked", "yes", true);
+            Ok(())
+        })],
+        coordinate_systems: &[("probe", |_, args| Ok(Point::new(args.trim().len() as f64, 0.0)))],
+        reading_input: &["probelive"],
         define: |e| e.tex.define_string("probedefined", "yes", true),
         definitions: || r"\def\probeloaded{yes}".to_string(),
     };
@@ -139,5 +196,16 @@ mod tests {
         bare.tex.push_text(r"\probecommand");
         bare.run().unwrap();
         assert!(!bare.tex.is_defined("done"), "the engine does not know it");
+        e.tex.push_text(r"\begin{tikzpicture}\path (0,0) probeword;\end{tikzpicture}");
+        e.run().unwrap();
+        assert!(e.tex.warnings.is_empty(), "{:?}", e.tex.warnings);
+        assert!(e.tex.is_defined("walked"), "its word of a path ran");
+        e.tex.push_text(r"\begin{tikzpicture}\coordinate (a) at (probe cs:abc);\end{tikzpicture}");
+        e.run().unwrap();
+        assert!(e.tex.warnings.is_empty(), "{:?}", e.tex.warnings);
+        assert!((e.nodes["a"].center().x - 3.0).abs() < 1e-9, "its coordinate system ran");
+        e.tex.push_text(r"\tikz\probelive with no semicolon!");
+        e.run().unwrap();
+        assert!(e.tex.is_defined("livedread"), "it read its own input");
     }
 }
