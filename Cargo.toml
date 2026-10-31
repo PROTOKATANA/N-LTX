@@ -4,6 +4,7 @@ members = [
     "formula",
     "primitivas",
     "documento",
+    "animacion",
     "adaptador",
     "ejemplo/nativo",
     "motor/tikra/crates/core",

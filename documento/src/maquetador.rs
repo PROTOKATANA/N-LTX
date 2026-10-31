@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use cosmic_text::{Attrs, Buffer, Color as ColorTexto, Family, FontSystem, Metrics, Shaping, Style, Weight, fontdb};
 use primitivas::{
     Caja, Capa, Color, Composicion, ErrorComposicion, Escena, GlifoId, Matriz, Pintura, Primitiva, Punto, Relleno,
-    Segmento,
+    Segmento, Zona,
 };
 
 use crate::contornos;
@@ -55,6 +55,7 @@ pub(crate) fn maquetar(
         primitivas: Vec::new(),
         contornos: BTreeMap::new(),
         fuentes: HashMap::new(),
+        zonas: Vec::new(),
         y: 0.0,
     };
     m.bloques(&bloques, 0.0, formato.ancho);
@@ -62,6 +63,7 @@ pub(crate) fn maquetar(
         primitivas,
         contornos,
         avisos,
+        zonas,
         y,
         ..
     } = m;
@@ -73,9 +75,10 @@ pub(crate) fn maquetar(
                 ancho: formato.ancho,
                 alto: y,
             },
-            fondo: None,
             primitivas,
             contornos,
+            zonas,
+            ..Escena::default()
         },
         avisos,
     }
@@ -91,6 +94,7 @@ struct Maquetador<'a> {
     primitivas: Vec<Primitiva>,
     contornos: BTreeMap<GlifoId, Vec<Segmento>>,
     fuentes: HashMap<fontdb::ID, u8>,
+    zonas: Vec<Zona>,
     /// Dónde va el siguiente bloque.
     y: f64,
 }
@@ -188,6 +192,7 @@ impl Maquetador<'_> {
             Bloque::Codigo(codigo) => self.codigo(codigo, x, ancho),
             Bloque::Formula(latex) => self.formula_en_bloque(latex, x, ancho),
             Bloque::Figura(fuente) => self.figura(fuente, x, ancho),
+            Bloque::Animacion(fuente) => self.animacion(fuente, x, ancho),
             Bloque::Tabla(filas) => self.tabla(filas, x, ancho),
             Bloque::Regla => {
                 self.separar(0.4);
@@ -263,6 +268,29 @@ impl Maquetador<'_> {
                 let px = x + ((ancho - caja.ancho * escala) / 2.0).max(0.0);
                 self.colocar(colocable, px - caja.x * escala, self.y - caja.y * escala, escala);
                 self.y += caja.alto * escala;
+                self.separar(SEPARACION);
+            }
+            Err(e) => self.fuente_visible(fuente, &e, x, ancho),
+        }
+    }
+
+    /// Una animación reserva su sitio: el pintor la reproduce ahí.
+    fn animacion(&mut self, fuente: &str, x: f64, ancho: f64) {
+        let completa = format!("{}{fuente}", self.preambulo);
+        match self.incrustados.caja_de_animacion(&completa) {
+            Ok(caja) => {
+                self.separar(0.3);
+                let px = x + ((ancho - caja.ancho) / 2.0).max(0.0);
+                self.zonas.push(Zona {
+                    caja: Caja {
+                        x: px,
+                        y: self.y,
+                        ancho: caja.ancho,
+                        alto: caja.alto,
+                    },
+                    fuente: completa,
+                });
+                self.y += caja.alto;
                 self.separar(SEPARACION);
             }
             Err(e) => self.fuente_visible(fuente, &e, x, ancho),

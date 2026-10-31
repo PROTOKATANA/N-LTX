@@ -13,7 +13,7 @@ mod maquetador;
 use std::sync::Mutex;
 
 use cosmic_text::{FontSystem, fontdb};
-use primitivas::{Color, Composicion, Compositor, ErrorComposicion};
+use primitivas::{Caja, Color, Composicion, Compositor, ErrorComposicion};
 
 const LATIN_MODERN: [&[u8]; 5] = [
     include_bytes!("../fuentes/lmroman10-regular.otf"),
@@ -27,6 +27,8 @@ const LATIN_MODERN: [&[u8]; 5] = [
 pub trait Incrustados: Send + Sync {
     fn formula(&self, latex: &str, bloque: bool, tam: f64) -> Result<Composicion, ErrorComposicion>;
     fn figura(&self, fuente: &str) -> Result<Composicion, ErrorComposicion>;
+    /// El tamaño que necesita una animación durante todo su recorrido.
+    fn caja_de_animacion(&self, fuente: &str) -> Result<Caja, ErrorComposicion>;
 }
 
 /// Medidas de un documento, en bp.

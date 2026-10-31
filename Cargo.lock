@@ -6,6 +6,7 @@ version = 4
 name = "adaptador"
 version = "0.1.0"
 dependencies = [
+ "animacion",
  "documento",
  "formula",
  "mathra",
@@ -22,6 +23,13 @@ name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
+
+[[package]]
+name = "animacion"
+version = "0.1.0"
+dependencies = [
+ "primitivas",
+]
 
 [[package]]
 name = "arrayref"
@@ -159,6 +167,7 @@ name = "ejemplo_nativo"
 version = "0.1.0"
 dependencies = [
  "adaptador",
+ "animacion",
  "documento",
  "primitivas",
  "serde_json",

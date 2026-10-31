@@ -25,14 +25,22 @@ pub enum Tramo {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Bloque {
-    Titulo { nivel: u8, tramos: Vec<Tramo> },
+    Titulo {
+        nivel: u8,
+        tramos: Vec<Tramo>,
+    },
     Parrafo(Vec<Tramo>),
     Leyenda(Vec<Tramo>),
-    Lista { ordenada: bool, items: Vec<Vec<Bloque>> },
+    Lista {
+        ordenada: bool,
+        items: Vec<Vec<Bloque>>,
+    },
     Cita(Vec<Bloque>),
     Codigo(String),
     Formula(String),
     Figura(String),
+    /// `\\begin{animacion}…`, entero: lo interpreta quien lo reproduce.
+    Animacion(String),
     Tabla(Vec<Vec<Vec<Tramo>>>),
     Regla,
 }
@@ -465,6 +473,17 @@ impl<'a> Lector<'a> {
                 Some(cuerpo) => vec![Bloque::Figura(format!("\\begin{{{nombre}}}{cuerpo}\\end{{{nombre}}}"))],
                 None => {
                     self.avisar(format!("figura sin cerrar: {nombre}"));
+                    Vec::new()
+                }
+            });
+        }
+        if nombre == "animacion" {
+            return Some(match self.hasta_fin_de(nombre) {
+                Some(cuerpo) => vec![Bloque::Animacion(format!(
+                    "\\begin{{animacion}}{cuerpo}\\end{{animacion}}"
+                ))],
+                None => {
+                    self.avisar("animación sin cerrar".into());
                     Vec::new()
                 }
             });

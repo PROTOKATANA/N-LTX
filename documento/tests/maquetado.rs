@@ -24,6 +24,15 @@ impl Incrustados for Falsos {
         })
     }
 
+    fn caja_de_animacion(&self, _fuente: &str) -> Result<Caja, ErrorComposicion> {
+        Ok(Caja {
+            x: 0.0,
+            y: 0.0,
+            ancho: 100.0,
+            alto: 50.0,
+        })
+    }
+
     fn figura(&self, fuente: &str) -> Result<Composicion, ErrorComposicion> {
         if fuente.contains("rota") {
             return Err(ErrorComposicion("figura rota".into()));
@@ -181,6 +190,19 @@ fn los_acentos_y_las_tildes_tienen_glifo() {
     }
     // solo el espacio no tiene contorno
     assert!(vacios <= 1, "{vacios} vacíos, {con} con contorno");
+}
+
+#[test]
+fn una_animacion_reserva_su_sitio_en_el_flujo() {
+    let e = documento(400.0)
+        .componer("Antes\n\n\\begin{animacion}\\draw (0,0);\\end{animacion}\n\nDespués")
+        .unwrap()
+        .escena;
+    let [zona] = &e.zonas[..] else { panic!("{:?}", e.zonas) };
+    assert_eq!((zona.caja.ancho, zona.caja.alto), (100.0, 50.0));
+    assert!((zona.caja.x - 150.0).abs() < 1e-9, "centrada: {}", zona.caja.x);
+    let despues = glifos(&e).last().unwrap().1;
+    assert!(despues > zona.caja.y + zona.caja.alto, "el texto sigue debajo");
 }
 
 #[test]

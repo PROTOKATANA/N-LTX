@@ -205,6 +205,13 @@ pub struct Caja {
     pub alto: f64,
 }
 
+/// Una animación dentro de una escena: el pintor reproduce `fuente` dentro de `caja`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Zona {
+    pub caja: Caja,
+    pub fuente: String,
+}
+
 /// Lo que hay que pintar. En una fórmula, la línea base es y = 0.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Escena {
@@ -213,6 +220,10 @@ pub struct Escena {
     pub primitivas: Vec<Primitiva>,
     /// El contorno de cada glifo usado, en unidades de su fuente y con la y hacia arriba.
     pub contornos: BTreeMap<GlifoId, Vec<Segmento>>,
+    /// Dónde cae el origen del dibujo. Una figura se desplaza para empezar en su esquina, así que
+    /// dos fotogramas solo coinciden si se restan esto.
+    pub origen: Punto,
+    pub zonas: Vec<Zona>,
 }
 
 /// Una escena y lo que el compositor tuvo que ignorar o aproximar para obtenerla. Sin avisos, la
