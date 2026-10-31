@@ -4,8 +4,7 @@ Motor LaTeX para Flutter sobre la GPU, sin depender de una instalación de TeX. 
 lista neutra de primitivas (glifos, trazados, recortes, grupos) que un pintor convierte en píxeles.
 
 **Estado:** el motor produce la lista para texto, fórmulas, química, física y TikZ, y `ejemplo/` la
-muestra en Flutter con un pintor de referencia sobre Canvas, con animaciones por parámetro. El pintor
-GPU (`pintor/`) ya mueve millones de elementos sobre Vulkan, pero aún no pinta `primitivas`.
+pinta en Flutter sobre Vulkan (`pintor/`), con animaciones por parámetro.
 
 ```
 primitivas/   el contrato: la lista neutra y el trait `Compositor`. Sin dependencias.
