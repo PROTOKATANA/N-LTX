@@ -2625,6 +2625,10 @@ impl Engine {
                 self.open_tikz_scope(o, true)
             }
             n if pgfplots::is_axis(n) => self.begin_axis(n),
+            n if self.piece_environment(n).is_some() => match self.piece_environment(n) {
+                Some((begin, _)) => begin(self, n),
+                None => Ok(()),
+            },
             "groupplot" => self.begin_groupplot(),
             "pgfonlayer" => {
                 let layer = self.argument_string()?;
@@ -2720,6 +2724,11 @@ impl Engine {
         match name {
             "tikzpicture" | "pgfpicture" => self.end_picture(),
             n if pgfplots::is_axis(n) => self.end_axis()?,
+            n if self.piece_environment(n).is_some() => {
+                if let Some((_, end)) = self.piece_environment(n) {
+                    end(self, n)?;
+                }
+            }
             "groupplot" => self.end_groupplot()?,
             "pgfscope" | "pgfviewboxscope" => {
                 self.end_scope();

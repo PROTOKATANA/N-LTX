@@ -6,9 +6,10 @@
 
 use std::any::Any;
 
+use super::coords::Coord;
 use super::{Engine, NATIVE_KEY_BASE};
 use crate::extension::Library;
-use crate::scene::Point;
+use crate::scene::{Point, Segment};
 use crate::tex::{Meaning, Token};
 use crate::Error;
 
@@ -29,6 +30,24 @@ pub type StatementFilterFn = fn(&mut Engine, &str, &Token) -> Option<Result<(), 
 /// the anchors the node has through `local`.
 pub type NodeAnchorFn = fn(&mut Engine, &str, &dyn Fn(&str) -> Option<Point>) -> Option<Point>;
 
+/// A coordinate system a piece knows among many (`axis cs`, `rel axis cs`…), from its name and its
+/// options: `None` if it is not one of its, or it does not apply now.
+pub type CoordinateFallbackFn = fn(&mut Engine, &str, &str) -> Option<Result<Coord, Error>>;
+
+/// What a piece reads in a plain `(x,y)` while it applies (inside an axis): `None` leaves it to the
+/// engine.
+pub type PlainCoordinateFn = fn(&mut Engine, &[String]) -> Option<Result<Point, Error>>;
+
+/// A command in the text of a node that a piece runs as the text is read, in its place among the
+/// others: it gets the tokens and where the command is, and returns where to go on.
+pub type NodeTextFn = fn(&mut Engine, &[Token], usize) -> Result<usize, Error>;
+
+/// One end of an environment of a piece, with its name.
+pub type EnvironmentFn = fn(&mut Engine, &str) -> Result<(), Error>;
+
+/// A decoration a piece does (`soft clip`): from the segments to what replaces them.
+pub type DecorationFn = fn(&mut Engine, &[Segment]) -> Result<Vec<Segment>, Error>;
+
 /// The first id of the commands of the pieces (`Meaning::Native`).
 pub const PIECE_COMMAND_BASE: u16 = 1000;
 
@@ -38,6 +57,12 @@ pub struct Piece {
     pub commands: &'static [(&'static str, CommandFn)],
     pub path_operations: &'static [(&'static str, PathOperationFn)],
     pub coordinate_systems: &'static [(&'static str, CoordinateSystemFn)],
+    pub coordinate_fallbacks: &'static [CoordinateFallbackFn],
+    pub plain_coordinates: &'static [PlainCoordinateFn],
+    pub node_text: &'static [(&'static str, NodeTextFn)],
+    /// Name, begin and end.
+    pub environments: &'static [(&'static str, EnvironmentFn, EnvironmentFn)],
+    pub decorations: &'static [(&'static str, DecorationFn)],
     /// Its commands that read their own input (`\\datavisualization`, data line by line): `\\tikz`
     /// runs them as they come, instead of reading up to the `;` first.
     pub reading_input: &'static [&'static str],
@@ -56,6 +81,11 @@ impl Piece {
         commands: &[],
         path_operations: &[],
         coordinate_systems: &[],
+        coordinate_fallbacks: &[],
+        plain_coordinates: &[],
+        node_text: &[],
+        environments: &[],
+        decorations: &[],
         reading_input: &[],
         statement_filters: &[],
         node_anchors: &[],
@@ -70,6 +100,11 @@ impl Piece {
 pub(super) struct Hooks {
     path_operations: Vec<(&'static str, PathOperationFn)>,
     coordinate_systems: Vec<(&'static str, CoordinateSystemFn)>,
+    coordinate_fallbacks: Vec<CoordinateFallbackFn>,
+    plain_coordinates: Vec<PlainCoordinateFn>,
+    node_text: Vec<(&'static str, NodeTextFn)>,
+    environments: Vec<(&'static str, EnvironmentFn, EnvironmentFn)>,
+    decorations: Vec<(&'static str, DecorationFn)>,
     reading_input: Vec<&'static str>,
     statement_filters: Vec<StatementFilterFn>,
     node_anchors: Vec<NodeAnchorFn>,
@@ -124,6 +159,11 @@ impl Engine {
         }
         self.hooks.path_operations.extend_from_slice(piece.path_operations);
         self.hooks.coordinate_systems.extend_from_slice(piece.coordinate_systems);
+        self.hooks.coordinate_fallbacks.extend_from_slice(piece.coordinate_fallbacks);
+        self.hooks.plain_coordinates.extend_from_slice(piece.plain_coordinates);
+        self.hooks.node_text.extend_from_slice(piece.node_text);
+        self.hooks.environments.extend_from_slice(piece.environments);
+        self.hooks.decorations.extend_from_slice(piece.decorations);
         self.hooks.reading_input.extend_from_slice(piece.reading_input);
         self.hooks.statement_filters.extend_from_slice(piece.statement_filters);
         self.hooks.node_anchors.extend_from_slice(piece.node_anchors);
@@ -138,6 +178,31 @@ impl Engine {
     /// The coordinate system `name` of a piece.
     pub(super) fn coordinate_system_of(&self, name: &str) -> Option<CoordinateSystemFn> {
         self.hooks.coordinate_systems.iter().find(|(n, _)| *n == name).map(|(_, system)| *system)
+    }
+
+    /// The coordinate system `name` of the pieces that know many.
+    pub(super) fn piece_coordinate(&mut self, name: &str, options: &str) -> Option<Result<Coord, Error>> {
+        (0..self.hooks.coordinate_fallbacks.len()).find_map(|i| (self.hooks.coordinate_fallbacks[i])(self, name, options))
+    }
+
+    /// What a piece reads in a plain `(x,y)`.
+    pub(super) fn piece_plain_coordinate(&mut self, parts: &[String]) -> Option<Result<Point, Error>> {
+        (0..self.hooks.plain_coordinates.len()).find_map(|i| (self.hooks.plain_coordinates[i])(self, parts))
+    }
+
+    /// What a piece does with the command `name` in the text of a node.
+    pub fn node_text_command(&self, name: &str) -> Option<NodeTextFn> {
+        self.hooks.node_text.iter().find(|(n, _)| *n == name).map(|(_, command)| *command)
+    }
+
+    /// The two ends of the environment `name` of a piece.
+    pub(super) fn piece_environment(&self, name: &str) -> Option<(EnvironmentFn, EnvironmentFn)> {
+        self.hooks.environments.iter().find(|(n, _, _)| *n == name).map(|(_, begin, end)| (*begin, *end))
+    }
+
+    /// The decoration `name` of a piece.
+    pub(super) fn piece_decoration(&self, name: &str) -> Option<DecorationFn> {
+        self.hooks.decorations.iter().find(|(n, _)| *n == name).map(|(_, decoration)| *decoration)
     }
 
     /// What a piece did with the statement `name`, if it took it.
@@ -219,8 +284,22 @@ mod tests {
             })
         }],
         node_anchors: &[|_, name, local| (name == "probe anchor").then(|| local("center")).flatten()],
+        coordinate_fallbacks: &[|_, name, _| (name == "probefall").then(|| Ok(Coord { p: Point::new(5.0, 0.0), node: None }))],
+        environments: &[(
+            "probeenv",
+            |e, _| {
+                e.tex.define_string("envbegan", "yes", true);
+                Ok(())
+            },
+            |e, _| {
+                e.tex.define_string("envended", "yes", true);
+                Ok(())
+            },
+        )],
+        decorations: &[("probedeco", |_, segs| Ok(segs.iter().rev().cloned().collect()))],
         define: |e| e.tex.define_string("probedefined", "yes", true),
         definitions: || r"\def\probeloaded{yes}".to_string(),
+        ..Piece::EMPTY
     };
 
     #[test]
@@ -245,6 +324,11 @@ mod tests {
         e.run().unwrap();
         assert!(e.tex.warnings.is_empty(), "{:?}", e.tex.warnings);
         assert!((e.nodes["a"].center().x - 3.0).abs() < 1e-9, "its coordinate system ran");
+        e.tex.push_text(r"\begin{probeenv}\end{probeenv}");
+        e.run().unwrap();
+        assert!(e.tex.is_defined("envbegan") && e.tex.is_defined("envended"), "its environment ran");
+        assert_eq!(e.coordinate("probefall cs:x").unwrap().p.x, 5.0, "its coordinate system ran");
+        assert!(e.piece_decoration("probedeco").is_some() && e.piece_decoration("zigzag").is_none());
         e.tex.define_string("probeholds", "yes", true);
         e.tex.push_text(r"\begin{tikzpicture}\coordinate (b) at (1,1);\end{tikzpicture}");
         e.run().unwrap();

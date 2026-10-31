@@ -704,6 +704,9 @@ impl Engine {
     /// with a moveto.
     pub fn decorate_segments(&mut self, segs: &[Segment], existing: Option<Point>) -> Result<Vec<Segment>, Error> {
         let Some(name) = self.st.decoration.name.clone() else { return Ok(segs.to_vec()) };
+        if let Some(decoration) = self.piece_decoration(name.trim()) {
+            return decoration(self, segs);
+        }
         // pgfplots' `soft clip`: the path cut to `soft clip path`
         if name.trim() == "soft clip" {
             let spec = keys::value(&self.tex, "/pgf/decoration/soft clip path").map(|v| tex::tokens_to_string(&v)).unwrap_or_default();
