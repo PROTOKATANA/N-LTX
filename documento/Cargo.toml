@@ -1,0 +1,12 @@
+[package]
+name = "documento"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+primitivas = { path = "../primitivas" }
+cosmic-text = "0.19"
+ttf-parser = "0.25"
+
+[lints]
+workspace = true

@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "formula",
     "primitivas",
+    "documento",
     "adaptador",
     "ejemplo/nativo",
     "motor/tikra/crates/core",
