@@ -125,3 +125,19 @@ fn the_rest() {
         ),
     );
 }
+
+/// A macro the document defines is its own, even with the name of a siunitx command: rewriting
+/// `\\def\\unit{0.7}` left the figure with nothing to draw.
+#[test]
+fn a_macro_the_document_defines_is_not_siunitx() {
+    for code in [
+        r"\def\unit{0.7}\begin{tikzpicture}\draw (0,0) circle (\unit);\end{tikzpicture}",
+        r"\newcommand{\unit}{0.7}\begin{tikzpicture}\draw (0,0) circle (\unit);\end{tikzpicture}",
+    ] {
+        let out = voltik::convert(code).unwrap();
+        assert!(out.svg.contains("<path"), "{code}");
+        assert!(out.warnings.is_empty(), "{code}: {:?}", out.warnings);
+    }
+    // and a name that only starts the same is not the macro
+    assert!(voltik::environments(r"\def\unitx{1}\unit{m}").contains(r"\mathrm{m}"));
+}

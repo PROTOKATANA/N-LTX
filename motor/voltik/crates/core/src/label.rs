@@ -236,7 +236,7 @@ pub fn siunitx(text: &str) -> String {
                 "si" | "unit" | "num" => 1,
                 _ => 0,
             };
-            if args > 0 {
+            if args > 0 && !defined_in(text, name) {
                 if let Some((values, after)) = arguments(&rest[name_end..], args) {
                     let body = match name {
                         // (siunitx leaves out an explicit plus)
@@ -257,6 +257,28 @@ pub fn siunitx(text: &str) -> String {
         rest = &rest[c.len_utf8()..];
     }
     out
+}
+
+/// Whether `text` defines `\\name` itself: then it is the document's macro, not siunitx's
+/// (`\\def\\unit{0.7}` is a length, and rewriting it would leave the figure with nothing to draw).
+fn defined_in(text: &str, name: &str) -> bool {
+    let forms = [
+        "\\def\\",
+        "\\edef\\",
+        "\\gdef\\",
+        "\\xdef\\",
+        "\\let\\",
+        "\\newcommand\\",
+        "\\newcommand{\\",
+        "\\renewcommand\\",
+        "\\renewcommand{\\",
+        "\\providecommand\\",
+        "\\providecommand{\\",
+    ];
+    forms.iter().any(|form| {
+        let wanted = format!("{form}{name}");
+        text.match_indices(&wanted).any(|(i, found)| !text[i + found.len()..].starts_with(|c: char| c.is_ascii_alphabetic()))
+    })
 }
 
 /// A quantity's value as siunitx prints it: no explicit plus, a zero before a bare point.

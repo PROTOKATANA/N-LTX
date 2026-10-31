@@ -757,7 +757,7 @@ pub fn convert_with(code: &str, options: &Options) -> Result<Output, Error> {
 
 /// `circuitikz` environments as the `tikzpicture`s they are, after the options the document gave
 /// the package (`\usepackage[RPvoltages, american]{circuitikz}`) as styles.
-fn environments(code: &str) -> String {
+pub fn environments(code: &str) -> String {
     let code = code.replace("\\begin{circuitikz}", "\\begin{tikzpicture}").replace("\\end{circuitikz}", "\\end{tikzpicture}");
     // siunitx anywhere (`\\SI{12}{\\volt}` in a node's text), in math whether the text is or not
     let code = label::siunitx(&code);
