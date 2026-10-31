@@ -1,0 +1,575 @@
+{
+ "code": "pt-BR",
+ "name": "Português (Brasil)",
+ "decimal": ",",
+ "thousands": ".",
+ "open_interval": true,
+ "written": {
+  "sin": "sen",
+  "tan": "tg",
+  "cot": "cotg",
+  "csc": "cossec",
+  "arcsin": "arcsen",
+  "arctan": "arctg",
+  "sinh": "senh",
+  "gcd": "mdc",
+  "lcm": "mmc"
+ },
+ "fractions": {
+  "numerals": [
+   "",
+   "um",
+   "dois",
+   "três",
+   "quatro",
+   "cinco",
+   "seis",
+   "sete",
+   "oito",
+   "nove",
+   "dez"
+  ],
+  "singular": [
+   "",
+   "",
+   "meio",
+   "terço",
+   "quarto",
+   "quinto",
+   "sexto",
+   "sétimo",
+   "oitavo",
+   "nono",
+   "décimo"
+  ],
+  "plural": [
+   "",
+   "",
+   "meios",
+   "terços",
+   "quartos",
+   "quintos",
+   "sextos",
+   "sétimos",
+   "oitavos",
+   "nonos",
+   "décimos"
+  ]
+ },
+ "speech": {
+  "function_of": "{0} de",
+  "binomial": "{0} escolhe {1}",
+  "fraction_simple": "{0} sobre {1}",
+  "fraction": "fração, {0}, sobre {1}, fim da fração",
+  "sqrt": "raiz quadrada de {0}",
+  "cbrt": "raiz cúbica de {0}",
+  "root_index": "raiz de índice {0} de {1}",
+  "root_end": "fim da raiz",
+  "abs": "módulo de {0}",
+  "abs_long": "módulo de, {0}, fim do módulo",
+  "norm": "norma de {0}",
+  "norm_long": "norma de, {0}, fim da norma",
+  "accent.vector": "vetor {0}",
+  "accent.hat": "{0} chapéu",
+  "accent.bar": "{0} barra",
+  "accent.dot": "{0} ponto",
+  "accent.ddot": "{0} dois pontos",
+  "accent.tilde": "{0} til",
+  "accent.arc": "arco {0}",
+  "arrow.right": "seta para a direita",
+  "arrow.left": "seta para a esquerda",
+  "arrow.both": "seta dupla",
+  "arrow.implies": "implica",
+  "arrow.equals": "igual",
+  "arrow.down": "seta para baixo",
+  "arrow.up": "seta para cima",
+  "canceled": "{0} cancelado",
+  "circled": "{0} circulado",
+  "angle": "ângulo {0}",
+  "boxed": "{0} em uma caixa",
+  "list_and": "e",
+  "with_above": "com {0} em cima",
+  "with_below": "com {0} embaixo",
+  "long_division": "divisão armada de {0} por {1}: quociente {2}, resto {3}",
+  "column_arithmetic": "conta armada: {0} {1} {2} igual a {3}",
+  "big_from_to": "{0} de {1} até {2} de",
+  "big_over": "{0} sobre {1} de",
+  "big_to": "{0} até {1} de",
+  "lim_as": "limite com {0} de",
+  "tending_to": "tendendo a",
+  "inverse": "inversa de {0}",
+  "inverse_trig": "arco {0}",
+  "log_base": "na base {0}",
+  "sub": "índice {0}",
+  "squared": "ao quadrado",
+  "cubed": "ao cubo",
+  "prime": "linha",
+  "double_prime": "duas linhas",
+  "degrees": "graus",
+  "from_right": "pela direita",
+  "from_left": "pela esquerda",
+  "power": "elevado a {0}",
+  "power_long": "elevado a, {0}, fim do expoente",
+  "matrix": "matriz {0} por {1}",
+  "row": "linha {0}",
+  "case": "caso {0}",
+  "determinant": "determinante",
+  "cases": "casos",
+  "diagram": "diagrama",
+  "diagram_arrow": "seta de {0} para {1}",
+  "chem.structure": "estrutura de {0}",
+  "chem.ring": "com 1 anel",
+  "chem.rings": "com {0} anéis",
+  "chem.aromatic_one": "com 1 anel aromático",
+  "chem.aromatic": "com {0} anéis aromáticos",
+  "chem.charge": "carga {0}",
+  "chem.over": "{0} sobre a seta",
+  "chem.under": "{0} sob a seta",
+  "chem.forward": "reage formando",
+  "chem.backward": "é formado a partir de",
+  "chem.equilibrium": "em equilíbrio com",
+  "chem.equilibrium_right": "em equilíbrio, deslocado para os produtos, com",
+  "chem.equilibrium_left": "em equilíbrio, deslocado para os reagentes, com",
+  "chem.resonance": "em ressonância com",
+  "chem.retro": "é preparado a partir de",
+  "chem.no_reaction": "não reage formando",
+  "chem.move": "seta curva: um par de elétrons vai de {0} para {1}",
+  "chem.move_single": "seta curva: um elétron vai de {0} para {1}",
+  "capital": "{0} maiúsculo",
+  "negative": "menos",
+  "open_interval": "abre intervalo",
+  "close_interval": "fecha intervalo",
+  "remainder": "resto",
+  "fn.sin": "seno",
+  "fn.cos": "cosseno",
+  "fn.tan": "tangente",
+  "fn.cot": "cotangente",
+  "fn.sec": "secante",
+  "fn.csc": "cossecante",
+  "fn.log": "logaritmo",
+  "fn.ln": "logaritmo natural",
+  "fn.lim": "limite",
+  "fn.det": "determinante",
+  "fn.max": "máximo",
+  "fn.min": "mínimo",
+  "fn.gcd": "mdc",
+  "fn.lcm": "mmc",
+  "op.+": "mais",
+  "op.−": "menos",
+  "op.–": "a",
+  "op.±": "mais ou menos",
+  "op.∓": "menos ou mais",
+  "op.×": "vezes",
+  "op./": "dividido por",
+  "op.=": "é igual a",
+  "op.<": "é menor que",
+  "op.>": "é maior que",
+  "op.≤": "é menor ou igual a",
+  "op.≥": "é maior ou igual a",
+  "op.≠": "é diferente de",
+  "op.≈": "é aproximadamente",
+  "op.≡": "é côngruo a",
+  "op.∝": "é proporcional a",
+  "op.→": "tende a",
+  "op.⇒": "implica",
+  "op.⇔": "se e somente se",
+  "op.⇌": "em equilíbrio com",
+  "op.∈": "pertence a",
+  "op.∉": "não pertence a",
+  "op.⊂": "está contido em",
+  "op.⊆": "está contido ou é igual a",
+  "op.∪": "união",
+  "op.∩": "interseção",
+  "op.∞": "infinito",
+  "op.∂": "derivada parcial",
+  "op.∇": "nabla",
+  "op.∀": "para todo",
+  "op.∃": "existe",
+  "op.∅": "conjunto vazio",
+  "op.(": "abre parênteses",
+  "op.)": "fecha parênteses",
+  "op.[": "abre colchetes",
+  "op.]": "fecha colchetes",
+  "op.{": "abre chaves",
+  "op.}": "fecha chaves",
+  "op.,": "vírgula",
+  "op.;": "ponto e vírgula",
+  "op.:": "dois-pontos",
+  "op.!": "fatorial",
+  "op.|": "barra",
+  "op.°": "graus",
+  "op.%": "por cento",
+  "op.…": "e assim por diante",
+  "op.∠": "ângulo",
+  "op.△": "triângulo",
+  "op.⊥": "é perpendicular a",
+  "op.∥": "é paralelo a",
+  "op.′": "linha",
+  "big.∑": "somatório",
+  "big.∏": "produtório",
+  "big.∫": "integral",
+  "big.∬": "integral dupla",
+  "big.∭": "integral tripla",
+  "big.∮": "integral de linha",
+  "big.⋃": "união",
+  "big.⋂": "interseção",
+  "big.other": "operador",
+  "greek.α": "alfa",
+  "greek.β": "beta",
+  "greek.γ": "gama",
+  "greek.δ": "delta",
+  "greek.ε": "épsilon",
+  "greek.ζ": "zeta",
+  "greek.η": "eta",
+  "greek.θ": "teta",
+  "greek.κ": "kappa",
+  "greek.λ": "lambda",
+  "greek.μ": "mi",
+  "greek.ν": "ni",
+  "greek.ξ": "csi",
+  "greek.π": "pi",
+  "greek.ρ": "rô",
+  "greek.σ": "sigma",
+  "greek.τ": "tau",
+  "greek.φ": "fi",
+  "greek.χ": "qui",
+  "greek.ψ": "psi",
+  "greek.ω": "ômega"
+ },
+ "units": {
+  "per": "por",
+  "singular": "below_two",
+  "prefixes": {
+   "yotta": "iota",
+   "zetta": "zeta",
+   "exa": "exa",
+   "peta": "peta",
+   "tera": "tera",
+   "giga": "giga",
+   "mega": "mega",
+   "kilo": "quilo",
+   "hecto": "hecto",
+   "deca": "deca",
+   "deci": "deci",
+   "centi": "centi",
+   "milli": "mili",
+   "micro": "micro",
+   "nano": "nano",
+   "pico": "pico",
+   "femto": "femto",
+   "atto": "ato",
+   "zepto": "zepto",
+   "yocto": "iocto"
+  },
+  "names": {
+   "meter": [
+    "metro",
+    "metros"
+   ],
+   "second": [
+    "segundo",
+    "segundos"
+   ],
+   "gram": [
+    "grama",
+    "gramas"
+   ],
+   "kilogram": [
+    "quilograma",
+    "quilogramas"
+   ],
+   "ampere": [
+    "ampere",
+    "amperes"
+   ],
+   "kelvin": [
+    "kelvin",
+    "kelvins"
+   ],
+   "mole": [
+    "mol",
+    "mols"
+   ],
+   "candela": [
+    "candela",
+    "candelas"
+   ],
+   "newton": [
+    "newton",
+    "newtons"
+   ],
+   "joule": [
+    "joule",
+    "joules"
+   ],
+   "watt": [
+    "watt",
+    "watts"
+   ],
+   "pascal": [
+    "pascal",
+    "pascals"
+   ],
+   "hertz": [
+    "hertz",
+    "hertz"
+   ],
+   "coulomb": [
+    "coulomb",
+    "coulombs"
+   ],
+   "volt": [
+    "volt",
+    "volts"
+   ],
+   "ohm": [
+    "ohm",
+    "ohms"
+   ],
+   "farad": [
+    "farad",
+    "farads"
+   ],
+   "tesla": [
+    "tesla",
+    "teslas"
+   ],
+   "weber": [
+    "weber",
+    "webers"
+   ],
+   "henry": [
+    "henry",
+    "henrys"
+   ],
+   "siemens": [
+    "siemens",
+    "siemens"
+   ],
+   "liter": [
+    "litro",
+    "litros"
+   ],
+   "hour": [
+    "hora",
+    "horas"
+   ],
+   "minute": [
+    "minuto",
+    "minutos"
+   ],
+   "day": [
+    "dia",
+    "dias"
+   ],
+   "degreeCelsius": [
+    "grau Celsius",
+    "graus Celsius"
+   ],
+   "degree": [
+    "grau",
+    "graus"
+   ],
+   "electronvolt": [
+    "elétron-volt",
+    "elétrons-volt"
+   ],
+   "calorie": [
+    "caloria",
+    "calorias"
+   ],
+   "bar": [
+    "bar",
+    "bars"
+   ],
+   "atm": [
+    "atmosfera",
+    "atmosferas"
+   ],
+   "percent": [
+    "por cento",
+    "por cento"
+   ],
+   "mmHg": [
+    "milímetro de mercúrio",
+    "milímetros de mercúrio"
+   ],
+   "hectare": [
+    "hectare",
+    "hectares"
+   ],
+   "tonne": [
+    "tonelada",
+    "toneladas"
+   ],
+   "angstrom": [
+    "angstrom",
+    "angstroms"
+   ],
+   "radian": [
+    "radiano",
+    "radianos"
+   ],
+   "steradian": [
+    "esferorradiano",
+    "esferorradianos"
+   ],
+   "lumen": [
+    "lúmen",
+    "lumens"
+   ],
+   "lux": [
+    "lux",
+    "lux"
+   ],
+   "becquerel": [
+    "becquerel",
+    "becquerels"
+   ],
+   "gray": [
+    "gray",
+    "grays"
+   ],
+   "sievert": [
+    "sievert",
+    "sieverts"
+   ],
+   "katal": [
+    "katal",
+    "katals"
+   ],
+   "dalton": [
+    "dalton",
+    "daltons"
+   ],
+   "atomicmassunit": [
+    "unidade de massa atômica",
+    "unidades de massa atômica"
+   ],
+   "astronomicalunit": [
+    "unidade astronômica",
+    "unidades astronômicas"
+   ],
+   "arcminute": [
+    "minuto de arco",
+    "minutos de arco"
+   ],
+   "arcsecond": [
+    "segundo de arco",
+    "segundos de arco"
+   ],
+   "bel": [
+    "bel",
+    "bels"
+   ],
+   "neper": [
+    "neper",
+    "nepers"
+   ],
+   "barn": [
+    "barn",
+    "barns"
+   ],
+   "knot": [
+    "nó",
+    "nós"
+   ],
+   "nauticalmile": [
+    "milha náutica",
+    "milhas náuticas"
+   ],
+   "bit": [
+    "bit",
+    "bits"
+   ],
+   "byte": [
+    "byte",
+    "bytes"
+   ],
+   "molar": [
+    "molar",
+    "molares"
+   ],
+   "torr": [
+    "torr",
+    "torr"
+   ]
+  },
+  "compounds": {
+   "kilometer": [
+    "quilômetro",
+    "quilômetros"
+   ],
+   "hectometer": [
+    "hectômetro",
+    "hectômetros"
+   ],
+   "decameter": [
+    "decâmetro",
+    "decâmetros"
+   ],
+   "decimeter": [
+    "decímetro",
+    "decímetros"
+   ],
+   "centimeter": [
+    "centímetro",
+    "centímetros"
+   ],
+   "millimeter": [
+    "milímetro",
+    "milímetros"
+   ],
+   "micrometer": [
+    "micrômetro",
+    "micrômetros"
+   ],
+   "nanometer": [
+    "nanômetro",
+    "nanômetros"
+   ],
+   "picometer": [
+    "picômetro",
+    "picômetros"
+   ],
+   "millisecond": [
+    "milissegundo",
+    "milissegundos"
+   ],
+   "microsecond": [
+    "microssegundo",
+    "microssegundos"
+   ],
+   "nanosecond": [
+    "nanossegundo",
+    "nanossegundos"
+   ],
+   "picosecond": [
+    "picossegundo",
+    "picossegundos"
+   ],
+   "femtosecond": [
+    "femtossegundo",
+    "femtossegundos"
+   ]
+  }
+ },
+ "double_struck": {
+  "letter": "{0} duplo",
+  "sets": {
+   "N": "os naturais",
+   "Z": "os inteiros",
+   "Q": "os racionais",
+   "R": "os reais",
+   "C": "os complexos"
+  },
+  "contractions": {
+   "a os": "aos",
+   "de os": "dos",
+   "em os": "nos"
+  }
+ },
+ "optional": {
+  "dot_product": "escalar"
+ }
+}

@@ -1,0 +1,34 @@
+[package]
+name = "mathra"
+description = "Equation converter: math LaTeX (chemfig chemistry and commutative diagrams included) to a tree of meaning and accessible SVG, with speech in 16 languages and braille."
+version.workspace = true
+edition.workspace = true
+# the code is MIT OR Apache-2.0; the embedded STIX Two Math font is OFL-1.1, and Latin Modern Math
+# (built only with the `latin-modern` feature) is under the GUST Font License, which SPDX does not list:
+# its text is in fonts/
+license = "(MIT OR Apache-2.0) AND OFL-1.1"
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+keywords = ["latex", "math", "svg", "accessibility", "equation"]
+categories = ["text-processing", "rendering", "accessibility", "mathematics", "science"]
+include = ["src/**", "fonts/**", "Cargo.toml"]
+
+[features]
+default = ["chem"]
+# structural chemistry (chemfig structures, reaction schemes, mechanisms): spec/chemistry.md
+chem = []
+# Latin Modern Math (the OpenType Computer Modern, GUST Font License) as a second font,
+# chosen with `convert_in_font` and `typeset_in_font`: some 430 KB more in the binary
+latin-modern = []
+
+[dependencies]
+ttf-parser = "0.25"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# MathML input: a small XML parser with no dependencies of its own
+roxmltree = "0.20"
+
+[dev-dependencies]
+# tests/fonts.rs reads the original fonts in tools/fonts to check the embedded subsets against them
+ttf-parser = "0.25"

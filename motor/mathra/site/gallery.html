@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mathra · Gallery</title>
+<meta name="description" content="Equations mathra draws, by group: famous and big equations, structures, science packages, structural chemistry, commutative diagrams, languages and notations. Drawn live in your browser.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#fbf9f4">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <a class="name" href="index.html">mathra</a>
+    <nav aria-label="Site">
+      <a href="index.html#playground">Playground</a>
+      <a href="gallery.html" aria-current="page">Gallery</a>
+      <a href="changelog.html">Evolution</a>
+      <a href="docs.html">Docs</a>
+      <a href="reference.html">Reference</a>
+      <a href="philosophy.html">Philosophy</a>
+      <a href="https://github.com/matheusmota-dev-br/mathra">GitHub</a>
+      <button class="theme" id="theme" type="button" aria-label="Toggle dark mode">◐</button>
+    </nav>
+  </div>
+
+  <header class="ref-head">
+    <h1>Gallery</h1>
+    <p>What mathra draws, by group. Open a group to see its equations, drawn live in your browser by the same WebAssembly as the playground; click an equation to open it there. The same equations are in the <a href="https://github.com/matheusmota-dev-br/mathra#examples">README</a>, and the test suite checks that every one converts in strict mode.</p>
+  </header>
+
+  <main class="groups" id="groups"><p class="empty">Loading…</p></main>
+
+  <footer>
+    <span>mathra · MIT or Apache-2.0 · STIX Two Math font under OFL-1.1</span>
+    <span><a href="https://github.com/sponsors/matheusmota-dev-br">Sponsor mathra</a> · <a href="https://github.com/matheusmota-dev-br/mathra">github.com/matheusmota-dev-br/mathra</a></span>
+  </footer>
+</div>
+
+<script src="pkg/mathra_wasm.js"></script>
+<script src="pkg/gallery_data.js"></script>
+<script src="animate.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const escape = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const INPUT_NAMES = { latex: "LaTeX", mathml: "MathML", asciimath: "AsciiMath" };
+  // an equation wider than this (in em) takes two columns
+  const WIDE_EM = 15;
+  let render = null;
+
+  function convert(src, loc, input, animate = false) {
+    return JSON.parse(render(src, loc, true, false, input, null, animate, false));
+  }
+
+  function tryLink(row) {
+    const p = new URLSearchParams({ tex: row.tex });
+    if (row.locale !== "en") p.set("locale", row.locale);
+    if (row.input && row.input !== "latex") p.set("input", row.input);
+    return `index.html#${p}`;
+  }
+
+  // the equations of a group, drawn the first time it opens
+  function tiles(group) {
+    return group.rows.map((row, i) => {
+      const input = row.input || "latex";
+      let svg;
+      try {
+        svg = convert(row.tex, row.locale, input).svg;
+      } catch (e) {
+        svg = `<span class="empty">${escape(String(e.message ?? e))}</span>`;
+      }
+      const width = parseFloat((svg.match(/width="([\d.]+)em"/) || [])[1] || "0");
+      const tag = [row.locale === "en" ? "" : row.locale, input === "latex" ? "" : INPUT_NAMES[input]].filter(Boolean).join(" · ");
+      const link = escape(tryLink(row));
+      return `<div class="card tile${width > WIDE_EM ? " wide" : ""}" data-row="${i}"><a class="eq" href="${link}" title="Open in the playground">${svg}</a>` +
+        `<a class="cap" href="${link}"><span>${escape(row.caption)}</span><span>${escape(tag)}</span></a>` +
+        `<div class="tile-actions"><button class="button" type="button" data-act="play">▶ Animate</button>` +
+        `<button class="button" type="button" data-act="gif">GIF</button>` +
+        `<button class="button" type="button" data-act="animated">Animated SVG</button></div></div>`;
+    }).join("");
+  }
+
+  function save(blob, name) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 0);
+  }
+
+  // the writing animation of each tile: played over and over, or saved as a GIF or an animated SVG
+  function animateTiles(body, group) {
+    for (const card of body.querySelectorAll(".tile")) {
+      const row = group.rows[Number(card.dataset.row)];
+      const eq = card.querySelector(".eq");
+      const still = eq.innerHTML;
+      const name = row.name || group.id;
+      let animated = null, stop = null;
+      const svg = () => (animated ??= convert(row.tex, row.locale, row.input || "latex", true).svg);
+      const play = card.querySelector('[data-act="play"]');
+      play.onclick = () => {
+        if (stop) { stop(); stop = null; play.textContent = "▶ Animate"; return; }
+        stop = mathraAnimation.loop(eq, svg(), still);
+        play.textContent = "■ Stop";
+      };
+      card.querySelector('[data-act="animated"]').onclick = () => save(new Blob([mathraAnimation.withControls(svg())], { type: "image/svg+xml" }), `${name}-animated.svg`);
+      const gif = card.querySelector('[data-act="gif"]');
+      gif.onclick = async () => {
+        if (gif.disabled) return;
+        gif.disabled = true;
+        try {
+          const bytes = await mathraAnimation.gif(svg(), { progress: (p) => (gif.textContent = `${Math.round(p * 100)}%`) });
+          save(new Blob([bytes], { type: "image/gif" }), `${name}.gif`);
+        } catch (e) {
+          alert(`Could not make the GIF: ${String(e.message ?? e)}`);
+        } finally {
+          gif.disabled = false;
+          gif.textContent = "GIF";
+        }
+      };
+    }
+  }
+
+  function toggle(card, group, open) {
+    const button = card.querySelector(".group-head");
+    const body = card.querySelector(".group-body");
+    button.setAttribute("aria-expanded", String(open));
+    card.classList.toggle("open", open);
+    body.hidden = !open;
+    if (open && !body.dataset.drawn) {
+      body.innerHTML = `<div class="gallery">${tiles(group)}</div>`;
+      animateTiles(body, group);
+      body.dataset.drawn = "1";
+    }
+  }
+
+  function draw() {
+    $("groups").innerHTML = MATHRA_GALLERY.map((g) => `
+      <div class="card group" id="${escape(g.id)}">
+        <button class="group-head" type="button" aria-expanded="false" aria-controls="${escape(g.id)}-body">
+          <span class="group-title">${escape(g.title)}</span>
+          <span class="group-intro">${escape(g.intro)}</span>
+          <span class="group-count">${g.rows.length} equations</span>
+        </button>
+        <div class="group-body" id="${escape(g.id)}-body" hidden></div>
+      </div>`).join("");
+    for (const g of MATHRA_GALLERY) {
+      const card = $(g.id);
+      card.querySelector(".group-head").onclick = () => {
+        const open = !card.classList.contains("open");
+        toggle(card, g, open);
+        history.replaceState(null, "", open ? `#${g.id}` : location.pathname);
+        if (open) card.scrollIntoView({ block: "nearest" });
+      };
+    }
+    // a link to a group (gallery.html#chemistry) opens it
+    const wanted = MATHRA_GALLERY.find((g) => g.id === location.hash.slice(1));
+    if (wanted) {
+      toggle($(wanted.id), wanted, true);
+      requestAnimationFrame(() => $(wanted.id).scrollIntoView());
+    }
+  }
+
+  function wasmSource() {
+    if (location.protocol !== "file:") return Promise.resolve("pkg/mathra_wasm_bg.wasm");
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "pkg/mathra_wasm_bytes.js";
+      s.onload = () => resolve(Uint8Array.from(atob(MATHRA_WASM_BASE64), (c) => c.charCodeAt(0)));
+      s.onerror = () => reject(new Error("pkg/mathra_wasm_bytes.js not found: run site/build.sh"));
+      document.head.append(s);
+    });
+  }
+
+  if (typeof wasm_bindgen === "undefined" || typeof MATHRA_GALLERY === "undefined") {
+    $("groups").innerHTML = '<p class="empty">pkg/ not found: run <code>site/build.sh</code>.</p>';
+    return;
+  }
+  wasmSource()
+    .then((module_or_path) => wasm_bindgen({ module_or_path }))
+    .then(() => {
+      render = wasm_bindgen.render;
+      draw();
+    })
+    .catch((e) => { $("groups").innerHTML = `<p class="empty">Could not load WebAssembly: ${escape(String(e.message ?? e))}</p>`; });
+})();
+</script>
+</body>
+</html>

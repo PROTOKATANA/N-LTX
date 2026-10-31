@@ -1,0 +1,4 @@
+#!/bin/sh
+# The wasm, npm and Python checks before each push, the slow part of scripts/check.sh.
+# Skip once with `git push --no-verify`.
+exec "$(git rev-parse --show-toplevel)/scripts/check.sh" wasm python

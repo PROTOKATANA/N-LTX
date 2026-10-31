@@ -1,0 +1,13 @@
+{
+  "name": "mathra-compare",
+  "private": true,
+  "description": "mathra next to KaTeX and MathJax on the same equations",
+  "scripts": {
+    "build": "cargo build -p mathra-wasm --profile wasm --target wasm32-unknown-unknown && wasm-bindgen --target nodejs --no-typescript --out-dir pkg ../target/wasm32-unknown-unknown/wasm/mathra_wasm.wasm",
+    "compare": "npm run build && node compare.mjs"
+  },
+  "dependencies": {
+    "katex": "0.16.22",
+    "mathjax-full": "3.2.2"
+  }
+}

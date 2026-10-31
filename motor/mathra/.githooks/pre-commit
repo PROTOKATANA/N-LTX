@@ -1,0 +1,4 @@
+#!/bin/sh
+# fmt, clippy and the Rust tests before each commit. Enable once with `git config core.hooksPath .githooks`;
+# skip once with `git commit --no-verify`.
+exec "$(git rev-parse --show-toplevel)/scripts/check.sh" rust

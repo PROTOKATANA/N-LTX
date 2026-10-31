@@ -1,0 +1,13 @@
+# Not part of the workspace or of any package: a review tool, run by hand (see README.md).
+[package]
+name = "braille-compare"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+mathcat = "=0.7.7-alpha.1"
+mathra = { path = "../../crates/core" }
+serde_json = "1"

@@ -1,0 +1,12 @@
+/target
+*.so
+*.pyd
+*.whl
+__pycache__/
+/crates/python/.venv
+/crates/wasm/pkg
+*.profraw
+/site/pkg
+**/.DS_Store
+.env
+.env.*

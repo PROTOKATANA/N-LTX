@@ -1,0 +1,1544 @@
+{
+ "asciimath": [
+  {
+   "id": "am-operations",
+   "title": "Operation symbols",
+   "rows": [
+    {
+     "am": "a + b",
+     "tex": "a + b"
+    },
+    {
+     "am": "a - b",
+     "tex": "a - b"
+    },
+    {
+     "am": "a * b",
+     "tex": "a \\cdot b"
+    },
+    {
+     "am": "a ** b",
+     "tex": "a \\ast b"
+    },
+    {
+     "am": "a *** b",
+     "tex": "a \\star b"
+    },
+    {
+     "am": "a // b",
+     "tex": "a / b"
+    },
+    {
+     "am": "A \\\\ B",
+     "tex": "A \\backslash B"
+    },
+    {
+     "am": "a xx b",
+     "tex": "a \\times b"
+    },
+    {
+     "am": "a -: b",
+     "tex": "a \\div b"
+    },
+    {
+     "am": "A |>< B",
+     "tex": "A \\ltimes B"
+    },
+    {
+     "am": "A ><| B",
+     "tex": "A \\rtimes B"
+    },
+    {
+     "am": "A |><| B",
+     "tex": "A \\bowtie B"
+    },
+    {
+     "am": "f @ g",
+     "tex": "f \\circ g"
+    },
+    {
+     "am": "a o+ b",
+     "tex": "a \\oplus b"
+    },
+    {
+     "am": "a ox b",
+     "tex": "a \\otimes b"
+    },
+    {
+     "am": "a o. b",
+     "tex": "a \\odot b"
+    },
+    {
+     "am": "sum_(i=1)^n i",
+     "tex": "\\sum_{i=1}^n i"
+    },
+    {
+     "am": "prod_(i=1)^n i",
+     "tex": "\\prod_{i=1}^n i"
+    },
+    {
+     "am": "p ^^ q",
+     "tex": "p \\wedge q"
+    },
+    {
+     "am": "^^^_(i) p_i",
+     "tex": "\\bigwedge_{i} p_i"
+    },
+    {
+     "am": "p vv q",
+     "tex": "p \\vee q"
+    },
+    {
+     "am": "vvv_(i) p_i",
+     "tex": "\\bigvee_{i} p_i"
+    },
+    {
+     "am": "A nn B",
+     "tex": "A \\cap B"
+    },
+    {
+     "am": "nnn_(i) A_i",
+     "tex": "\\bigcap_{i} A_i"
+    },
+    {
+     "am": "A uu B",
+     "tex": "A \\cup B"
+    },
+    {
+     "am": "uuu_(i) A_i",
+     "tex": "\\bigcup_{i} A_i"
+    }
+   ]
+  },
+  {
+   "id": "am-misc",
+   "title": "Miscellaneous symbols",
+   "rows": [
+    {
+     "am": "2/3",
+     "tex": "\\frac{2}{3}"
+    },
+    {
+     "am": "2^3",
+     "tex": "2^3"
+    },
+    {
+     "am": "sqrt x",
+     "tex": "\\sqrt{x}"
+    },
+    {
+     "am": "root(3)(x)",
+     "tex": "\\sqrt[3]{x}"
+    },
+    {
+     "am": "int f",
+     "tex": "\\int f"
+    },
+    {
+     "am": "oint f",
+     "tex": "\\oint f"
+    },
+    {
+     "am": "del f",
+     "tex": "\\partial f"
+    },
+    {
+     "am": "grad f",
+     "tex": "\\nabla f"
+    },
+    {
+     "am": "a +- b",
+     "tex": "a \\pm b"
+    },
+    {
+     "am": "O/",
+     "tex": "\\emptyset"
+    },
+    {
+     "am": "oo",
+     "tex": "\\infty"
+    },
+    {
+     "am": "aleph",
+     "tex": "\\aleph"
+    },
+    {
+     "am": ":.",
+     "tex": "\\therefore"
+    },
+    {
+     "am": ":'",
+     "tex": "\\because"
+    },
+    {
+     "am": "1, 2, ..., n",
+     "tex": "1, 2, \\ldots, n"
+    },
+    {
+     "am": "1 + cdots + n",
+     "tex": "1 + \\cdots + n"
+    },
+    {
+     "am": "vdots",
+     "tex": "\\vdots"
+    },
+    {
+     "am": "ddots",
+     "tex": "\\ddots"
+    },
+    {
+     "am": "a\\ b",
+     "tex": "a\\ b"
+    },
+    {
+     "am": "a quad b",
+     "tex": "a \\quad b"
+    },
+    {
+     "am": "/_ ABC",
+     "tex": "\\angle ABC"
+    },
+    {
+     "am": "frown",
+     "tex": "\\frown"
+    },
+    {
+     "am": "/_\\ ABC",
+     "tex": "\\triangle ABC"
+    },
+    {
+     "am": "diamond",
+     "tex": "\\diamond"
+    },
+    {
+     "am": "square",
+     "tex": "\\square"
+    },
+    {
+     "am": "|__ x __|",
+     "tex": "\\lfloor x \\rfloor"
+    },
+    {
+     "am": "|~ x ~|",
+     "tex": "\\lceil x \\rceil"
+    },
+    {
+     "am": "CC",
+     "tex": "\\mathbb{C}"
+    },
+    {
+     "am": "NN",
+     "tex": "\\mathbb{N}"
+    },
+    {
+     "am": "QQ",
+     "tex": "\\mathbb{Q}"
+    },
+    {
+     "am": "RR",
+     "tex": "\\mathbb{R}"
+    },
+    {
+     "am": "ZZ",
+     "tex": "\\mathbb{Z}"
+    },
+    {
+     "am": "\"hi\"",
+     "tex": "\\text{hi}"
+    }
+   ]
+  },
+  {
+   "id": "am-relations",
+   "title": "Relation symbols",
+   "rows": [
+    {
+     "am": "a = b",
+     "tex": "a = b"
+    },
+    {
+     "am": "a != b",
+     "tex": "a \\ne b"
+    },
+    {
+     "am": "a < b",
+     "tex": "a < b"
+    },
+    {
+     "am": "a > b",
+     "tex": "a > b"
+    },
+    {
+     "am": "a <= b",
+     "tex": "a \\le b"
+    },
+    {
+     "am": "a >= b",
+     "tex": "a \\ge b"
+    },
+    {
+     "am": "a mlt b",
+     "tex": "a \\ll b"
+    },
+    {
+     "am": "a mgt b",
+     "tex": "a \\gg b"
+    },
+    {
+     "am": "a -< b",
+     "tex": "a \\prec b"
+    },
+    {
+     "am": "a -<= b",
+     "tex": "a \\preceq b"
+    },
+    {
+     "am": "a >- b",
+     "tex": "a \\succ b"
+    },
+    {
+     "am": "a >-= b",
+     "tex": "a \\succeq b"
+    },
+    {
+     "am": "x in A",
+     "tex": "x \\in A"
+    },
+    {
+     "am": "x !in A",
+     "tex": "x \\notin A"
+    },
+    {
+     "am": "A sub B",
+     "tex": "A \\subset B"
+    },
+    {
+     "am": "A sup B",
+     "tex": "A \\supset B"
+    },
+    {
+     "am": "A sube B",
+     "tex": "A \\subseteq B"
+    },
+    {
+     "am": "A supe B",
+     "tex": "A \\supseteq B"
+    },
+    {
+     "am": "a -= b",
+     "tex": "a \\equiv b"
+    },
+    {
+     "am": "a ~= b",
+     "tex": "a \\cong b"
+    },
+    {
+     "am": "a ~~ b",
+     "tex": "a \\approx b"
+    },
+    {
+     "am": "a ~ b",
+     "tex": "a \\sim b"
+    },
+    {
+     "am": "a prop b",
+     "tex": "a \\propto b"
+    }
+   ]
+  },
+  {
+   "id": "am-logic",
+   "title": "Logical symbols",
+   "rows": [
+    {
+     "am": "p and q",
+     "tex": "p \\text{ and } q"
+    },
+    {
+     "am": "p or q",
+     "tex": "p \\text{ or } q"
+    },
+    {
+     "am": "not p",
+     "tex": "\\neg p"
+    },
+    {
+     "am": "p => q",
+     "tex": "p \\implies q"
+    },
+    {
+     "am": "p if q",
+     "tex": "p \\text{ if } q"
+    },
+    {
+     "am": "p <=> q",
+     "tex": "p \\iff q"
+    },
+    {
+     "am": "AA x",
+     "tex": "\\forall x"
+    },
+    {
+     "am": "EE x",
+     "tex": "\\exists x"
+    },
+    {
+     "am": "_|_",
+     "tex": "\\bot"
+    },
+    {
+     "am": "TT",
+     "tex": "\\top"
+    },
+    {
+     "am": "A |-- B",
+     "tex": "A \\vdash B"
+    },
+    {
+     "am": "A |== B",
+     "tex": "A \\models B"
+    }
+   ]
+  },
+  {
+   "id": "am-grouping",
+   "title": "Grouping brackets",
+   "rows": [
+    {
+     "am": "(x)",
+     "tex": "\\left(x\\right)"
+    },
+    {
+     "am": "[x]",
+     "tex": "\\left[x\\right]"
+    },
+    {
+     "am": "{x}",
+     "tex": "\\left\\{x\\right\\}"
+    },
+    {
+     "am": "(:x, y:)",
+     "tex": "\\left\\langle x, y \\right\\rangle"
+    },
+    {
+     "am": "<<x, y>>",
+     "tex": "\\left\\langle x, y \\right\\rangle"
+    },
+    {
+     "am": "{: x )",
+     "tex": "\\left. x \\right)"
+    },
+    {
+     "am": "( x :}",
+     "tex": "\\left( x \\right."
+    },
+    {
+     "am": "abs(x)",
+     "tex": "\\left|x\\right|"
+    },
+    {
+     "am": "floor(x)",
+     "tex": "\\left\\lfloor x \\right\\rfloor"
+    },
+    {
+     "am": "ceil(x)",
+     "tex": "\\left\\lceil x \\right\\rceil"
+    },
+    {
+     "am": "norm(vec x)",
+     "tex": "\\left\\| \\vec{x} \\right\\|"
+    },
+    {
+     "am": "(a, b]",
+     "tex": "\\left(a, b\\right]"
+    }
+   ]
+  },
+  {
+   "id": "am-arrows",
+   "title": "Arrows",
+   "rows": [
+    {
+     "am": "uarr",
+     "tex": "\\uparrow"
+    },
+    {
+     "am": "darr",
+     "tex": "\\downarrow"
+    },
+    {
+     "am": "rarr",
+     "tex": "\\rightarrow"
+    },
+    {
+     "am": "x -> y",
+     "tex": "x \\to y"
+    },
+    {
+     "am": "A >-> B",
+     "tex": "A \\rightarrowtail B"
+    },
+    {
+     "am": "A ->> B",
+     "tex": "A \\twoheadrightarrow B"
+    },
+    {
+     "am": "x |-> y",
+     "tex": "x \\mapsto y"
+    },
+    {
+     "am": "larr",
+     "tex": "\\leftarrow"
+    },
+    {
+     "am": "harr",
+     "tex": "\\leftrightarrow"
+    },
+    {
+     "am": "rArr",
+     "tex": "\\Rightarrow"
+    },
+    {
+     "am": "lArr",
+     "tex": "\\Leftarrow"
+    },
+    {
+     "am": "hArr",
+     "tex": "\\Leftrightarrow"
+    }
+   ]
+  },
+  {
+   "id": "am-accents",
+   "title": "Accents",
+   "rows": [
+    {
+     "am": "hat x",
+     "tex": "\\hat{x}"
+    },
+    {
+     "am": "bar x",
+     "tex": "\\overline{x}"
+    },
+    {
+     "am": "ul x",
+     "tex": "\\underline{x}"
+    },
+    {
+     "am": "vec x",
+     "tex": "\\vec{x}"
+    },
+    {
+     "am": "tilde x",
+     "tex": "\\tilde{x}"
+    },
+    {
+     "am": "dot x",
+     "tex": "\\dot{x}"
+    },
+    {
+     "am": "ddot x",
+     "tex": "\\ddot{x}"
+    },
+    {
+     "am": "overset(x)(=)",
+     "tex": "\\overset{x}{=}"
+    },
+    {
+     "am": "underset(x)(=)",
+     "tex": "\\underset{x}{=}"
+    },
+    {
+     "am": "ubrace(1+2)",
+     "tex": "\\underbrace{1+2}"
+    },
+    {
+     "am": "obrace(1+2)",
+     "tex": "\\overbrace{1+2}"
+    },
+    {
+     "am": "overarc(AB)",
+     "tex": "\\overarc{AB}"
+    },
+    {
+     "am": "color(red)(x)",
+     "tex": "\\textcolor{red}{x}"
+    },
+    {
+     "am": "cancel(x)",
+     "tex": "\\cancel{x}"
+    }
+   ]
+  },
+  {
+   "id": "am-greek",
+   "title": "Greek letters",
+   "rows": [
+    {
+     "am": "alpha",
+     "tex": "\\alpha"
+    },
+    {
+     "am": "beta",
+     "tex": "\\beta"
+    },
+    {
+     "am": "gamma",
+     "tex": "\\gamma"
+    },
+    {
+     "am": "delta",
+     "tex": "\\delta"
+    },
+    {
+     "am": "epsilon",
+     "tex": "\\epsilon"
+    },
+    {
+     "am": "varepsilon",
+     "tex": "\\varepsilon"
+    },
+    {
+     "am": "zeta",
+     "tex": "\\zeta"
+    },
+    {
+     "am": "eta",
+     "tex": "\\eta"
+    },
+    {
+     "am": "theta",
+     "tex": "\\theta"
+    },
+    {
+     "am": "vartheta",
+     "tex": "\\vartheta"
+    },
+    {
+     "am": "iota",
+     "tex": "\\iota"
+    },
+    {
+     "am": "kappa",
+     "tex": "\\kappa"
+    },
+    {
+     "am": "lambda",
+     "tex": "\\lambda"
+    },
+    {
+     "am": "mu",
+     "tex": "\\mu"
+    },
+    {
+     "am": "nu",
+     "tex": "\\nu"
+    },
+    {
+     "am": "xi",
+     "tex": "\\xi"
+    },
+    {
+     "am": "pi",
+     "tex": "\\pi"
+    },
+    {
+     "am": "rho",
+     "tex": "\\rho"
+    },
+    {
+     "am": "sigma",
+     "tex": "\\sigma"
+    },
+    {
+     "am": "tau",
+     "tex": "\\tau"
+    },
+    {
+     "am": "upsilon",
+     "tex": "\\upsilon"
+    },
+    {
+     "am": "phi",
+     "tex": "\\phi"
+    },
+    {
+     "am": "varphi",
+     "tex": "\\varphi"
+    },
+    {
+     "am": "chi",
+     "tex": "\\chi"
+    },
+    {
+     "am": "psi",
+     "tex": "\\psi"
+    },
+    {
+     "am": "omega",
+     "tex": "\\omega"
+    },
+    {
+     "am": "Gamma",
+     "tex": "\\Gamma"
+    },
+    {
+     "am": "Delta",
+     "tex": "\\Delta"
+    },
+    {
+     "am": "Theta",
+     "tex": "\\Theta"
+    },
+    {
+     "am": "Lambda",
+     "tex": "\\Lambda"
+    },
+    {
+     "am": "Xi",
+     "tex": "\\Xi"
+    },
+    {
+     "am": "Pi",
+     "tex": "\\Pi"
+    },
+    {
+     "am": "Sigma",
+     "tex": "\\Sigma"
+    },
+    {
+     "am": "Phi",
+     "tex": "\\Phi"
+    },
+    {
+     "am": "Psi",
+     "tex": "\\Psi"
+    },
+    {
+     "am": "Omega",
+     "tex": "\\Omega"
+    }
+   ]
+  },
+  {
+   "id": "am-fonts",
+   "title": "Font commands",
+   "rows": [
+    {
+     "am": "bb(AaBbCc)",
+     "tex": "\\mathbf{AaBbCc}"
+    },
+    {
+     "am": "bbb(AaBbCc)",
+     "tex": "\\mathbb{AaBbCc}"
+    },
+    {
+     "am": "cc(AaBbCc)",
+     "tex": "\\mathcal{AaBbCc}"
+    },
+    {
+     "am": "tt(AaBbCc)",
+     "tex": "\\mathtt{AaBbCc}"
+    },
+    {
+     "am": "fr(AaBbCc)",
+     "tex": "\\mathfrak{AaBbCc}"
+    },
+    {
+     "am": "sf(AaBbCc)",
+     "tex": "\\mathsf{AaBbCc}"
+    }
+   ]
+  },
+  {
+   "id": "am-functions",
+   "title": "Standard functions",
+   "rows": [
+    {
+     "am": "sin x",
+     "tex": "\\sin x"
+    },
+    {
+     "am": "cos x",
+     "tex": "\\cos x"
+    },
+    {
+     "am": "tan x",
+     "tex": "\\tan x"
+    },
+    {
+     "am": "sec x",
+     "tex": "\\sec x"
+    },
+    {
+     "am": "csc x",
+     "tex": "\\csc x"
+    },
+    {
+     "am": "cot x",
+     "tex": "\\cot x"
+    },
+    {
+     "am": "arcsin x",
+     "tex": "\\arcsin x"
+    },
+    {
+     "am": "arccos x",
+     "tex": "\\arccos x"
+    },
+    {
+     "am": "arctan x",
+     "tex": "\\arctan x"
+    },
+    {
+     "am": "sinh x",
+     "tex": "\\sinh x"
+    },
+    {
+     "am": "cosh x",
+     "tex": "\\cosh x"
+    },
+    {
+     "am": "tanh x",
+     "tex": "\\tanh x"
+    },
+    {
+     "am": "exp x",
+     "tex": "\\exp x"
+    },
+    {
+     "am": "log x",
+     "tex": "\\log x"
+    },
+    {
+     "am": "ln x",
+     "tex": "\\ln x"
+    },
+    {
+     "am": "det x",
+     "tex": "\\det x"
+    },
+    {
+     "am": "dim x",
+     "tex": "\\dim x"
+    },
+    {
+     "am": "gcd x",
+     "tex": "\\gcd x"
+    },
+    {
+     "am": "min x",
+     "tex": "\\min x"
+    },
+    {
+     "am": "max x",
+     "tex": "\\max x"
+    }
+   ]
+  },
+  {
+   "id": "am-special",
+   "title": "Special cases",
+   "rows": [
+    {
+     "am": "[[a,b],[c,d]]",
+     "tex": "\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}"
+    },
+    {
+     "am": "((a),(b))",
+     "tex": "\\begin{pmatrix} a \\\\ b \\end{pmatrix}"
+    },
+    {
+     "am": "[[a,b,|,c],[d,e,|,f]]",
+     "tex": "\\left[\\begin{array}{cc|c} a & b & c \\\\ d & e & f \\end{array}\\right]",
+     "same_speech": false
+    },
+    {
+     "am": "{(2x,+,17y,=,23),(x,-,y,=,5):}",
+     "tex": "\\begin{cases} 2x & + & 17y & = & 23 \\\\ x & - & y & = & 5 \\end{cases}",
+     "same_speech": false
+    },
+    {
+     "am": "lim_(N->oo) sum_(i=0)^N",
+     "tex": "\\lim_{N\\to\\infty} \\sum_{i=0}^N"
+    },
+    {
+     "am": "int_0^1 f(x)dx",
+     "tex": "\\int_0^1 f(x) d x"
+    },
+    {
+     "am": "f'(x) = dy/dx",
+     "tex": "f'(x) = \\frac{dy}{dx}"
+    },
+    {
+     "am": "(dq)/(dp)",
+     "tex": "\\frac{dq}{dp}"
+    },
+    {
+     "am": "ubrace(1+2+3+4)_(\"4 terms\")",
+     "tex": "\\underbrace{1+2+3+4}_{\\text{4 terms}}"
+    },
+    {
+     "am": "obrace(1+2+3+4)^(\"4 terms\")",
+     "tex": "\\overbrace{1+2+3+4}^{\\text{4 terms}}"
+    }
+   ]
+  }
+ ],
+ "latex": [
+  {
+   "id": "scripts",
+   "title": "Subscripts and superscripts",
+   "rows": [
+    {
+     "tex": "x^2"
+    },
+    {
+     "tex": "x_1"
+    },
+    {
+     "tex": "a_{i,j}^{2}"
+    },
+    {
+     "tex": "x^{2^{n}}"
+    },
+    {
+     "tex": "e^{-x^2}"
+    },
+    {
+     "tex": "x_{n+1} = x_n + 1"
+    },
+    {
+     "tex": "f'(x) + f''(x)"
+    },
+    {
+     "tex": "{}^{14}_{6}\\mathrm{C}"
+    }
+   ]
+  },
+  {
+   "id": "brackets",
+   "title": "Brackets and parentheses",
+   "rows": [
+    {
+     "tex": "(x)"
+    },
+    {
+     "tex": "[x]"
+    },
+    {
+     "tex": "\\{x\\}"
+    },
+    {
+     "tex": "\\langle x \\rangle"
+    },
+    {
+     "tex": "|x|"
+    },
+    {
+     "tex": "\\|x\\|"
+    },
+    {
+     "tex": "\\lfloor x \\rfloor"
+    },
+    {
+     "tex": "\\lceil x \\rceil"
+    },
+    {
+     "tex": "\\left( \\frac{a}{b} \\right)"
+    },
+    {
+     "tex": "\\big( \\Big( \\bigg( \\Bigg("
+    },
+    {
+     "tex": "\\left. \\frac{df}{dx} \\right|_{x=0}"
+    },
+    {
+     "tex": "\\left\\{ x \\;\\middle|\\; x > 0 \\right\\}"
+    },
+    {
+     "tex": "\\lgroup x \\rgroup \\quad \\lBrace x \\rBrace \\quad \\lparen x \\rparen"
+    },
+    {
+     "tex": "\\left\\lmoustache \\frac{a}{b} \\right\\rmoustache"
+    }
+   ]
+  },
+  {
+   "id": "matrices",
+   "title": "Matrices",
+   "rows": [
+    {
+     "tex": "\\begin{matrix} a & b \\\\ c & d \\end{matrix}"
+    },
+    {
+     "tex": "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}"
+    },
+    {
+     "tex": "\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}"
+    },
+    {
+     "tex": "\\begin{Bmatrix} a & b \\\\ c & d \\end{Bmatrix}"
+    },
+    {
+     "tex": "\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}"
+    },
+    {
+     "tex": "\\begin{Vmatrix} a & b \\\\ c & d \\end{Vmatrix}"
+    },
+    {
+     "tex": "\\begin{smallmatrix} a & b \\\\ c & d \\end{smallmatrix}"
+    },
+    {
+     "tex": "\\left[\\begin{array}{cc|c} 1 & 2 & 3 \\\\ 4 & 5 & 6 \\end{array}\\right]"
+    },
+    {
+     "tex": "\\def\\arraystretch{1.5} \\begin{array}{c:c:c} a & b & c \\\\ \\hline d & e & f \\\\ \\hdashline g & h & i \\end{array}"
+    },
+    {
+     "tex": "\\begin{array}{|l|r|} \\hline \\text{item} & \\text{cost} \\\\ \\cdashline{1-2} \\text{pen} & 2 \\\\ \\text{book} & 15 \\\\ \\hline \\end{array}"
+    }
+   ]
+  },
+  {
+   "id": "fractions",
+   "title": "Fractions and binomials",
+   "rows": [
+    {
+     "tex": "\\frac{a}{b}"
+    },
+    {
+     "tex": "\\dfrac{a}{b}"
+    },
+    {
+     "tex": "\\tfrac{a}{b}"
+    },
+    {
+     "tex": "\\cfrac{1}{1 + \\cfrac{1}{x}}"
+    },
+    {
+     "tex": "\\binom{n}{k}"
+    },
+    {
+     "tex": "\\sfrac{1}{2}"
+    },
+    {
+     "tex": "\\frac{\\frac{a}{b}}{c}"
+    },
+    {
+     "tex": "{a \\above 1pt b} \\quad \\genfrac{(}{)}{0pt}{}{n}{k}"
+    }
+   ]
+  },
+  {
+   "id": "aligning",
+   "title": "Aligning equations",
+   "rows": [
+    {
+     "tex": "\\begin{aligned} a &= b + c \\\\ d &= e \\end{aligned}"
+    },
+    {
+     "tex": "\\begin{gathered} a = b \\\\ c = d \\end{gathered}"
+    },
+    {
+     "tex": "f(x) = \\begin{cases} 1 & x > 0 \\\\ 0 & x \\le 0 \\end{cases}"
+    },
+    {
+     "tex": "\\begin{rcases} a \\\\ b \\end{rcases} \\Rightarrow c"
+    },
+    {
+     "tex": "\\begin{split} a &= b \\\\ &= c \\end{split}"
+    }
+   ]
+  },
+  {
+   "id": "operators",
+   "title": "Operators",
+   "rows": [
+    {
+     "tex": "\\sin x + \\cos x + \\tan x"
+    },
+    {
+     "tex": "\\log_2 x + \\ln x + \\exp x"
+    },
+    {
+     "tex": "\\max_{x} f(x) + \\min_{y} g(y)"
+    },
+    {
+     "tex": "\\sup A + \\inf B"
+    },
+    {
+     "tex": "\\det A + \\gcd(a, b)"
+    },
+    {
+     "tex": "\\operatorname{rank} M"
+    },
+    {
+     "tex": "\\argmax_x f(x)"
+    },
+    {
+     "tex": "\\sen x + \\tg x"
+    },
+    {
+     "tex": "\\injlim_{i} A_i \\quad \\projlim_{j} B_j \\quad \\varliminf_{n} a_n \\quad \\varlimsup_{n} a_n"
+    }
+   ]
+  },
+  {
+   "id": "spacing",
+   "title": "Spacing in math mode",
+   "rows": [
+    {
+     "tex": "a\\,b"
+    },
+    {
+     "tex": "a\\:b"
+    },
+    {
+     "tex": "a\\;b"
+    },
+    {
+     "tex": "a\\ b"
+    },
+    {
+     "tex": "a\\quad b"
+    },
+    {
+     "tex": "a\\qquad b"
+    },
+    {
+     "tex": "a\\!b"
+    }
+   ]
+  },
+  {
+   "id": "integrals",
+   "title": "Integrals, sums and limits",
+   "rows": [
+    {
+     "tex": "\\int_a^b f(x)\\,dx"
+    },
+    {
+     "tex": "\\iint_D f"
+    },
+    {
+     "tex": "\\iiint_V f"
+    },
+    {
+     "tex": "\\oint_C f"
+    },
+    {
+     "tex": "\\sum_{n=1}^{\\infty} \\frac{1}{n^2}"
+    },
+    {
+     "tex": "\\prod_{i=1}^{n} i"
+    },
+    {
+     "tex": "\\lim_{x \\to 0} \\frac{\\sin x}{x}"
+    },
+    {
+     "tex": "\\bigcup_{i} A_i"
+    },
+    {
+     "tex": "\\int\\limits_0^1 f"
+    },
+    {
+     "tex": "\\intop_0^1 f(x)\\,dx"
+    }
+   ]
+  },
+  {
+   "id": "display",
+   "title": "Display style",
+   "rows": [
+    {
+     "tex": "\\displaystyle \\sum_{i=1}^n i"
+    },
+    {
+     "tex": "\\textstyle \\sum_{i=1}^n i"
+    },
+    {
+     "tex": "\\displaystyle \\frac{1}{2}"
+    },
+    {
+     "tex": "\\textstyle \\frac{1}{2}"
+    },
+    {
+     "tex": "\\mathchoice{D}{T}{S}{SS} + x_{\\mathchoice{D}{T}{S}{SS}}"
+    },
+    {
+     "tex": "a + \\vcenter{\\frac{\\frac{a}{b}}{c}}"
+    }
+   ]
+  },
+  {
+   "id": "symbols",
+   "title": "Greek letters and math symbols",
+   "rows": [
+    {
+     "tex": "\\alpha \\beta \\gamma \\delta \\epsilon \\theta \\lambda \\pi \\sigma \\phi \\omega"
+    },
+    {
+     "tex": "\\Gamma \\Delta \\Theta \\Lambda \\Pi \\Sigma \\Phi \\Omega"
+    },
+    {
+     "tex": "\\le \\ge \\ne \\approx \\equiv \\sim \\cong \\propto"
+    },
+    {
+     "tex": "\\subset \\subseteq \\in \\notin \\cup \\cap \\emptyset"
+    },
+    {
+     "tex": "\\nleq \\ngeq \\nsim \\ncong \\nRightarrow"
+    },
+    {
+     "tex": "\\pm \\mp \\times \\div \\cdot \\circ \\oplus \\otimes"
+    },
+    {
+     "tex": "\\to \\gets \\Rightarrow \\Leftrightarrow \\mapsto \\hookrightarrow"
+    },
+    {
+     "tex": "\\forall \\exists \\neg \\land \\lor"
+    },
+    {
+     "tex": "\\infty \\partial \\nabla \\hbar \\ell \\aleph"
+    },
+    {
+     "tex": "\\varGamma \\varDelta \\varTheta \\varLambda \\varPi \\varSigma \\varPhi \\varOmega"
+    },
+    {
+     "tex": "a \\coloneqq b \\quad c \\eqqcolon d \\quad e \\Coloneq f \\quad g \\colonapprox h \\quad i \\dblcolon j"
+    },
+    {
+     "tex": "\\backepsilon \\gtreqqless \\lesseqqgtr \\circledcirc \\circledR \\maltese"
+    },
+    {
+     "tex": "A \\xrightleftharpoons[\\text{below}]{\\text{above}} B \\xtwoheadrightarrow{f} C \\xhookleftarrow{g} D"
+    }
+   ]
+  },
+  {
+   "id": "fonts",
+   "title": "Mathematical fonts",
+   "rows": [
+    {
+     "tex": "\\mathbb{R}"
+    },
+    {
+     "tex": "\\mathcal{L}"
+    },
+    {
+     "tex": "\\mathfrak{g}"
+    },
+    {
+     "tex": "\\mathbf{v}"
+    },
+    {
+     "tex": "\\boldsymbol{\\alpha}"
+    },
+    {
+     "tex": "\\mathsf{A}"
+    },
+    {
+     "tex": "\\mathtt{x}"
+    },
+    {
+     "tex": "\\mathrm{d}x"
+    },
+    {
+     "tex": "\\textsc{Smith}"
+    },
+    {
+     "tex": "\\textbf{bold} \\; \\texttt{typewriter} \\; \\text{\\AE{}sop, \\OE{}uvre, \\H{o}, \\r{a}}"
+    },
+    {
+     "tex": "\\url{https://example.org/a_b}"
+    }
+   ]
+  },
+  {
+   "id": "decorations",
+   "title": "Accents and decorations",
+   "rows": [
+    {
+     "tex": "\\hat{x} \\bar{x} \\vec{v} \\dot{x} \\ddot{x} \\tilde{x}"
+    },
+    {
+     "tex": "\\widehat{AB} \\overline{AB} \\overrightarrow{AB} \\overarc{AB}"
+    },
+    {
+     "tex": "\\underline{x} \\underrightarrow{AB}"
+    },
+    {
+     "tex": "\\overbrace{a+b}^{n} \\underbrace{c+d}_{m}"
+    },
+    {
+     "tex": "\\overbracket{a+b} \\underbracket{c+d}"
+    },
+    {
+     "tex": "\\cancel{x} \\bcancel{y} \\xcancel{z}"
+    },
+    {
+     "tex": "\\boxed{E = mc^2}"
+    },
+    {
+     "tex": "\\colorbox{yellow}{x} \\fcolorbox{red}{yellow}{y}"
+    },
+    {
+     "tex": "\\overleftharpoon{AB} \\quad \\overrightharpoon{AB} \\quad \\utilde{AB}"
+    },
+    {
+     "tex": "\\cancelto{0}{x} \\quad \\reflectbox{abc}"
+    }
+   ]
+  }
+ ],
+ "science": [
+  {
+   "id": "chemistry",
+   "title": "Chemistry (mhchem)",
+   "rows": [
+    {
+     "tex": "\\ce{2H2 + O2 -> 2H2O}"
+    },
+    {
+     "tex": "\\ce{N2 + 3H2 <=> 2NH3}"
+    },
+    {
+     "tex": "\\ce{A ->[\\Delta] B}"
+    },
+    {
+     "tex": "\\ce{H2O <=>[K_w] H+ + OH-}"
+    },
+    {
+     "tex": "\\ce{CuSO4.5H2O}"
+    },
+    {
+     "tex": "\\ce{^{14}_{6}C}"
+    },
+    {
+     "tex": "\\ce{SO4^{2-} + Ag+ -> AgCl v}"
+    },
+    {
+     "tex": "\\ce{HC#CH}"
+    },
+    {
+     "tex": "\\ce{K_{a} = \\frac{[H+][A-]}{[HA]}}"
+    },
+    {
+     "tex": "\\pu{123 kJ mol^-1}"
+    },
+    {
+     "tex": "\\ce{Zn^2+ <=>[+ 2OH-][+ 2H+] Zn(OH)2 v}"
+    },
+    {
+     "tex": "\\ce{A <-->[k_1][k_{-1}] B}"
+    }
+   ]
+  },
+  {
+   "id": "units",
+   "title": "Units (siunitx)",
+   "rows": [
+    {
+     "tex": "\\SI{9.81}{\\meter\\per\\second\\squared}"
+    },
+    {
+     "tex": "\\qty{1.38e-23}{\\joule\\per\\kelvin}"
+    },
+    {
+     "tex": "\\num{6.022e23}"
+    },
+    {
+     "tex": "\\ang{12;30;15}"
+    },
+    {
+     "tex": "\\SIrange{1}{10}{\\kilo\\gram}"
+    },
+    {
+     "tex": "\\numlist{1;2;3}"
+    },
+    {
+     "tex": "\\SI{1}{\\angstrom}"
+    }
+   ]
+  },
+  {
+   "id": "physics",
+   "title": "Physics",
+   "rows": [
+    {
+     "tex": "\\dv{f}{x}"
+    },
+    {
+     "tex": "\\pdv{f}{x}{y}"
+    },
+    {
+     "tex": "\\fdv{F}{\\phi}"
+    },
+    {
+     "tex": "\\bra{\\psi}\\hat{H}\\ket{\\psi}"
+    },
+    {
+     "tex": "\\expval{A}{\\psi}"
+    },
+    {
+     "tex": "\\mel{n}{H}{m}"
+    },
+    {
+     "tex": "\\comm{A}{B}"
+    },
+    {
+     "tex": "\\grad f + \\curl \\vb{B} + \\laplacian \\phi"
+    },
+    {
+     "tex": "\\Tr\\rho"
+    },
+    {
+     "tex": "\\order{n^2}"
+    },
+    {
+     "tex": "\\int f \\dd x"
+    },
+    {
+     "tex": "\\eval{x^2}_0^1"
+    },
+    {
+     "tex": "\\tensor{T}{^\\mu_\\nu}"
+    }
+   ]
+  },
+  {
+   "id": "structures",
+   "title": "Structural chemistry (chemfig)",
+   "rows": [
+    {
+     "tex": "\\chemfig{H_3C-CH_2-OH}"
+    },
+    {
+     "tex": "\\chemfig{*6(=-=-=-)} \\quad \\chemfig{**6(------)}"
+    },
+    {
+     "tex": "\\chemfig{*6(-=-*6(-=-=-)=-=)}"
+    },
+    {
+     "tex": "\\chemfig{HO-C(=[1]O)-[7]CH_3}"
+    },
+    {
+     "tex": "\\chemfig{H-C(>[:-30]Cl)(<:[:210]Br)-[2]F}"
+    },
+    {
+     "tex": "\\chemfig{\\lewis{0:2:4:6:,O}}"
+    },
+    {
+     "tex": "\\schemestart \\ce{N2 + 3H2} \\arrow{<=>[Fe][450 °C]} \\ce{2NH3} \\schemestop"
+    },
+    {
+     "tex": "\\schemestart \\chemfig{**6(------)} \\+ \\ce{Br2} \\arrow{->[\\ce{FeBr3}]} \\chemfig{**6(---(-Br)---)} \\+ \\ce{HBr} \\schemestop"
+    }
+   ]
+  },
+  {
+   "id": "diagrams",
+   "title": "Commutative diagrams (amscd, tikz-cd, xymatrix)",
+   "rows": [
+    {
+     "tex": "\\begin{CD} A @>f>> B \\\\ @VgVV @VVhV \\\\ C @>k>> D \\end{CD}"
+    },
+    {
+     "tex": "\\begin{tikzcd} A \\arrow[r, \"f\"] \\arrow[d, \"g\"'] \\arrow[dr, \"h\" description] & B \\arrow[d, \"k\"] \\\\ C \\arrow[r, \"\\ell\"'] & D \\end{tikzcd}"
+    },
+    {
+     "tex": "\\begin{tikzcd} X \\arrow[r, bend left, \"f\"] \\arrow[r, bend right, \"g\"'] & Y \\end{tikzcd}"
+    },
+    {
+     "tex": "\\begin{tikzcd} 0 \\arrow[r] & A \\arrow[r, hook] & B \\arrow[r, two heads] & C \\arrow[r] & 0 \\end{tikzcd}"
+    },
+    {
+     "tex": "\\begin{tikzcd} P \\arrow[r] \\arrow[d] \\arrow[dr, phantom, \"\\lrcorner\" very near start] & X \\arrow[d] \\\\ Y \\arrow[r] & Z \\end{tikzcd}"
+    },
+    {
+     "tex": "\\begin{tikzcd} A \\arrow[r, dashed] & B \\arrow[r, dotted] & C \\arrow[r, Rightarrow] & D \\arrow[r, mapsto] & E \\end{tikzcd}"
+    },
+    {
+     "tex": "\\xymatrix{ A \\ar[r]^f \\ar[d]_g & B \\ar[d]^h \\\\ C \\ar[r]_k & D }"
+    },
+    {
+     "tex": "\\xymatrix{ A \\ar@{^{(}->}[r] \\ar@/^/[rr]^{\\phi} & B \\ar@{->>}[r] & C }"
+    }
+   ]
+  },
+  {
+   "id": "phasors",
+   "title": "Phasors and actuarial notation (steinmetz, actuarialangle)",
+   "rows": [
+    {
+     "tex": "V = 10\\phase{-48\\degree}\\,\\mathrm{V}"
+    },
+    {
+     "tex": "Z = |Z|\\phase{\\theta} = R + jX"
+    },
+    {
+     "tex": "\\ddot{a}_{\\angl{n}} = \\frac{1 - v^n}{d}"
+    },
+    {
+     "tex": "a_{\\angln} \\quad s_{\\anglr} \\quad \\bar{A}_{x:\\angl{n}}"
+    }
+   ]
+  },
+  {
+   "id": "school",
+   "title": "School arithmetic (mathra)",
+   "rows": [
+    {
+     "tex": "\\divchave{247}{5}"
+    },
+    {
+     "tex": "\\contaarmada{+}{347}{285}"
+    },
+    {
+     "tex": "\\contaarmada{\\times}{23}{14}"
+    }
+   ]
+  }
+ ],
+ "mathml": [
+  {
+   "id": "mathml",
+   "title": "MathML",
+   "rows": [
+    {
+     "mml": "<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>",
+     "tex": "\\frac{1}{2}"
+    },
+    {
+     "mml": "<math><msqrt><mi>x</mi></msqrt><mo>+</mo><mroot><mn>8</mn><mn>3</mn></mroot></math>",
+     "tex": "\\sqrt{x} + \\sqrt[3]{8}"
+    },
+    {
+     "mml": "<math><msup><mi>x</mi><mn>2</mn></msup><mo>+</mo><msub><mi>a</mi><mi>n</mi></msub></math>",
+     "tex": "x^2 + a_n"
+    },
+    {
+     "mml": "<math><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><mi>i</mi></math>",
+     "tex": "\\sum_{i=1}^{n} i"
+    },
+    {
+     "mml": "<math><mrow><mo>(</mo><mtable><mtr><mtd><mi>a</mi></mtd><mtd><mi>b</mi></mtd></mtr><mtr><mtd><mi>c</mi></mtd><mtd><mi>d</mi></mtd></mtr></mtable><mo>)</mo></mrow></math>",
+     "tex": "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}"
+    },
+    {
+     "mml": "<math><mover><mi>v</mi><mo>→</mo></mover><mo>⋅</mo><mover><mi>x</mi><mo>^</mo></mover></math>",
+     "tex": "\\vec{v} \\cdot \\hat{x}"
+    },
+    {
+     "mml": "<math><mi>sin</mi><mo>&ApplyFunction;</mo><mi>θ</mi><mo>≤</mo><mn>1</mn></math>",
+     "tex": "\\sin\\theta \\le 1"
+    },
+    {
+     "mml": "<math><mmultiscripts><mi>C</mi><mprescripts/><mn>6</mn><mn>14</mn></mmultiscripts></math>",
+     "tex": "{}^{14}_{6}C"
+    }
+   ]
+  }
+ ]
+}

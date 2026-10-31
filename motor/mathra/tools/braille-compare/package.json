@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "LaTeX to MathML for braille-compare (MathJax)",
+  "dependencies": { "mathjax-full": "3.2.2" }
+}

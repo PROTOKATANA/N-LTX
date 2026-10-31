@@ -1,0 +1,313 @@
+[
+ {
+  "id": "famous",
+  "title": "Famous equations",
+  "intro": "The equations everyone knows, from Euler's identity to Black–Scholes.",
+  "rows": [
+   {
+    "name": "euler",
+    "caption": "Euler's identity",
+    "locale": "en",
+    "tex": "e^{i\\pi} + 1 = 0"
+   },
+   {
+    "name": "gaussian",
+    "caption": "Gaussian integral",
+    "locale": "en",
+    "tex": "\\int_{-\\infty}^{\\infty} e^{-x^2}\\,dx = \\sqrt{\\pi}"
+   },
+   {
+    "name": "basel",
+    "caption": "Basel problem",
+    "locale": "en",
+    "tex": "\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}"
+   },
+   {
+    "name": "quadratic",
+    "caption": "Quadratic formula",
+    "locale": "en",
+    "tex": "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}"
+   },
+   {
+    "name": "maxwell",
+    "caption": "Maxwell's equations",
+    "locale": "en",
+    "tex": "\\begin{aligned} \\nabla \\cdot \\vec{E} &= \\frac{\\rho}{\\varepsilon_0} & \\nabla \\cdot \\vec{B} &= 0 \\\\ \\nabla \\times \\vec{E} &= -\\frac{\\partial \\vec{B}}{\\partial t} & \\nabla \\times \\vec{B} &= \\mu_0 \\vec{J} + \\mu_0 \\varepsilon_0 \\frac{\\partial \\vec{E}}{\\partial t} \\end{aligned}"
+   },
+   {
+    "name": "schrodinger",
+    "caption": "Schrödinger equation",
+    "locale": "en",
+    "tex": "i\\hbar \\frac{\\partial}{\\partial t} \\Psi(\\mathbf{r}, t) = \\left[ -\\frac{\\hbar^2}{2m} \\nabla^2 + V(\\mathbf{r}, t) \\right] \\Psi(\\mathbf{r}, t)"
+   },
+   {
+    "name": "einstein",
+    "caption": "Einstein field equations",
+    "locale": "en",
+    "tex": "R_{\\mu\\nu} - \\frac{1}{2} R\\, g_{\\mu\\nu} + \\Lambda g_{\\mu\\nu} = \\frac{8\\pi G}{c^4} T_{\\mu\\nu}"
+   },
+   {
+    "name": "cauchy",
+    "caption": "Cauchy's integral formula",
+    "locale": "en",
+    "tex": "f(a) = \\frac{1}{2\\pi i} \\oint_{\\gamma} \\frac{f(z)}{z - a}\\, dz"
+   },
+   {
+    "name": "fourier",
+    "caption": "Fourier transform",
+    "locale": "en",
+    "tex": "\\hat{f}(\\xi) = \\int_{-\\infty}^{\\infty} f(x)\\, e^{-2\\pi i x \\xi}\\, dx"
+   },
+   {
+    "name": "bayes",
+    "caption": "Bayes' theorem",
+    "locale": "en",
+    "tex": "P(A \\mid B) = \\frac{P(B \\mid A)\\, P(A)}{P(B)}"
+   },
+   {
+    "name": "navierstokes",
+    "caption": "Navier–Stokes equations (incompressible)",
+    "locale": "en",
+    "tex": "\\rho \\left( \\frac{\\partial \\mathbf{u}}{\\partial t} + (\\mathbf{u} \\cdot \\nabla) \\mathbf{u} \\right) = -\\nabla p + \\mu \\nabla^2 \\mathbf{u} + \\rho \\mathbf{g}, \\qquad \\nabla \\cdot \\mathbf{u} = 0"
+   },
+   {
+    "name": "stokes",
+    "caption": "Stokes' theorem",
+    "locale": "en",
+    "tex": "\\oint_{\\partial \\Sigma} \\vec{F} \\cdot d\\vec{r} = \\iint_{\\Sigma} \\left( \\nabla \\times \\vec{F} \\right) \\cdot d\\vec{S}"
+   },
+   {
+    "name": "eulerlagrange",
+    "caption": "Euler–Lagrange equation",
+    "locale": "en",
+    "tex": "\\frac{d}{dt} \\frac{\\partial L}{\\partial \\dot{q}} - \\frac{\\partial L}{\\partial q} = 0"
+   },
+   {
+    "name": "zeta",
+    "caption": "Riemann zeta as an Euler product",
+    "locale": "en",
+    "tex": "\\zeta(s) = \\sum_{n=1}^{\\infty} \\frac{1}{n^s} = \\prod_{p \\text{ prime}} \\frac{1}{1 - p^{-s}}"
+   },
+   {
+    "name": "dirac",
+    "caption": "Dirac equation",
+    "locale": "en",
+    "tex": "\\left( i\\hbar \\gamma^\\mu \\partial_\\mu - mc \\right) \\psi = 0"
+   },
+   {
+    "name": "planck",
+    "caption": "Planck's law",
+    "locale": "en",
+    "tex": "B_\\nu(T) = \\frac{2 h \\nu^3}{c^2} \\, \\frac{1}{e^{h\\nu / k_B T} - 1}"
+   },
+   {
+    "name": "ramanujan",
+    "caption": "Ramanujan's series for 1/π",
+    "locale": "en",
+    "tex": "\\frac{1}{\\pi} = \\frac{2\\sqrt{2}}{9801} \\sum_{k=0}^{\\infty} \\frac{(4k)!\\,(1103 + 26390k)}{(k!)^4\\, 396^{4k}}"
+   },
+   {
+    "name": "blackscholes",
+    "caption": "Black–Scholes equation",
+    "locale": "en",
+    "tex": "\\frac{\\partial V}{\\partial t} + \\frac{1}{2} \\sigma^2 S^2 \\frac{\\partial^2 V}{\\partial S^2} + r S \\frac{\\partial V}{\\partial S} - r V = 0"
+   }
+  ]
+ },
+ {
+  "id": "big",
+  "title": "Big equations",
+  "intro": "Long, many-line and deeply nested: Navier–Stokes in components, the Riemann tensor, QED, a proof step by step.",
+  "rows": [
+   {
+    "name": "navierstokes3d",
+    "caption": "Navier–Stokes in Cartesian components, with continuity",
+    "locale": "en",
+    "tex": "\\begin{aligned} \\rho \\left( \\frac{\\partial u}{\\partial t} + u \\frac{\\partial u}{\\partial x} + v \\frac{\\partial u}{\\partial y} + w \\frac{\\partial u}{\\partial z} \\right) &= -\\frac{\\partial p}{\\partial x} + \\mu \\left( \\frac{\\partial^2 u}{\\partial x^2} + \\frac{\\partial^2 u}{\\partial y^2} + \\frac{\\partial^2 u}{\\partial z^2} \\right) + \\rho g_x \\\\ \\rho \\left( \\frac{\\partial v}{\\partial t} + u \\frac{\\partial v}{\\partial x} + v \\frac{\\partial v}{\\partial y} + w \\frac{\\partial v}{\\partial z} \\right) &= -\\frac{\\partial p}{\\partial y} + \\mu \\left( \\frac{\\partial^2 v}{\\partial x^2} + \\frac{\\partial^2 v}{\\partial y^2} + \\frac{\\partial^2 v}{\\partial z^2} \\right) + \\rho g_y \\\\ \\rho \\left( \\frac{\\partial w}{\\partial t} + u \\frac{\\partial w}{\\partial x} + v \\frac{\\partial w}{\\partial y} + w \\frac{\\partial w}{\\partial z} \\right) &= -\\frac{\\partial p}{\\partial z} + \\mu \\left( \\frac{\\partial^2 w}{\\partial x^2} + \\frac{\\partial^2 w}{\\partial y^2} + \\frac{\\partial^2 w}{\\partial z^2} \\right) + \\rho g_z \\\\ \\frac{\\partial u}{\\partial x} + \\frac{\\partial v}{\\partial y} + \\frac{\\partial w}{\\partial z} &= 0 \\end{aligned}"
+   },
+   {
+    "name": "compressible",
+    "caption": "Compressible Navier–Stokes, with the viscous stress tensor",
+    "locale": "en",
+    "tex": "\\frac{\\partial (\\rho \\mathbf{u})}{\\partial t} + \\nabla \\cdot \\left( \\rho\\, \\mathbf{u} \\otimes \\mathbf{u} \\right) = -\\nabla p + \\nabla \\cdot \\left[ \\mu \\left( \\nabla \\mathbf{u} + \\left( \\nabla \\mathbf{u} \\right)^{\\mathsf{T}} \\right) - \\frac{2}{3} \\mu \\left( \\nabla \\cdot \\mathbf{u} \\right) \\mathbf{I} \\right] + \\rho \\mathbf{g}"
+   },
+   {
+    "name": "riemann",
+    "caption": "Riemann curvature tensor and Christoffel symbols",
+    "locale": "en",
+    "tex": "R^{\\rho}{}_{\\sigma\\mu\\nu} = \\partial_\\mu \\Gamma^{\\rho}_{\\nu\\sigma} - \\partial_\\nu \\Gamma^{\\rho}_{\\mu\\sigma} + \\Gamma^{\\rho}_{\\mu\\lambda} \\Gamma^{\\lambda}_{\\nu\\sigma} - \\Gamma^{\\rho}_{\\nu\\lambda} \\Gamma^{\\lambda}_{\\mu\\sigma}, \\qquad \\Gamma^{\\lambda}_{\\mu\\nu} = \\frac{1}{2} g^{\\lambda\\kappa} \\left( \\partial_\\mu g_{\\kappa\\nu} + \\partial_\\nu g_{\\kappa\\mu} - \\partial_\\kappa g_{\\mu\\nu} \\right)"
+   },
+   {
+    "name": "qed",
+    "caption": "Lagrangian of quantum electrodynamics",
+    "locale": "en",
+    "tex": "\\mathcal{L} = -\\frac{1}{4} F_{\\mu\\nu} F^{\\mu\\nu} + \\bar{\\psi} \\left( i \\gamma^\\mu D_\\mu - m \\right) \\psi, \\qquad D_\\mu = \\partial_\\mu + i e A_\\mu, \\qquad F_{\\mu\\nu} = \\partial_\\mu A_\\nu - \\partial_\\nu A_\\mu"
+   },
+   {
+    "name": "gaussproof",
+    "caption": "The Gaussian integral, step by step in polar coordinates",
+    "locale": "en",
+    "tex": "\\begin{aligned} \\left( \\int_{-\\infty}^{\\infty} e^{-x^2} \\, dx \\right)^2 &= \\int_{-\\infty}^{\\infty} \\int_{-\\infty}^{\\infty} e^{-(x^2 + y^2)} \\, dx \\, dy \\\\ &= \\int_{0}^{2\\pi} \\int_{0}^{\\infty} e^{-r^2} \\, r \\, dr \\, d\\theta \\\\ &= 2\\pi \\left[ -\\frac{1}{2} e^{-r^2} \\right]_{0}^{\\infty} = \\pi \\end{aligned}"
+   },
+   {
+    "name": "vandermonde",
+    "caption": "Vandermonde determinant",
+    "locale": "en",
+    "tex": "\\det \\begin{pmatrix} 1 & x_1 & x_1^2 & \\cdots & x_1^{n-1} \\\\ 1 & x_2 & x_2^2 & \\cdots & x_2^{n-1} \\\\ 1 & x_3 & x_3^2 & \\cdots & x_3^{n-1} \\\\ \\vdots & \\vdots & \\vdots & \\ddots & \\vdots \\\\ 1 & x_n & x_n^2 & \\cdots & x_n^{n-1} \\end{pmatrix} = \\prod_{1 \\le i < j \\le n} \\left( x_j - x_i \\right)"
+   }
+  ]
+ },
+ {
+  "id": "structures",
+  "title": "Structures",
+  "intro": "Continued fractions, matrices with dots, cases, binomials, labeled braces.",
+  "rows": [
+   {
+    "name": "golden",
+    "caption": "Golden ratio as a continued fraction",
+    "locale": "en",
+    "tex": "\\varphi = 1 + \\cfrac{1}{1 + \\cfrac{1}{1 + \\cfrac{1}{1 + \\cdots}}}"
+   },
+   {
+    "name": "matrix",
+    "caption": "m × n matrix with dots",
+    "locale": "en",
+    "tex": "A = \\begin{pmatrix} a_{11} & a_{12} & \\cdots & a_{1n} \\\\ a_{21} & a_{22} & \\cdots & a_{2n} \\\\ \\vdots & \\vdots & \\ddots & \\vdots \\\\ a_{m1} & a_{m2} & \\cdots & a_{mn} \\end{pmatrix}"
+   },
+   {
+    "name": "piecewise",
+    "caption": "Piecewise definition",
+    "locale": "en",
+    "tex": "|x| = \\begin{cases} x & \\text{if } x \\ge 0 \\\\ -x & \\text{if } x < 0 \\end{cases}"
+   },
+   {
+    "name": "binomial",
+    "caption": "Binomial theorem",
+    "locale": "en",
+    "tex": "(x + y)^n = \\sum_{k=0}^{n} \\binom{n}{k} x^{n-k} y^{k}"
+   },
+   {
+    "name": "braces",
+    "caption": "Labeled brace",
+    "locale": "en",
+    "tex": "\\underbrace{1 + 2 + \\cdots + n}_{n \\text{ terms}} = \\frac{n(n+1)}{2}"
+   }
+  ]
+ },
+ {
+  "id": "science",
+  "title": "Science packages",
+  "intro": "mhchem formulas and reactions, siunitx quantities, the physics package.",
+  "rows": [
+   {
+    "name": "chemistry",
+    "caption": "Chemical equation (mhchem)",
+    "locale": "en",
+    "tex": "\\ce{CH4 + 2 O2 -> CO2 + 2 H2O}"
+   },
+   {
+    "name": "units",
+    "caption": "Quantity with units (siunitx)",
+    "locale": "en",
+    "tex": "g = \\SI{9.81}{\\meter\\per\\second\\squared}"
+   },
+   {
+    "caption": "Reaction with a label (mhchem)",
+    "locale": "en",
+    "tex": "\\ce{N2 + 3H2 <=>[\\text{Fe}] 2NH3}"
+   },
+   {
+    "caption": "Quantum mechanics (physics)",
+    "locale": "en",
+    "tex": "\\expval{H}{\\psi} = \\mel{\\psi}{H}{\\psi},\\quad \\comm{x}{p} = i\\hbar"
+   }
+  ]
+ },
+ {
+  "id": "chemistry",
+  "title": "Structural chemistry",
+  "intro": "chemfig structures, reaction schemes and mechanism arrows, read aloud by the formula counted from each structure.",
+  "rows": [
+   {
+    "name": "caffeine",
+    "caption": "Caffeine: fused rings (chemfig)",
+    "locale": "en",
+    "tex": "\\chemfig{*6((=O)-N(-CH_3)-*5(-N=-N(-CH_3)-=)--(=O)-N(-H_3C)-)}"
+   },
+   {
+    "name": "nitration",
+    "caption": "Nitration of benzene: structures, mhchem and conditions on the arrow",
+    "locale": "en",
+    "tex": "\\schemestart \\chemfig{**6(------)} \\+ \\ce{HNO3} \\arrow{->[\\ce{H2SO4}][$\\Delta$]} \\chemfig{**6(---(-NO_2)---)} \\+ \\ce{H2O} \\schemestop"
+   },
+   {
+    "name": "sn2",
+    "caption": "SN2 mechanism: lone pairs and curved arrows",
+    "locale": "en",
+    "tex": "\\schemestart \\chemfig{@{nu}\\lewis{2:4:6:,HO}^{-}} \\+ \\chemfig{H_3C-@{c}C(-[2]H)(-[6]H)-@{cl}Cl} \\arrow{->[][S$_\\text{N}$2]} \\chemfig{HO-CH_3} \\+ \\chemfig{\\lewis{0:2:4:6:,Cl}^{-}} \\schemestop \\chemmove{\\draw[->](nu)..controls +(60:1.2cm) and +(120:1.2cm)..(c); \\draw[->](c) to[bend left] (cl);}"
+   },
+   {
+    "name": "esterification",
+    "caption": "Esterification and reduction: equilibrium, a reagent drawn over a vertical arrow (pt-BR)",
+    "locale": "pt-BR",
+    "tex": "\\schemestart \\chemfig{R-C(=[1]O)-[7]OH} \\+ \\chemfig{HO-R'} \\arrow{<=>[H$^+$][$-$H$_2$O]} \\chemfig{R-C(=[1]O)-[7]O-R'} \\arrow{->[\\chemfig{LiAlH_4}][depois H$_2$O]}[-90] \\chemfig{R-CH_2-OH} \\schemestop"
+   }
+  ]
+ },
+ {
+  "id": "diagrams",
+  "title": "Commutative diagrams",
+  "intro": "amscd, tikz-cd and xymatrix: arrows in any direction, bent, dashed, hooked.",
+  "rows": [
+   {
+    "name": "diagram",
+    "caption": "Commutative diagram (amscd)",
+    "locale": "en",
+    "tex": "\\begin{CD} A @>f>> B \\\\ @VgVV @VVhV \\\\ C @>k>> D \\end{CD}"
+   },
+   {
+    "name": "tikzcd",
+    "caption": "Pullback with bent arrows (tikz-cd)",
+    "locale": "en",
+    "tex": "\\begin{tikzcd} T \\arrow[drr, bend left, \"x\"] \\arrow[ddr, bend right, \"y\"'] \\arrow[dr, dashed, \"\\exists!\" description] & & \\\\ & P \\arrow[r, \"q\"] \\arrow[d, \"p\"'] \\arrow[dr, phantom, \"\\lrcorner\" very near start] & X \\arrow[d, \"f\"] \\\\ & Y \\arrow[r, \"g\"'] & Z \\end{tikzcd}"
+   },
+   {
+    "name": "xymatrix",
+    "caption": "Short exact sequence (xymatrix)",
+    "locale": "en",
+    "tex": "\\xymatrix{ 0 \\ar[r] & A \\ar@{^{(}->}[r]^{\\iota} \\ar[d]_{\\alpha} & B \\ar@{->>}[r]^{\\pi} \\ar[d]^{\\beta} & C \\ar[r] \\ar@{=}[d] & 0 \\\\ 0 \\ar[r] & A' \\ar[r] & B' \\ar[r] & C \\ar[r] & 0 }"
+   }
+  ]
+ },
+ {
+  "id": "languages",
+  "title": "Languages and notations",
+  "intro": "The locale decides the form (pt-BR: sen, decimal comma, divisão armada); AsciiMath and MathML give the same drawing as LaTeX.",
+  "rows": [
+   {
+    "name": "ptbr",
+    "caption": "pt-BR locale: sen, decimal comma, open interval",
+    "locale": "pt-BR",
+    "tex": "\\sen^2 \\theta + \\cos^2 \\theta = 1,\\quad x \\in \\left]0{,}5;\\, 2{,}5\\right["
+   },
+   {
+    "name": "division",
+    "caption": "Long division, computed (pt-BR)",
+    "locale": "pt-BR",
+    "tex": "\\divchave{247}{5}"
+   },
+   {
+    "caption": "AsciiMath",
+    "locale": "en",
+    "tex": "sum_(i=1)^n i^2 = (n(n+1)(2n+1))/6",
+    "input": "asciimath"
+   },
+   {
+    "caption": "MathML",
+    "locale": "en",
+    "tex": "<math><mi>x</mi><mo>=</mo><mfrac><mrow><mo>−</mo><mi>b</mi><mo>±</mo><msqrt><msup><mi>b</mi><mn>2</mn></msup><mo>−</mo><mn>4</mn><mi>a</mi><mi>c</mi></msqrt></mrow><mrow><mn>2</mn><mi>a</mi></mrow></mfrac></math>",
+    "input": "mathml"
+   }
+  ]
+ }
+]
