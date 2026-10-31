@@ -1,0 +1,16 @@
+\begin{circuitikz}
+  % the long-tailed pair: two matched transistors sharing a tail current
+  \draw (0,0) node[npn] (Q1) {$Q_1$};
+  \draw (3.6,0) node[npn, xscale=-1] (Q2) {};
+  \path (Q2.C |- Q2.B) node[left] {$Q_2$};
+  \draw (Q1.B) to[short, -o] ++(-0.6,0) node[left] {$v_1$};
+  \draw (Q2.B) to[short, -o] ++(0.6,0) node[right] {$v_2$};
+  % the collector loads, from the supply
+  \draw (Q1.C) to[R, l=$R_C$] (Q1.C |- 0,2.6) -- (Q2.C |- 0,2.6) to[R, l=$R_C$] (Q2.C);
+  \draw (1.8,2.6) to[short, *-] (1.8,2.9) node[vcc] {$+V_{CC}$};
+  \draw (Q1.C) to[short, *-o] ++(1,0) node[below] {$v_{o1}$};
+  \draw (Q2.C) to[short, *-o] ++(-1,0) node[below] {$v_{o2}$};
+  % the tail
+  \draw (Q1.E) |- (1.8,-1.2) -| (Q2.E);
+  \draw (1.8,-1.2) to[I, l=$I_{EE}$, *-] (1.8,-3) node[vee] {$-V_{EE}$};
+\end{circuitikz}

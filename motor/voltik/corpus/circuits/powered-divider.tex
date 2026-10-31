@@ -1,0 +1,7 @@
+\begin{circuitikz}
+  \draw (0,3) node[vcc] {$+5\,\mathrm{V}$} to[R=$R_1$, -*] (0,1.5) coordinate (out)
+        to[R=$R_2$] (0,0) node[ground] {};
+  \draw (out) -- (1.5,1.5) node[ocirc] {} node[right] {$v_\mathrm{out}$};
+  \draw (2.5,3) to[multiwire=8] (4.5,3) (3.5,3.5) -- (3.5,2.5);
+  \draw (3.5,3) node[jump crossing] {};
+\end{circuitikz}

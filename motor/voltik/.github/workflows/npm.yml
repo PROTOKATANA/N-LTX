@@ -1,0 +1,40 @@
+# Publishes the npm package when an npm version tag (npm-v1.2.3) is pushed, with npm trusted publishing:
+# no token, and npm attaches the provenance of this workflow run. Set it up once on npmjs.com, in the
+# settings of @mathlabs/voltik: Trusted Publisher → GitHub Actions, repository matheusmota-dev-br/voltik,
+# workflow npm.yml. npm only offers it for a package that exists, so the very first version is
+# published by hand (see "Releasing" in the README).
+name: npm
+
+on:
+  push:
+    tags: ["npm-v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@0.2.129
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm/build.sh && npm/test/run.sh
+      - name: the tag matches the version in npm/package.json
+        run: test "npm-v$(node -p "require('./npm/pkg/package.json').version")" = "$GITHUB_REF_NAME"
+      # a version already out is skipped, so rerunning the workflow never fails on it
+      - name: publish unless already published
+        working-directory: npm/pkg
+        run: |
+          spec="$(node -p "require('./package.json').name")@$(node -p "require('./package.json').version")"
+          if npm view "$spec" version >/dev/null 2>&1; then echo "$spec is already on npm"; else npm publish --access public; fi

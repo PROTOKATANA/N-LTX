@@ -1,0 +1,6 @@
+\begin{circuitikz}
+  \ctikzset{label/align=rotate}
+  \foreach \i in {0,45,90,135,180,-90,-45,-135} {
+    \draw (0,0) to[R=\i, *-o] (\i:2.5);
+  }
+\end{circuitikz}

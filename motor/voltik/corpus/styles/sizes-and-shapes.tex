@@ -1,0 +1,9 @@
+\begin{circuitikz}
+  \ctikzset{amplifiers/fill=cyan!20}
+  \draw (0,0) node[op amp] {};
+  \begin{scope}\ctikzset{tripoles/op amp/width=1.2, tripoles/op amp/port width=1}\draw (2.4,0) node[op amp] {};\end{scope}
+  \draw (5,0) node[double bipole, circuitikz/double bipole L=fulllediodeshape, circuitikz/double bipole R=emptydiodeshape, circuitikz/double bipole R invert] {};
+  \ctikzset{transformer L1/.style={inductors/coils=2, inductors/width=0.3}}
+  \draw (7.6,0) node[transformer core] (T) {} (T-L1.a) node[circ] {} (T-L1.b) node[circ] {};
+  \draw (9.6,-0.6) node[resistorshape, rotate=90] {} (10.4,-0.6) node[oosourceshape, rotate=90] {};
+\end{circuitikz}

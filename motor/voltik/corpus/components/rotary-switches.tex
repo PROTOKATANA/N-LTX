@@ -1,0 +1,6 @@
+\begin{circuitikz}
+  \draw (0,0) -- ++(1,0) node[rotary switch <-=8 in 120 wiper 40, anchor=in] (A) {};
+  \draw (A.out 4) -- ++(1,0) node[rotary switch ->, anchor=in] (B) {};
+  \draw (A-out 2.n) -- ++(0,0.4) -| (B-out 1.n);
+  \draw (B.out 3) -- ++(1,0) node[cute spdt up, anchor=in] (C) {} (C-out 2.s) -- ++(0,-0.4);
+\end{circuitikz}

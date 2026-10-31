@@ -1,0 +1,16 @@
+\begin{circuitikz}
+  % four switches with their body diodes; the motor between the two legs
+  \draw (0,3) node[nmos, bodydiode] (Q1) {$Q_1$}
+    (0,0.6) node[nmos, bodydiode] (Q2) {$Q_2$}
+    (5,3) node[nmos, bodydiode, xscale=-1] (Q3) {\scalebox{-1}[1]{$Q_3$}}
+    (5,0.6) node[nmos, bodydiode, xscale=-1] (Q4) {\scalebox{-1}[1]{$Q_4$}};
+  \draw (Q1.S) -- (Q2.D) (Q3.S) -- (Q4.D);
+  \draw ($(Q1.S)!0.5!(Q2.D)$) coordinate (a) ($(Q3.S)!0.5!(Q4.D)$) coordinate (b);
+  \draw (a) to[Telmech=M, n=mot, *-*] (b);
+  \draw (Q1.D) -- ++(0,0.4) coordinate (t1) -- (t1 -| Q3.D) -- (Q3.D);
+  \draw ($(t1)!0.5!(t1 -| Q3.D)$) node[circ] {} -- ++(0,0.4) node[vcc] {$V_{CC}$};
+  \draw (Q2.S) -- ++(0,-0.4) coordinate (b1) -- (b1 -| Q4.S) -- (Q4.S);
+  \draw ($(b1)!0.5!(b1 -| Q4.S)$) node[circ] {} node[ground] {};
+  \foreach \q/\s in {Q1/A, Q2/\overline{A}} \draw (\q.G) to[short, -o] ++(-0.5,0) node[left] {$\s$};
+  \foreach \q/\s in {Q3/B, Q4/\overline{B}} \draw (\q.G) to[short, -o] ++(0.5,0) node[right] {$\s$};
+\end{circuitikz}

@@ -1,0 +1,12 @@
+\begin{circuitikz}
+  \draw (0,0) to[V, l=$V_{\mathrm{in}}$, invert] (0,3)
+    to[L, l=$L$] (3.2,3) coordinate (sw)
+    to[D*, l=$D$, *-*] (5.6,3)
+    -- (7.8,3)
+    to[R, l_=$R_L$, v^=$V_{\mathrm{out}}$] (7.8,0) -- (0,0);
+  \draw (3.2,0.7) node[nmos, anchor=S] (S) {};
+  \draw (S.D) -- (sw) (S.S) to[short, -*] (3.2,0);
+  \draw (S.G) to[short, -o] ++(-0.5,0) node[left] {PWM};
+  \draw (5.6,3) to[C, l=$C$, -*] (5.6,0);
+  \draw (4.4,0) node[ground] {};
+\end{circuitikz}

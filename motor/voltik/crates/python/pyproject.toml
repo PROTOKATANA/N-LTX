@@ -1,0 +1,41 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "voltik"
+description = "CircuiTikZ circuits to SVG and PNG, without a TeX install. A library of tikra; math labels typeset by mathra."
+readme = "README.md"
+requires-python = ">=3.9"
+dynamic = ["version"]
+license = "(MIT OR Apache-2.0) AND OFL-1.1 AND LicenseRef-GUST-Font-License"
+# copies of the repository root files and of mathra's font licenses: the OFL (STIX Two Math) and the
+# GUST Font License (Latin Modern Math, which SPDX does not list) require their text next to the fonts
+license-files = ["licenses/*"]
+authors = [{ name = "Matheus Mota" }]
+keywords = ["circuitikz", "tikz", "latex", "circuit", "schematic", "electronics", "svg", "png", "rust", "python", "cli", "javascript", "webassembly"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Text Processing :: Markup :: LaTeX",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/matheusmota-dev-br/voltik"
+Repository = "https://github.com/matheusmota-dev-br/voltik"
+Issues = "https://github.com/matheusmota-dev-br/voltik/issues"
+Documentation = "https://github.com/matheusmota-dev-br/voltik#install-and-use"
+
+[tool.maturin]
+python-source = "python"
+module-name = "voltik._voltik"
+features = ["pyo3/extension-module"]

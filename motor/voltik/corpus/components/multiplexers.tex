@@ -1,0 +1,11 @@
+\begin{circuitikz}
+  \tikzset{mux 4by1/.style={muxdemux, muxdemux def={Lh=6, NL=4, Rh=3, NB=2, w=4},
+    muxdemux label={L1=$D_0$, L2=$D_1$, L3=$D_2$, L4=$D_3$, R1=$Y$, B1=$S_1$, B2=$S_0$, N=MUX}}}
+  \draw (0,0) node[mux 4by1] (M) {};
+  \draw (3,0) node[demux] (D) {};
+  \draw (5.4,0) node[ALU] (A) {};
+  \draw (7.6,0) node[one bit adder] (O) {\Large$\oplus$};
+  \draw (M.rpin 1) -- (D.lpin 1);
+  \draw (9.6,0) node[muxdemux, muxdemux def={Lh=4, Rh=4, w=3, NL=2, NR=2, NB=0},
+    muxdemux label={L1=D, L2=CLK, cL2=1, R1=Q, R2=$\overline{Q}$, nR2=1}] (F) {};
+\end{circuitikz}

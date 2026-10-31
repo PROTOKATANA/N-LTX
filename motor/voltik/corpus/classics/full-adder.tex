@@ -1,0 +1,23 @@
+\begin{circuitikz}
+  \draw (0,2) node[xor port] (X1) {}
+    (0,-0.9) node[and port] (A1) {}
+    (3.4,1.7) node[xor port] (X2) {}
+    (3.4,0.1) node[and port] (A2) {}
+    (6.4,-0.18) node[or port] (O) {};
+  % the inputs
+  \draw (X1.in 1) -- ++(-2.4,0) node[left] {$A$};
+  \draw (X1.in 2) -- ++(-2.4,0) node[left] {$B$};
+  \draw ($(X1.in 1)+(-1.6,0)$) node[circ] {} |- (A1.in 1);
+  \draw ($(X1.in 2)+(-1,0)$) node[circ] {} |- (A1.in 2);
+  \draw ($(A1.in 2)+(-2.4,-1.2)$) node[left] {$C_{\mathrm{in}}$} -| ($(X2.in 2)+(-0.6,0)$) -- (X2.in 2);
+  \draw ($(A2.in 2)+(-0.6,0)$) node[circ] {} -- (A2.in 2);
+  % A xor B to the second stage
+  \draw (X1.out) -- ++(0.5,0) |- (X2.in 1);
+  \draw ($(X1.out)+(0.5,0)$) |- (A2.in 1);
+  \draw ({$(X1.out)+(0.5,0)$} |- X2.in 1) node[circ] {};
+  % the carry
+  \draw (A2.out) -- ++(0.6,0) |- (O.in 1);
+  \draw (A1.out) -| ($(O.in 2)+(-0.6,0)$) -- (O.in 2);
+  \draw (O.out) -- ++(0.6,0) node[right] {$C_{\mathrm{out}}$};
+  \draw (X2.out) -- (X2.out -| {$(O.out)+(0.6,0)$}) node[right] {$S$};
+\end{circuitikz}

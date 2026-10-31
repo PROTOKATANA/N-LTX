@@ -1,0 +1,15 @@
+/target
+/.cargo/config.toml*
+*.so
+*.pyd
+*.whl
+__pycache__/
+/crates/python/.venv
+/.venv
+*.profraw
+/site/pkg
+**/.DS_Store
+.env
+.env.*
+/tools/oracle/out
+*.voltik.png

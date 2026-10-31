@@ -1,0 +1,7 @@
+\begin{circuitikz}[long pot/.style={pR, resistors/scale=0.8, resistors/width=1.6, resistors/zigs=7}]
+  \draw (0,3) to[long pot, l=$P$, wiper pos=0.25] ++(4,0);
+  \ctikzset{tall R/.style={resistors/scale=1.6, resistors/width=0.5}}
+  \draw (0,1.5) to[R=$R$, tall R] ++(4,0);
+  \ctikzset{capacitors/width=0.1, capacitors/height=0.4}
+  \draw (0,0) to[C=$C_1$] ++(2,0) to[eC=$C_2$] ++(2,0);
+\end{circuitikz}

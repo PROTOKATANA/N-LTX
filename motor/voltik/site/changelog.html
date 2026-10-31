@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>voltik evolution</title>
+<meta name="description" content="How voltik grew, release by release: what changed, how many CircuiTikZ components it draws, and the circuits that show it, drawn live in your browser.">
+<link rel="icon" href="pkg/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="pkg/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="pkg/apple-touch-icon.png">
+<meta name="theme-color" content="#fbf9f4">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <a class="name" href="index.html">voltik</a>
+    <nav>
+      <a href="index.html#playground">Playground</a>
+      <a href="gallery.html">Gallery</a>
+      <a href="changelog.html" aria-current="page">Evolution</a>
+      <a href="index.html#docs">Docs</a>
+      <a href="https://github.com/matheusmota-dev-br/voltik/blob/main/spec/subset.md">Subset</a>
+      <a href="https://github.com/matheusmota-dev-br/voltik">GitHub</a>
+      <button class="theme" id="theme" type="button" aria-label="Toggle dark mode">◐</button>
+    </nav>
+  </div>
+
+  <section>
+    <h2>How voltik grew</h2>
+    <p class="lead">Every release, what it changed and the figures that show it, drawn live by today's voltik. The same as <a href="https://github.com/matheusmota-dev-br/voltik/blob/main/CHANGELOG.md"><code>CHANGELOG.md</code></a>.</p>
+    <div class="evo-stats" id="stats"></div>
+    <div class="card evo-chart">
+      <span class="label">Components of the CircuiTikZ manual that voltik draws</span>
+      <div class="eq" id="chart"><span class="status" id="status">Loading WebAssembly…</span></div>
+    </div>
+  </section>
+
+  <section>
+    <ol class="evo-releases" id="releases"></ol>
+  </section>
+
+  <footer>
+    <span>voltik · MIT or Apache-2.0 · Latin Modern Math (GUST Font License) and STIX Two Math (OFL-1.1) fonts, through mathra</span>
+    <a href="https://github.com/matheusmota-dev-br/voltik">github.com/matheusmota-dev-br/voltik</a>
+  </footer>
+</div>
+
+<script src="pkg/voltik_wasm.js"></script>
+<script src="pkg/corpus.js"></script>
+<script src="pkg/changelog.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const CORPUS = typeof VOLTIK_CORPUS === "undefined" ? [] : VOLTIK_CORPUS;
+  const LOG = typeof VOLTIK_CHANGELOG === "undefined" ? { releases: [], progress: [] } : VOLTIK_CHANGELOG;
+  const escape = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  // the little Markdown the changelog uses: `code`, **bold** and [links](url)
+  const inline = (s) => escape(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2">$1</a>');
+  const caption = (name) => { const s = name.replace(/-/g, " "); return s[0].toUpperCase() + s.slice(1); };
+  const day = (iso) => new Date(iso + "T12:00:00Z");
+  const short = (iso) => day(iso).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" });
+
+  // the numbers at a glance, from the changelog and the corpus
+  const released = LOG.releases.filter((r) => r.date);
+  const first = released[released.length - 1], last = released[0];
+  const start = LOG.progress[0], now = LOG.progress[LOG.progress.length - 1];
+  const stats = [
+    [String(released.length), "releases"],
+    [first && last ? `${Math.round((day(last.date) - day(first.date)) / 864e5) + 1} days` : "—", "from the first to the last"],
+    [now ? String(now.components) : "—", "components drawn"],
+    [String(CORPUS.length), "figures in the corpus"],
+  ];
+  $("stats").innerHTML = stats.map(([v, l]) => `<div class="card"><span class="evo-value">${escape(v)}</span><span>${escape(l)}</span></div>`).join("");
+
+  // the components drawn, release by release, as a pgfplots figure for voltik to draw
+  function chartTex() {
+    const x = (p) => Math.round((day(p.date) - day(start.date)) / 864e5);
+    const points = LOG.progress.map((p) => `(${x(p)},${p.components})`).join(" ");
+    const span = Math.max(x(now), 1);
+    const top = Math.max(...LOG.progress.map((p) => p.components)) * 1.2 + 1;
+    return String.raw`\begin{tikzpicture}
+\begin{axis}[width=13cm, height=5.5cm, ymin=0, ymax=${top}, xmin=-0.4, xmax=${span + 0.4},
+  xtick={${LOG.progress.map(x).join(",")}}, xticklabels={${LOG.progress.map((p) => short(p.date)).join(",")}},
+  axis lines=left, grid=major, grid style={gray!20}, tick label style={font=\small}]
+\addplot[very thick, teal!70!black, mark=*, mark options={fill=white}] coordinates {${points}};
+\node[above, font=\small] at (axis cs:${x(now)},${now.components}) {${now.components}};
+\end{axis}
+\end{tikzpicture}`;
+  }
+
+  function drawReleases(draw) {
+    const byName = new Map(CORPUS.map((f) => [f.name, f]));
+    $("releases").innerHTML = "";
+    for (const r of LOG.releases) {
+      const li = document.createElement("li");
+      li.className = "card evo-release";
+      const figures = r.figures.map((n) => byName.get(n)).filter(Boolean);
+      li.innerHTML =
+        `<div class="evo-head"><h3>${r.date ? `voltik ${escape(r.version)}` : "Next release"}</h3>` +
+        `<span class="stats">${r.date ? escape(short(r.date) + ", " + day(r.date).getUTCFullYear()) : "on main, not released yet"}</span></div>` +
+        (r.headline ? `<p class="evo-headline">${inline(r.headline)}</p>` : "") +
+        (r.items.length ? `<ul>${r.items.map((i) => `<li>${inline(i)}</li>`).join("")}</ul>` : "") +
+        (r.matches ? `<p class="evo-matches">${inline("**Matches TeX:** " + r.matches)}</p>` : "") +
+        (figures.length ? `<div class="gallery evo-figures"></div>` : "");
+      const box = li.querySelector(".evo-figures");
+      for (const f of figures) {
+        const a = document.createElement("a");
+        a.className = "card tile";
+        a.href = `index.html#${new URLSearchParams({ tikz: f.tex.replace(/^%[^\n]*\n/, "") })}`;
+        a.title = "Open in the playground";
+        a.innerHTML = `<div class="eq">${draw(f.tex)}</div><div class="cap"><span>${escape(caption(f.name))}</span></div>`;
+        box.append(a);
+      }
+      $("releases").append(li);
+    }
+  }
+
+  // the text first, the drawings once the WebAssembly is there
+  drawReleases(() => "");
+  function wasmSource() {
+    if (location.protocol !== "file:") return Promise.resolve("pkg/voltik_wasm_bg.wasm");
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "pkg/voltik_wasm_bytes.js";
+      s.onload = () => resolve(Uint8Array.from(atob(VOLTIK_WASM_BASE64), (c) => c.charCodeAt(0)));
+      s.onerror = () => reject(new Error("pkg/voltik_wasm_bytes.js not found: run site/build.sh"));
+      document.head.append(s);
+    });
+  }
+  if (typeof wasm_bindgen === "undefined") {
+    $("status").innerHTML = "pkg/voltik_wasm.js not found: run <code>site/build.sh</code>.";
+    return;
+  }
+  wasmSource()
+    .then((module_or_path) => wasm_bindgen({ module_or_path }))
+    .then(() => {
+      const draw = (tex) => { try { return JSON.parse(wasm_bindgen.render(tex)).svg; } catch { return ""; } };
+      if (start) $("chart").innerHTML = draw(chartTex());
+      drawReleases(draw);
+    })
+    .catch((e) => { $("status").textContent = `Could not load WebAssembly: ${String(e.message ?? e)}`; });
+})();
+</script>
+</body>
+</html>

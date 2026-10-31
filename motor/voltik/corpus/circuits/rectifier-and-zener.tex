@@ -1,0 +1,5 @@
+\begin{circuitikz}[voltage dir=RP]
+  \draw (0,0) to[sV=$v_s$] (0,3) to[D*, l=$D_1$, i=$i_D$] (3,3) to[C, l_=$C$] (3,0) -- (0,0);
+  \draw (3,3) to[R, l=$R_s$] (6,3) to[zD*, invert, l_=$D_Z$] (6,0) -- (3,0);
+  \draw (6,3) -- (8,3) to[R, l_=$R_L$, v^=$v_o$] (8,0) -- (6,0);
+\end{circuitikz}

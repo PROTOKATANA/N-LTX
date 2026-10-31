@@ -1,0 +1,11 @@
+% The site icon, drawn by voltik itself: site/build.sh writes favicon.svg, favicon-32.png and
+% apple-touch-icon.png from it. A resistor on the navy and amber of tikra and mathra.
+\begin{circuitikz}
+  \definecolor{ink}{HTML}{0E1726}
+  \definecolor{paper}{HTML}{FBF9F4}
+  \definecolor{warm}{HTML}{F2B544}
+  \fill[ink, rounded corners=2.1mm] (0,0) rectangle (1,1);
+  \draw[warm, line width=1.6pt, line cap=round] (0.14,0.24) -- (0.86,0.24);
+  \ctikzset{bipoles/length=0.62cm, resistors/scale=1.5, resistors/width=0.6}
+  \draw[paper, line width=0.9pt] (0.1,0.58) to[R] (0.9,0.58);
+\end{circuitikz}

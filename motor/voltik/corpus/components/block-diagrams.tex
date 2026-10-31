@@ -1,0 +1,8 @@
+\begin{circuitikz}
+  \draw (0,0) node[oscillator] (O) {$f_0$};
+  \draw (O.east) -- ++(0.4,0) node[mixer, anchor=west] (M) {};
+  \draw (M.east) to[bandpass] ++(2,0) to[amp, t=LNA] ++(2,0) to[adc] ++(2,0) to[dsp] ++(2,0);
+  \draw (M.south) -- ++(0,-0.6) node[adder, anchor=north] (A) {};
+  \draw (0,-2.6) to[lowpassp] ++(2,0) to[twoportsplit, t1=in, t2=out] ++(2,0) to[sacdc] ++(2,0) to[vamp, boxed] ++(2,0);
+  \draw (10,-2.6) node[coupler] (C) {} (C.right up) -- ++(0.4,0) node[bareantenna] {};
+\end{circuitikz}

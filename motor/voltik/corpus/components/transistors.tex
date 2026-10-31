@@ -1,0 +1,5 @@
+\begin{circuitikz}
+  \draw (0,0) node[npn] {npn} (2,0) node[pnp] {pnp} (4,0) node[nmos] {nmos} (6,0) node[pmos] {pmos} (8,0) node[nmosd] {nmosd} (10,0) node[nigbt] {nigbt};
+  \draw (0,-2) node[npn, bodydiode] {} (2,-2) node[npn, tr circle] {} (4,-2) node[nmos, bulk] {} (6,-2) node[nigfete, doublegate] {} (8,-2) node[njfet] {njfet} (10,-2) node[bjtnpn, emitters=2] {};
+  \path (-0.8,-3.2) (11.2,0.8);
+\end{circuitikz}

@@ -1,0 +1,20 @@
+\begin{circuitikz}
+  % class AB: the two diodes hold both transistors just on, so the crossover has no dead zone
+  \draw (2.2,1.5) node[npn] (Q1) {$Q_1$};
+  \draw (2.2,-1.5) node[pnp] (Q2) {$Q_2$};
+  \draw (Q1.E) -- (Q2.E);
+  % the bias chain
+  \draw (0.6,3) to[R, l_=$R_1$] (0.6,1.5) to[D*, l=$D_1$, *-*] (0.6,0)
+    to[D*, l=$D_2$, -*] (0.6,-1.5) to[R, l_=$R_2$] (0.6,-3);
+  \draw (0.6,1.5) -- (Q1.B);
+  \draw (0.6,-1.5) -- (Q2.B);
+  \draw (0.6,0) to[C, l=$C_i$, -o] (-1,0) node[left] {$v_i$};
+  % the supplies
+  \draw (0.6,3) -- (Q1.C |- 0,3) -- (Q1.C);
+  \draw (0.6,-3) -- (Q2.C |- 0,-3) -- (Q2.C);
+  \draw (1.4,3) to[short, *-] (1.4,3.3) node[vcc] {$+V_{CC}$};
+  \draw (1.4,-3) to[short, *-] (1.4,-3.3) node[vee] {$-V_{CC}$};
+  % the load
+  \draw (Q1.E |- 0,0) to[short, *-] (4,0) to[R, l=$R_L$] (4,-2) node[ground] {};
+  \draw (4,0) to[short, *-o] (5,0) node[right] {$v_o$};
+\end{circuitikz}

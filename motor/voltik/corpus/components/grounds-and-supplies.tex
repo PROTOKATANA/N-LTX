@@ -1,0 +1,6 @@
+\begin{circuitikz}
+  \foreach \g [count=\i] in {ground, tlground, rground, sground, tground, nground, pground, cground, eground, eground2} {
+    \draw (1.2*\i, 0) node[\g] {} -- ++(0,0.4) node[above, font=\tiny] {\g};
+  }
+  \draw (13.5,0) node[vcc] {$V_{DD}$} (14.5,0) node[vee] {$V_{SS}$};
+\end{circuitikz}

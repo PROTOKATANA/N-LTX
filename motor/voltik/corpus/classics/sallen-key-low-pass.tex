@@ -1,0 +1,13 @@
+\begin{circuitikz}
+  % unity-gain Sallen-Key low-pass: f_c = 1 / (2 pi sqrt(R1 R2 C1 C2))
+  \draw (5.4,0) node[op amp, noinv input up] (A) {};
+  \draw (0,0.5) node[left] {$v_i$} to[short, o-] (0.2,0.5)
+    to[R, l=$R_1$] (1.6,0.5) coordinate (N)
+    to[R, l=$R_2$, *-*] (3.0,0.5) coordinate (P) -- (A.+);
+  \draw (P) to[C, l_=$C_2$] (3.0,-1.8) node[ground] {};
+  % C1 feeds the output back to the middle node; the op amp is a follower
+  \draw (A.out) -- (7,0) coordinate (O);
+  \draw (N) -- (1.6,2) to[C, l=$C_1$] (7,2) -- (O);
+  \draw (A.-) -- ++(-0.2,0) |- (7,-1.3) -- (O);
+  \draw (O) to[short, *-o] (8,0) node[right] {$v_o$};
+\end{circuitikz}

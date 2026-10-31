@@ -1,0 +1,16 @@
+\begin{circuitikz}
+  % the Wien bridge: the RC network feeds back a third of the output at f = 1 / (2 pi R C), and
+  % the gain 1 + R_f / R_g = 3 keeps it oscillating
+  \draw (4.5,0) node[op amp] (A) {};
+  \draw (A.out) -- (6.2,0) coordinate (O);
+  % negative feedback: the gain
+  \draw (A.-) -- (2.8,0.5) coordinate (N);
+  \draw (N) to[R, l_=$R_g$, *-] (1.6,0.5) node[ground] {};
+  \draw (N) -- (2.8,1.8) to[R, l=$R_f$] (6.2,1.8) -- (O);
+  % positive feedback: the frequency
+  \draw (A.+) -- (2.8,-0.5) coordinate (P);
+  \draw (O) -- (6.2,-2.8) to[R, l=$R$] (4.5,-2.8) to[C, l=$C$] (2.8,-2.8) to[short, -*] (P);
+  \draw (P) -- (1.6,-0.5) to[R, l=$R$, *-] (1.6,-2.2) -- (0.4,-2.2) to[C, l=$C$] (0.4,-0.5) -- (1.6,-0.5);
+  \draw (1,-2.2) node[circ] {} node[ground] {};
+  \draw (O) to[short, *-o] (7.2,0) node[right] {$v_o$};
+\end{circuitikz}

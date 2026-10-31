@@ -1,0 +1,18 @@
+\begin{circuitikz}
+  % pull-up: two PMOS in parallel; pull-down: two NMOS in series
+  \draw (0,2.6) node[pmos, emptycircle] (PA) {$M_3$}
+    (3.8,2.6) node[pmos, emptycircle] (PB) {$M_4$}
+    (3.8,0.4) node[nmos] (NA) {$M_1$}
+    (3.8,-1.6) node[nmos] (NB) {$M_2$};
+  \draw (PA.S) -- ++(0,0.4) coordinate (ta) -- (ta -| PB.S) -- (PB.S);
+  \draw ($(ta)!0.5!(ta -| PB.S)$) node[circ] {} -- ++(0,0.4) node[vcc] {$V_{DD}$};
+  \draw (PA.D) -- ++(0,-0.4) coordinate (da) -- (da -| PB.D) node[circ] (y) {} -- (PB.D);
+  \draw (y) -- (NA.D);
+  \draw (NA.S) -- (NB.D);
+  \draw (NB.S) -- ++(0,-0.3) node[ground] {};
+  \draw (y) to[short, -o] ++(1.6,0) node[right] {$Y = \overline{AB}$};
+  \draw (PA.G) to[short, -o] ++(-0.8,0) node[left] {$A$};
+  \draw (PB.G) to[short, -o] ++(-0.8,0) node[left] {$B$};
+  \draw (NA.G) to[short, -o] ++(-0.8,0) node[left] {$A$};
+  \draw (NB.G) to[short, -o] ++(-0.8,0) node[left] {$B$};
+\end{circuitikz}

@@ -1,0 +1,41 @@
+\begin{circuitikz}
+  \ctikzset{bipoles/length=0.9cm}
+  % a window of the infinite triangular lattice, every edge a resistor R: rows 2 sin 60° apart,
+  % the odd ones shifted by half an edge; each node is joined to its two neighbours on its
+  % row and to the two above it, half an edge to each side
+  \foreach \r in {0,...,3} {
+    \pgfmathsetmacro{\y}{1.7321*\r}
+    \pgfmathtruncatemacro{\s}{mod(\r,2)}
+    \foreach \c in {0,...,3} \draw (2*\c+\s,\y) to[R] (2*\c+\s+2,\y);
+    \draw[dashed] (\s,\y) -- ++(-0.8,0);
+    \draw[dashed] (\s+8,\y) -- ++(0.8,0);
+  }
+  \foreach \r in {0,...,2} {
+    \pgfmathsetmacro{\y}{1.7321*\r}
+    \pgfmathtruncatemacro{\s}{mod(\r,2)}
+    \foreach \c in {0,...,4} {
+      % the node above to the right is in the window unless this is the last one of an odd row
+      \pgfmathtruncatemacro{\right}{\c < 4 || \s == 0}
+      \pgfmathtruncatemacro{\left}{\c > 0 || \s == 1}
+      \ifnum\right=1 \draw (2*\c+\s,\y) to[R] (2*\c+\s+1,\y+1.7321); \fi
+      \ifnum\left=1 \draw (2*\c+\s,\y) to[R] (2*\c+\s-1,\y+1.7321); \fi
+    }
+  }
+  % the lattice goes on above and below
+  \foreach \c in {0,...,4} {
+    \draw[dashed] (2*\c,0) -- ++(-0.4,-0.69) (2*\c,0) -- ++(0.4,-0.69);
+    \draw[dashed] (2*\c+1,5.1962) -- ++(-0.4,0.69) (2*\c+1,5.1962) -- ++(0.4,0.69);
+  }
+  \foreach \r in {0,...,3} {
+    \pgfmathsetmacro{\y}{1.7321*\r}
+    \pgfmathtruncatemacro{\s}{mod(\r,2)}
+    \foreach \c in {0,...,4} \node[circ] at (2*\c+\s,\y) {};
+  }
+  % two neighbours: I/6 leaves A on each of its six edges, I/6 reaches B on each of its
+  \node[circ, red, scale=1.6] at (3,1.7321) {};
+  \node[circ, red, scale=1.6] at (5,1.7321) {};
+  \draw[red, thick] (3,1.7321) -- (3.55,1.7321) (4.45,1.7321) -- (5,1.7321);
+  \node[red, below] at (3,1.55) {$A$};
+  \node[red, below] at (5,1.55) {$B$};
+  \node[right, align=left] at (9.6,2.6) {every edge: $R$\\[4pt] $\displaystyle R_{AB} = \frac{R}{3}$};
+\end{circuitikz}

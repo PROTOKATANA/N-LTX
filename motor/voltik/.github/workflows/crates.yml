@@ -1,0 +1,42 @@
+# Publishes the voltik and voltik-cli crates when a Rust version tag (v1.2.3) is pushed, with crates.io
+# trusted publishing: the job trades its GitHub identity for a short-lived token, so no token is stored.
+# Set it up once on crates.io, for each crate: Settings → Trusted Publishing, repository
+# matheusmota-dev-br/voltik, workflow crates.yml. crates.io only offers it for a crate that exists, so
+# the very first version of each one is published by hand (see "Releasing" in the README).
+name: crates
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: the tag matches the workspace version in Cargo.toml
+        run: test "v$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)" = "$GITHUB_REF_NAME"
+      - run: cargo test -p voltik -p voltik-cli
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      # one crate at a time, the core first, skipping a version already out, so rerunning a half-done
+      # release finishes it instead of failing on the crate that was published
+      - name: publish voltik, then voltik-cli
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for crate in voltik voltik-cli; do
+            if curl -sf -A "voltik-release (github.com/matheusmota-dev-br/voltik)" -o /dev/null "https://crates.io/api/v1/crates/$crate/$version"; then
+              echo "$crate $version is already on crates.io"
+            else
+              cargo publish -p "$crate"
+            fi
+          done

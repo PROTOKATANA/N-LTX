@@ -1,0 +1,18 @@
+\begin{circuitikz}
+  % each section a series R on top and a shunt R down to the return wire
+  \draw (0,2) node[left] {$A$} to[short, o-] (0.5,2);
+  \draw (0,0) node[left] {$B$} to[short, o-] (0.5,0);
+  \foreach \x in {0.5, 2.5, 4.5, 6.5} {
+    \draw (\x,2) to[R, l=$R$, -*] ++(2,0) coordinate (top);
+    \draw (top) to[R, l=$R$, -*] (top |- 0,0);
+    \draw (\x,0) -- ++(2,0);
+  }
+  % and so on, without end
+  \draw[dashed] (8.5,2) -- ++(1,0);
+  \draw[dashed] (8.5,0) -- ++(1,0);
+  \node at (10,1) {$\cdots$};
+  % the classic answer: the ladder seen from A and B is a section followed by itself
+  \draw[latex-latex, thin] (-0.6,1.8) -- (-0.6,0.2);
+  \node[left] at (-0.7,1) {$R_\mathrm{eq}$};
+  \node[below] at (4.75,-0.4) {$\displaystyle R_\mathrm{eq} = R + \frac{R\,R_\mathrm{eq}}{R + R_\mathrm{eq}} \;\Rightarrow\; R_\mathrm{eq} = \frac{1+\sqrt{5}}{2}\,R$};
+\end{circuitikz}

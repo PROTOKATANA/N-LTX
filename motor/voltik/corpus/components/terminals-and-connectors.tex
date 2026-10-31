@@ -1,0 +1,8 @@
+\begin{circuitikz}
+  \draw (0,1) node[circ] {} -- (1,1) node[ocirc] {} -- (2,1) node[diamondpole] {} -- (3,1) node[odiamondpole] {}
+        -- (4,1) node[squarepole] {} -- (5,1) node[osquarepole] {};
+  \draw (0,0) node[bnc, fill=cyan!20] (B) {in} -- (1.5,0) node[iecsocketL] {s} (2.2,0) node[iecplugR] {p};
+  \draw (B.shield) node[ground] {};
+  \draw (3,0) to[iec connector] (5,0);
+  \draw (6,1) -- (8,1) (7,2) -- (7,1) node[jump crossing] {} -- (7,0);
+\end{circuitikz}

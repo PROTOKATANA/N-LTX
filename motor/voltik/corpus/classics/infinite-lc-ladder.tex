@@ -1,0 +1,18 @@
+\begin{circuitikz}
+  % a lossless line, section by section: a series inductance and a shunt capacitance per length
+  \draw (0,2) node[left] {$v_1$} to[short, o-] (0.5,2);
+  \draw (0,0) to[short, o-] (0.5,0);
+  \foreach \x/\k in {0.5/1, 2.5/2, 4.5/3, 6.5/4} {
+    \draw (\x,2) to[L, l=$L$, -*] ++(2,0) coordinate (top);
+    \draw (top) to[C, l=$C$, -*] (top |- 0,0);
+    \draw (\x,0) -- ++(2,0);
+  }
+  % and so on, without end
+  \draw[dashed] (8.5,2) -- ++(1,0);
+  \draw[dashed] (8.5,0) -- ++(1,0);
+  \node at (10,1) {$\cdots$};
+  % the input sees the line's characteristic impedance
+  \draw[-latex, thin] (0.25,1) -- ++(1.2,0);
+  \node[above] at (0.85,1) {$Z_0$};
+  \node[below] at (4.75,-0.4) {$\displaystyle Z_0 = \frac{j\omega L}{2} + \sqrt{\frac{L}{C} - \frac{\omega^2 L^2}{4}} \;\approx\; \sqrt{\frac{L}{C}} \quad \left(\omega \ll \frac{1}{\sqrt{LC}}\right)$};
+\end{circuitikz}

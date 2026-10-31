@@ -1,0 +1,21 @@
+\begin{circuitikz}
+  \ctikzset{bipoles/length=1cm}
+  % a cube in oblique projection: the front face, the back face shifted up and right (so that
+  % no edge crosses a resistor of another), every edge a resistor R
+  \foreach \n/\x/\y in {1/0/0, 2/4.4/0, 3/4.4/4.4, 4/0/4.4} {
+    \coordinate (F\n) at (\x,\y);
+    \coordinate (K\n) at (\x+1.4,\y+1.1);
+  }
+  % the back face first, under the rest
+  \draw (K1) to[R] (K2) to[R] (K3) to[R] (K4) to[R] (K1);
+  \foreach \n in {1,...,4} \draw (F\n) to[R] (K\n);
+  \draw (F1) to[R] (F2) to[R] (F3) to[R] (F4) to[R] (F1);
+  \foreach \n in {1,...,4} \node[circ] at (F\n) {};
+  \foreach \n in {1,...,4} \node[circ] at (K\n) {};
+  % opposite corners: current in at A splits in three, then in six, then joins three again
+  \node[circ, red, scale=1.6] at (F1) {};
+  \node[circ, red, scale=1.6] at (K3) {};
+  \node[red, below left] at (F1) {$A$};
+  \node[red, above right] at (K3) {$B$};
+  \node[right, align=left] at (6.6,2.8) {every edge: $R$\\[4pt] $\displaystyle R_{AB} = \frac{R}{3} + \frac{R}{6} + \frac{R}{3} = \frac{5}{6}\,R$};
+\end{circuitikz}

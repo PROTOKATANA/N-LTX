@@ -1,0 +1,24 @@
+\begin{circuitikz}
+  % each transistor's collector drives the other's base through a capacitor: they take turns,
+  % each half-period about 0.69 R_B C
+  \draw (0,0) node[npn, xscale=-1] (Q1) {};
+  \path (Q1.C |- Q1.B) node[left] {$Q_1$};
+  \draw (5.6,0) node[npn] (Q2) {$Q_2$};
+  % the supply rail and the collector loads
+  \draw (0,3.8) -- (5.6,3.8);
+  \draw (2.8,3.8) to[short, *-] (2.8,4.1) node[vcc] {$+V_{CC}$};
+  \draw (0,3.8) to[R, l_=$R_{C1}$] (0,2.2) to[short, -*] (0,1.6) -- (Q1.C);
+  \draw (5.6,3.8) to[R, l=$R_{C2}$] (5.6,2.2) to[short, -*] (5.6,0.8) -- (Q2.C);
+  % the base resistors, crossed by the coupling capacitors
+  \draw (2,1.6) node[jump crossing] (X1) {};
+  \draw (3.6,0.8) node[jump crossing] (X2) {};
+  \draw (2,3.8) to[R, l_=$R_{B1}$, *-] (2,2.2) -- (X1.north) (X1.south) -- (2,0.8) to[short, *-] (2,0) -- (Q1.B);
+  \draw (3.6,3.8) to[R, l=$R_{B2}$, *-] (3.6,2.2) to[short, -*] (3.6,1.6) -- (X2.north) (X2.south) -- (3.6,0) -- (Q2.B);
+  \draw (0,1.6) to[C, l=$C_1$] (1.4,1.6) -- (X1.west) (X1.east) -- (3.6,1.6);
+  \draw (5.6,0.8) to[C, l_=$C_2$] (4.2,0.8) -- (X2.east) (X2.west) -- (2,0.8);
+  % the emitters
+  \draw (Q1.E) |- (2.8,-1.2) -| (Q2.E);
+  \draw (2.8,-1.2) node[circ] {} node[ground] {};
+  \draw (0,1.6) to[short, -o] (-1,1.6) node[left] {$v_{o1}$};
+  \draw (5.6,0.8) to[short, -o] (6.6,0.8) node[right] {$v_{o2}$};
+\end{circuitikz}

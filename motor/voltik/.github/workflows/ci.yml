@@ -1,0 +1,67 @@
+# The checks of scripts/check.sh, run again on main after each merge. Pull requests are checked on the
+# contributor's machine by the hooks in .githooks/.
+name: ci
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --exclude voltik-python --all-targets -- -D warnings
+      - run: cargo test --workspace --exclude voltik-python
+
+  wasm:
+    runs-on: ubuntu-latest
+    env:
+      # `cargo test --target wasm32-unknown-unknown` runs the tests on Node
+      CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: wasm-bindgen-test-runner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      # must match the wasm-bindgen version in Cargo.lock
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@0.2.129
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: cargo test -p voltik-wasm --target wasm32-unknown-unknown
+      - run: site/build.sh
+      # the npm package as users get it: packed, installed, imported with ESM and require
+      - run: npm/build.sh && npm/test/run.sh
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install maturin pytest
+          cd crates/python
+          maturin develop
+          python -m pytest tests

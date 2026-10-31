@@ -1,0 +1,24 @@
+% README banner, drawn by voltik itself: `voltik docs/banner.tex -o docs/banner.svg`.
+% The same version always writes the same bytes (crates/core/tests/banner.rs checks the committed file).
+\begin{circuitikz}
+  \definecolor{ink}{HTML}{0E1726}
+  \definecolor{paper}{HTML}{EEF2F8}
+  \definecolor{muted}{HTML}{8796AD}
+  \definecolor{rule}{HTML}{1F2D45}
+  \definecolor{accent}{HTML}{4FD1C5}
+  \definecolor{warm}{HTML}{F2B544}
+
+  % paper: the canvas and a fine grid
+  \fill[ink, rounded corners=8pt] (0,0) rectangle (16,4);
+  \draw[rule, step=0.25, line width=0.3pt] (9,0.25) grid (15.75,3.75);
+
+  % name and tagline
+  \node[anchor=base west, text=paper, font=\Huge\bfseries, scale=2.2] at (0.9,1.75) {voltik};
+  \node[anchor=base west, text=muted, font=\large] at (0.95,0.85) {CircuiTikZ to SVG, no TeX install};
+
+  % an RLC filter, drawn as any circuitikz path
+  \draw[accent, line width=0.8pt] (9.5,3) to[R=$R$, o-] (11.75,3)
+        to[L=$L$] (14.25,3) to[short, -o] (15.25,3);
+  \draw[accent, line width=0.8pt] (14.25,3) to[C, l_=$C$, *-*] (14.25,1) ;
+  \draw[warm, line width=0.8pt] (9.5,1) to[short, o-] (14.25,1) to[short, -o] (15.25,1);
+\end{circuitikz}

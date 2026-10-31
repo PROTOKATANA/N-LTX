@@ -1,0 +1,26 @@
+\begin{circuitikz}
+  % the ladder: 2R to ground at its far end, R between the nodes, a 2R leg per bit
+  \draw (0,4) to[R, l_=$2R$] (0,2) node[ground] {};
+  \draw (0,4) -- (2,4);
+  \foreach \x in {2, 4, 6} \draw (\x,4) to[R, l=$R$, *-*] ++(2,0);
+  \foreach \x/\b in {2/0, 4/1, 6/2, 8/3} {
+    \draw (\x,4) to[R, l=$2R$] (\x,2.2);
+    % each bit's switch: to ground when it is 0, to V_ref when it is 1
+    \draw (\x,2.2) node[spdt, rotate=-90, anchor=in] (S\b) {};
+    \node[right] at ([xshift=2pt, yshift=7pt]S\b.out 1) {$b_\b$};
+    \draw (S\b.out 2) -- ++(0,-0.25) node[ground] {};
+    \draw (S\b.out 1) -- (S\b.out 1 |- 0,0);
+  }
+  % the reference rail under the switches
+  \draw (S3.out 1 |- 0,0) -- (S0.out 1 |- 0,0);
+  \foreach \b in {0, 1, 2} \node[circ] at (S\b.out 1 |- 0,0) {};
+  \draw (S0.out 1 |- 0,0) to[short, -o] (0.6,0) node[left] {$V_\mathrm{ref}$};
+  % the op amp makes the ladder's current a voltage
+  \draw (8,4) to[short, *-] (9.4,4) coordinate (sum);
+  \draw (11.2,3.5) node[op amp] (A) {};
+  \draw (sum) |- (A.-);
+  \draw (A.+) -| ++(-0.4,-0.7) node[ground] {};
+  \draw (sum) to[short, *-] ++(0,1.3) to[R, l=$R$] ++(2.6,0) -| (A.out);
+  \draw (A.out) to[short, *-o] ++(0.8,0) node[right] {$v_o$};
+  \node at (6,-1.1) {$\displaystyle v_o = -\frac{V_\mathrm{ref}}{2}\left(b_3 + \frac{b_2}{2} + \frac{b_1}{4} + \frac{b_0}{8}\right)$};
+\end{circuitikz}

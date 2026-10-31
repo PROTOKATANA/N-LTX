@@ -1,0 +1,5 @@
+\begin{circuitikz}
+  \draw (0,0) to[R, l2=$R_1$ and \SI{4.7}{\kilo\ohm}] (0,3)
+        to[C, l=\SI{100}{\nano\farad}, i=\qty{2}{\milli\ampere}] (3,3)
+        to[L, a2=$L_1$ and \si{\milli\henry}, l2 halign=c] (3,0) -- (0,0);
+\end{circuitikz}

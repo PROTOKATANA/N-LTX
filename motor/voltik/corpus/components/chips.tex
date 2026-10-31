@@ -1,0 +1,10 @@
+\begin{circuitikz}
+  \draw (0,0) node[dipchip, num pins=8] (A) {NE555};
+  \draw (3.6,0) node[qfpchip, num pins=16, external pad fraction=6, anchor=pin 2] (B) at ($(A.pin 7)+(1.2,0)$) {MCU};
+  \draw (A.pin 7) -- (B.pin 2) (A.pin 8) -- ++(0.4,0) |- (B.pin 1);
+  \ctikzset{multipoles/dipchip/width=2}
+  \draw (8.2,0) node[dipchip, num pins=10, hide numbers, no topmark, external pins width=0] (C) {Block};
+  \node[right, font=\tiny] at (C.bpin 1) {RST};
+  \node[left, font=\tiny] at (C.bpin 8) {OUT};
+  \draw (C.bpin 8) to[short, -o] ++(0.5,0) (C.bpin 1) -- ++(-0.5,0);
+\end{circuitikz}

@@ -1,0 +1,8 @@
+\begin{circuitikz}
+  \draw (0,0) node[flipflop D] (A) {}
+    (2.6,0) node[flipflop JK, add async SR] (B) {}
+    (5.2,0) node[flipflop SR, dot on notQ] (C) {};
+  \draw (A.pin 6) -- (A.pin 6 -| B.pin 1) (A.pin 4) -- ++(0.3,0) |- (B.pin 3);
+  \draw (B.pin 6) -- (B.pin 6 -| C.pin 1);
+  \foreach \v [count=\i] in {2,0,2,6} \path (6.6+0.8*\i,0) node[seven segment val=\v dot none box on] {};
+\end{circuitikz}

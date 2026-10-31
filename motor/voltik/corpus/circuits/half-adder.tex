@@ -1,0 +1,8 @@
+\begin{circuitikz}
+  \draw (0,1) node[xor port] (X) {} (0,-1) node[and port] (A) {};
+  \draw (X.in 1) -- ++(-1.5,0) node[left] {$a$} (X.in 2) -- ++(-0.6,0) coordinate (b1);
+  \draw (A.in 1) -- ++(-0.9,0) coordinate (a1) (A.in 2) -- ++(-1.5,0) node[left] {$b$};
+  \draw (a1) node[circ] {} |- ($(X.in 1)+(-0.9,0)$) node[circ] {};
+  \draw (b1) node[circ] {} |- ($(A.in 2)+(-0.6,0)$) node[circ] {};
+  \draw (X.out) -- ++(0.5,0) node[right] {$s$} (A.out) -- ++(0.5,0) node[right] {$c$};
+\end{circuitikz}

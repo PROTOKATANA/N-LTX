@@ -1,0 +1,20 @@
+\begin{circuitikz}
+  % common-emitter Colpitts: the tank L, C1, C2 turns the collector's signal round and feeds it
+  % back to the base; it oscillates at f = 1 / (2 pi sqrt(L C1 C2 / (C1 + C2)))
+  \draw (3,0) node[npn] (Q) {$Q_1$};
+  % bias and supply
+  \draw (0.6,3.2) to[R, l_=$R_1$] (0.6,0) to[R, l_=$R_2$, *-] (0.6,-2) node[ground] {};
+  \draw (0.6,0) -- (Q.B);
+  \draw (Q.C) -- (3,1.4) to[R, l=$R_C$, *-] (3,3.2) -- (0.6,3.2);
+  \draw (1.8,3.2) to[short, *-] (1.8,3.5) node[vcc] {$+V_{CC}$};
+  \draw (Q.E) -- (3,-1.1) coordinate (e) to[R, l=$R_E$, *-] (3,-2.6) node[ground] {};
+  \draw (e) -- (4.3,-1.1) to[C, l=$C_E$] (4.3,-2.6) node[ground] {};
+  % the tank
+  \draw (3,1.4) to[C, l=$C_c$] (5.8,1.4) coordinate (T);
+  \draw (T) to[C, l_=$C_1$, *-*] (5.8,-0.4) to[C, l_=$C_2$, -*] (5.8,-2.2) coordinate (U);
+  \draw (5.8,-0.4) -- (6.5,-0.4) node[ground] {};
+  \draw (T) -- (7.4,1.4) to[L, l=$L$] (7.4,-2.2) -- (U);
+  % fed back to the base
+  \draw (U) |- (1.6,-3.6) to[C, l_=$C_b$] (1.6,-1) to[short, -*] (1.6,0);
+  \draw (7.4,1.4) to[short, *-o] (8.4,1.4) node[right] {$v_o$};
+\end{circuitikz}

@@ -1,0 +1,11 @@
+\begin{circuitikz}
+  \draw (0,1.3) node[nor port] (N1) {}
+    (0,-1.3) node[nor port] (N2) {};
+  % the outputs, each fed back to the other gate's input
+  \draw (N1.out) -- ++(0.4,0) coordinate (q) to[short, *-o] ++(1.2,0) node[right] {$Q$};
+  \draw (N2.out) -- ++(0.4,0) coordinate (nq) to[short, *-o] ++(1.2,0) node[right] {$\overline{Q}$};
+  \draw (q) -- ++(0,-0.9) -| ($(N2.in 1)+(-0.9,0)$) -- (N2.in 1);
+  \draw (nq) -- ++(0,0.9) -| ($(N1.in 2)+(-0.5,0)$) -- (N1.in 2);
+  \draw (N1.in 1) to[short, -o] ++(-1.6,0) node[left] {$R$};
+  \draw (N2.in 2) to[short, -o] ++(-1.6,0) node[left] {$S$};
+\end{circuitikz}

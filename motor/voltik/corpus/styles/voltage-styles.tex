@@ -1,0 +1,8 @@
+\begin{circuitikz}
+  \draw (0,3) to[R, l=european, v=$v$] (3,3);
+  \draw[straight voltages] (4,3) to[R, l=straight, v=$v$] (7,3);
+  \draw[american voltages] (0,1) to[R, l=american, v=$v$] (3,1);
+  \draw[raised voltages] (4,1) to[R, l=raised, v=$v$] (7,1);
+  \draw[american voltages] (0,-0.5) to[open, v=$v_o$, o-o] (3,-0.5);
+  \draw (4,-0.5) to[C, v_>=$v_C$, voltage shift=0.5] (7,-0.5);
+\end{circuitikz}

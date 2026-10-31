@@ -1,0 +1,16 @@
+[package]
+name = "voltik"
+description = "CircuiTikZ circuits to SVG and PNG with no TeX install, as a library of tikra."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+keywords = ["circuitikz", "tikz", "circuit", "svg", "latex"]
+categories = ["rendering", "graphics", "text-processing"]
+
+include = ["src/**", "Cargo.toml"]
+
+[dependencies]
+tikra.workspace = true

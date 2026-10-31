@@ -1,0 +1,6 @@
+\begin{circuitikz}
+  \draw (0,3) to[spst, l=spst] ++(2,0) to[nos, l=nos] ++(2,0) to[ncs, l=ncs] ++(2,0) to[push button, l=push button] ++(2,0) to[toggle switch, l=toggle] ++(2,0);
+  \draw (0,1.5) to[cosw, l=cosw] ++(2,0) to[ccgsw, l=ccgsw] ++(2,0) to[reed, l=reed] ++(2,0) to[open jumper, l=open jumper] ++(2,0) to[three-pins jumper, tjumper connections=12, l=3-pin] ++(2,0);
+  \draw (0,0) to[open solder jumper] ++(2,0) to[closed double solder jumper] ++(2,0) to[inline proximeter] ++(2,0);
+  \draw (7.4,0) node[spdt] {} (8.9,0) node[cute spdt up arrow] {} (10.2,0) node[proximeter] {};
+\end{circuitikz}

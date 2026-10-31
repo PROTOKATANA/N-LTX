@@ -1,0 +1,19 @@
+[package]
+name = "voltik-cli"
+description = "Command line for voltik: CircuiTikZ to SVG and PNG."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+keywords = ["circuitikz", "tikz", "circuit", "svg", "cli"]
+categories = ["command-line-utilities", "rendering", "graphics"]
+
+[[bin]]
+name = "voltik"
+path = "src/main.rs"
+
+[dependencies]
+voltik.workspace = true
+tikra.workspace = true

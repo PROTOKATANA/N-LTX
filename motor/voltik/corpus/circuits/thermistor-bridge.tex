@@ -1,0 +1,6 @@
+\begin{circuitikz}
+  \draw (0,0) to[R=$R_1$, *-*] (2,2) to[thR=$R_T$, -*] (4,0);
+  \draw (0,0) to[R, l_=$R_2$] (2,-2) to[pR, l_=$P$, name=P, -*] (4,0);
+  \draw (2,2) to[short, *-o] (2,3) node[above] {$V_\mathrm{ref}$};
+  \draw (P.wiper) to[short, -o] ++(0,-1) node[below] {$v_\mathrm{out}$};
+\end{circuitikz}

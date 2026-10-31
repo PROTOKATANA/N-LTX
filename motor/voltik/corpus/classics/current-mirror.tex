@@ -1,0 +1,13 @@
+\begin{circuitikz}
+  % Q1, wired as a diode, sets the base voltage; Q2 copies its current into the load
+  \draw (0,0) node[npn, xscale=-1] (Q1) {};
+  \path (Q1.C |- Q1.B) node[left] {$Q_1$};
+  \draw (3,0) node[npn] (Q2) {$Q_2$};
+  \draw (Q1.B) -- (Q2.B);
+  \draw (Q1.C) -| (1.5,0) node[circ] {};
+  \draw (Q1.C) to[R, l=$R_\mathrm{ref}$, f<^=$I_\mathrm{ref}$, *-] (Q1.C |- 0,2.6)
+    -- (Q2.C |- 0,2.6) to[R, l_=$R_L$, f^>=$I_o$] (Q2.C);
+  \draw (1.5,2.6) to[short, *-] (1.5,2.9) node[vcc] {$+V_{CC}$};
+  \draw (Q1.E) |- (1.5,-1.2) -| (Q2.E);
+  \draw (1.5,-1.2) node[circ] {} node[ground] {};
+\end{circuitikz}

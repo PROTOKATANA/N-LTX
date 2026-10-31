@@ -1,0 +1,23 @@
+\begin{circuitikz}
+  % the mains and the step-down transformer
+  \draw (1.5,1.5) node[transformer core] (T) {};
+  \draw (T.A1) -- ++(-0.8,0) coordinate (a);
+  \draw (T.A2) -- ++(-0.8,0) coordinate (b);
+  \draw (a) to[sV, l_=$\SI{230}{V}$] (b);
+  % the diode bridge, as a diamond: the ac at its top and bottom, the dc at its sides
+  \coordinate (top) at (4.8,3.3);
+  \coordinate (bot) at (4.8,-0.3);
+  \coordinate (lft) at (3.0,1.5);
+  \coordinate (rgt) at (6.6,1.5);
+  \draw (lft) to[D*] (top) to[D*] (rgt);
+  \draw (lft) to[D*] (bot) to[D*] (rgt);
+  \draw (T.B1) |- (top) node[circ] {};
+  \draw (T.B2) |- (bot) node[circ] {};
+  \node[circ] at (lft) {};
+  \node[circ] at (rgt) {};
+  % the smoothing capacitor and the load
+  \draw (rgt) -- (7.6,1.5) to[eC, l_=$C$, *-*] (7.6,-1) -- (3.0,-1) -- (lft);
+  \draw (7.6,1.5) -- (9.1,1.5) to[R, l=$R_L$] (9.1,-1) -- (7.6,-1);
+  \draw (9.1,1.5) to[short, *-o] (10.1,1.5) node[right] {$+V_o$};
+  \draw (9.1,-1) to[short, *-o] (10.1,-1) node[right] {$-$};
+\end{circuitikz}

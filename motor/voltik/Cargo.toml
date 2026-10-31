@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/cli", "crates/python", "crates/wasm"]
+# python and wasm need maturin and wasm-bindgen to build a package; they stay out of the default `cargo build`
+default-members = ["crates/core", "crates/cli"]
+
+[workspace.package]
+version = "0.16.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/matheusmota-dev-br/voltik"
+homepage = "https://github.com/matheusmota-dev-br/voltik"
+
+[workspace.dependencies]
+# the core's published name lives only here and in crates/core/Cargo.toml
+voltik = { path = "crates/core", version = "0.16.0" }
+# the figures are drawn by tikra; voltik is a library of it (tikra::extension)
+tikra = "1.8.1"
