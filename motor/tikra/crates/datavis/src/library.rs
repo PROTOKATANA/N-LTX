@@ -316,10 +316,20 @@ struct Range {
 const PI: &str = "3.141592653589793";
 const HALF_PI: &str = "1.570796326794897";
 
-/// The clean variant's radius axis at `at`: its texts on `side`, its ticks from the axis toward
-/// `end`, moved by the angle axis' padding at the range's `end` (`shift` is `xshift`, `yshift`,
-/// `-xshift`…), and more options for its ticks.
-fn entry(which: &str, at: &str, side: &str, end: &str, shift: &str, more: &str) -> String {
+/// One radius axis of a clean scientific polar system: where it sits, which side its text uses,
+/// and how far the angle axis' padding moves it (`shift` is `xshift`, `-xshift`…).
+struct RadiusAt<'a> {
+    which: &'a str,
+    at: &'a str,
+    side: &'a str,
+    end: &'a str,
+    shift: &'a str,
+    more: &'a str,
+}
+
+/// The clean variant's radius axis, as the five brace groups its style reads.
+fn entry(place: RadiusAt) -> String {
+    let RadiusAt { which, at, side, end, shift, more } = place;
     let shift = match shift.strip_prefix('-') {
         _ if shift.is_empty() => String::new(),
         Some(k) => format!("{k}=-\\pgfkeysvalueof{{/tikz/data visualization/angle axis/padding {which}}}"),
@@ -338,7 +348,11 @@ fn ranges() -> Vec<Range> {
             unit: "@rad",
             zero: "north east",
             inner: leak(format!("{{0}}{{low}},{{{HALF_PI}}}{{high}}")),
-            clean: leak(format!("{},{}", entry("min", "0", "low", "high", "yshift", ""), entry("max", HALF_PI, "high", "low", "-xshift", ""))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "0", side: "low", end: "high", shift: "yshift", more: "" }),
+                entry(RadiusAt { which: "max", at: HALF_PI, side: "high", end: "low", shift: "-xshift", more: "" })
+            )),
         },
         Range {
             name: "0 to 90",
@@ -346,7 +360,11 @@ fn ranges() -> Vec<Range> {
             unit: "@degrees",
             zero: "north east",
             inner: "{0}{low},{90}{high}",
-            clean: leak(format!("{},{}", entry("min", "0", "low", "high", "yshift", ""), entry("max", "90", "high", "low", "-xshift", ""))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "0", side: "low", end: "high", shift: "yshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "90", side: "high", end: "low", shift: "-xshift", more: "" })
+            )),
         },
         Range {
             name: "quadrant",
@@ -354,7 +372,11 @@ fn ranges() -> Vec<Range> {
             unit: "",
             zero: "north east",
             inner: "{min}{low},{max}{high}",
-            clean: leak(format!("{},{}", entry("min", "min", "low", "high", "yshift", ""), entry("max", "max", "high", "low", "-xshift", ""))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "min", side: "low", end: "high", shift: "yshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "max", side: "high", end: "low", shift: "-xshift", more: "" })
+            )),
         },
         Range {
             name: "quadrant clockwise",
@@ -362,7 +384,11 @@ fn ranges() -> Vec<Range> {
             unit: "",
             zero: "north east",
             inner: "{min}{low},{max}{high}",
-            clean: leak(format!("{},{}", entry("min", "max", "high", "low", "yshift", ""), entry("max", "min", "low", "high", "-xshift", ""))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "max", side: "high", end: "low", shift: "yshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "min", side: "low", end: "high", shift: "-xshift", more: "" })
+            )),
         },
         Range {
             name: "-pi half to 0",
@@ -370,7 +396,11 @@ fn ranges() -> Vec<Range> {
             unit: "@rad",
             zero: "south east",
             inner: leak(format!("{{-{HALF_PI}}}{{low}},{{0}}{{high}}")),
-            clean: leak(format!("{},{}", entry("min", &format!("-{HALF_PI}"), "low", "high", "xshift", ""), entry("max", "0", "high", "low", "yshift", ""))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: &format!("-{HALF_PI}"), side: "low", end: "high", shift: "xshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "0", side: "high", end: "low", shift: "yshift", more: "" })
+            )),
         },
         Range {
             name: "-90 to 0",
@@ -378,7 +408,11 @@ fn ranges() -> Vec<Range> {
             unit: "@degrees",
             zero: "south east",
             inner: "{-90}{low},{0}{high}",
-            clean: leak(format!("{},{}", entry("min", "-90", "low", "high", "xshift", ""), entry("max", "0", "high", "low", "yshift", ""))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "-90", side: "low", end: "high", shift: "xshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "0", side: "high", end: "low", shift: "yshift", more: "" })
+            )),
         },
         Range {
             name: "fourth quadrant",
@@ -386,7 +420,11 @@ fn ranges() -> Vec<Range> {
             unit: "",
             zero: "south east",
             inner: "{min}{low},{max}{high}",
-            clean: leak(format!("{},{}", entry("min", "min", "low", "high", "xshift", ""), entry("max", "max", "high", "low", "yshift", ""))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "min", side: "low", end: "high", shift: "xshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "max", side: "high", end: "low", shift: "yshift", more: "" })
+            )),
         },
         Range {
             name: "fourth quadrant clockwise",
@@ -394,7 +432,11 @@ fn ranges() -> Vec<Range> {
             unit: "",
             zero: "south east",
             inner: "{min}{low},{max}{high}",
-            clean: leak(format!("{},{}", entry("min", "max", "high", "low", "xshift", ""), entry("max", "min", "low", "high", "yshift", ""))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "max", side: "high", end: "low", shift: "xshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "min", side: "low", end: "high", shift: "yshift", more: "" })
+            )),
         },
         Range {
             name: "0 to pi",
@@ -402,7 +444,11 @@ fn ranges() -> Vec<Range> {
             unit: "@rad",
             zero: "north",
             inner: leak(format!("{{0}}{{low}},{{{HALF_PI}}}{{high}},{{{PI}}}{{high}}")),
-            clean: leak(format!("{},{}", entry("min", "0", "low", "high", "yshift", ""), entry("max", PI, "high", "low", "-yshift", nt))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "0", side: "low", end: "high", shift: "yshift", more: "" }),
+                entry(RadiusAt { which: "max", at: PI, side: "high", end: "low", shift: "-yshift", more: nt })
+            )),
         },
         Range {
             name: "0 to 180",
@@ -410,7 +456,11 @@ fn ranges() -> Vec<Range> {
             unit: "@degrees",
             zero: "north",
             inner: "{0}{low},{90}{high},{180}{high}",
-            clean: leak(format!("{},{}", entry("min", "0", "low", "high", "yshift", ""), entry("max", "180", "high", "low", "-yshift", nt))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "0", side: "low", end: "high", shift: "yshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "180", side: "high", end: "low", shift: "-yshift", more: nt })
+            )),
         },
         Range {
             name: "upper half",
@@ -418,7 +468,11 @@ fn ranges() -> Vec<Range> {
             unit: "",
             zero: "north",
             inner: "{min}{low},{max}{high}",
-            clean: leak(format!("{},{}", entry("min", "min", "low", "high", "yshift", ""), entry("max", "max", "high", "low", "-yshift", nt))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "min", side: "low", end: "high", shift: "yshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "max", side: "high", end: "low", shift: "-yshift", more: nt })
+            )),
         },
         Range {
             name: "upper half clockwise",
@@ -426,7 +480,11 @@ fn ranges() -> Vec<Range> {
             unit: "",
             zero: "north",
             inner: "{min}{low},{max}{high}",
-            clean: leak(format!("{},{}", entry("min", "min", "low", "high", "yshift", ""), entry("max", "max", "high", "low", "-yshift", nt))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "min", side: "low", end: "high", shift: "yshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "max", side: "high", end: "low", shift: "-yshift", more: nt })
+            )),
         },
         Range {
             name: "lower half",
@@ -434,7 +492,11 @@ fn ranges() -> Vec<Range> {
             unit: "",
             zero: "south",
             inner: "{min}{low},{max}{high}",
-            clean: leak(format!("{},{}", entry("min", "min", "low", "high", "-yshift", ""), entry("max", "max", "high", "low", "yshift", nt))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "min", side: "low", end: "high", shift: "-yshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "max", side: "high", end: "low", shift: "yshift", more: nt })
+            )),
         },
         Range {
             name: "lower half clockwise",
@@ -442,7 +504,11 @@ fn ranges() -> Vec<Range> {
             unit: "",
             zero: "south",
             inner: "{min}{low},{max}{high}",
-            clean: leak(format!("{},{}", entry("min", "min", "low", "high", "-yshift", ""), entry("max", "max", "high", "low", "yshift", nt))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "min", side: "low", end: "high", shift: "-yshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "max", side: "high", end: "low", shift: "yshift", more: nt })
+            )),
         },
         Range {
             name: "-pi half to pi half",
@@ -450,7 +516,11 @@ fn ranges() -> Vec<Range> {
             unit: "@rad",
             zero: "east",
             inner: leak(format!("{{0}}{{low}},{{{HALF_PI}}}{{low}},{{-{HALF_PI}}}{{high}}")),
-            clean: leak(format!("{},{}", entry("min", &format!("-{HALF_PI}"), "low", "high", "xshift", ""), entry("max", HALF_PI, "high", "low", "-xshift", nt))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: &format!("-{HALF_PI}"), side: "low", end: "high", shift: "xshift", more: "" }),
+                entry(RadiusAt { which: "max", at: HALF_PI, side: "high", end: "low", shift: "-xshift", more: nt })
+            )),
         },
         Range {
             name: "-90 to 90",
@@ -458,7 +528,11 @@ fn ranges() -> Vec<Range> {
             unit: "@degrees",
             zero: "east",
             inner: "{-90}{low},{0}{low},{90}{high}",
-            clean: leak(format!("{},{}", entry("min", "-90", "low", "high", "xshift", ""), entry("max", "90", "high", "low", "-xshift", nt))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "-90", side: "low", end: "high", shift: "xshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "90", side: "high", end: "low", shift: "-xshift", more: nt })
+            )),
         },
         Range {
             name: "right half",
@@ -466,7 +540,11 @@ fn ranges() -> Vec<Range> {
             unit: "",
             zero: "east",
             inner: "{min}{low},{max}{high}",
-            clean: leak(format!("{},{}", entry("min", "min", "low", "high", "xshift", ""), entry("max", "max", "high", "low", "-xshift", nt))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "min", side: "low", end: "high", shift: "xshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "max", side: "high", end: "low", shift: "-xshift", more: nt })
+            )),
         },
         Range {
             name: "right half clockwise",
@@ -474,7 +552,11 @@ fn ranges() -> Vec<Range> {
             unit: "",
             zero: "east",
             inner: "{min}{low},{max}{high}",
-            clean: leak(format!("{},{}", entry("min", "min", "low", "high", "xshift", ""), entry("max", "max", "high", "low", "-xshift", nt))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "min", side: "low", end: "high", shift: "xshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "max", side: "high", end: "low", shift: "-xshift", more: nt })
+            )),
         },
         Range {
             name: "left half",
@@ -482,7 +564,11 @@ fn ranges() -> Vec<Range> {
             unit: "",
             zero: "west",
             inner: "{min}{low},{max}{high}",
-            clean: leak(format!("{},{}", entry("min", "min", "low", "high", "-xshift", ""), entry("max", "max", "high", "low", "xshift", nt))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "min", side: "low", end: "high", shift: "-xshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "max", side: "high", end: "low", shift: "xshift", more: nt })
+            )),
         },
         Range {
             name: "left half clockwise",
@@ -490,7 +576,11 @@ fn ranges() -> Vec<Range> {
             unit: "",
             zero: "west",
             inner: "{min}{low},{max}{high}",
-            clean: leak(format!("{},{}", entry("min", "min", "low", "high", "-xshift", ""), entry("max", "max", "high", "low", "xshift", nt))),
+            clean: leak(format!(
+                "{},{}",
+                entry(RadiusAt { which: "min", at: "min", side: "low", end: "high", shift: "-xshift", more: "" }),
+                entry(RadiusAt { which: "max", at: "max", side: "high", end: "low", shift: "xshift", more: nt })
+            )),
         },
         Range {
             name: "0 to 2pi",
@@ -584,9 +674,9 @@ fn polar() -> String {
     out
 }
 
-/// Everything, as TeX to run once.
-pub fn definitions() -> String {
-    let mut out = String::from(BASE);
+/// Tick, grid, padding, about-strategy and handler styles, from the tables above.
+fn tick_styles() -> String {
+    let mut out = String::new();
     for (kind, ticks, grid) in KINDS {
         out.push_str(&format!(
             "\\tikzdatavisualizationset{{every {kind} ticks/.style={{{ticks}}},every {kind} grid/.style={{{grid}}},\
@@ -607,11 +697,15 @@ pub fn definitions() -> String {
         out.push_str(&format!("\\tikzdatavisualizationset{{{name} about strategy/.style={{about strategy={{{list}}}}}}}\n"));
     }
     out.push_str("\\tikzdatavisualizationset{standard about strategy}\n");
-    // the visualizers' handlers
     for (option, handler, sample) in HANDLERS {
         out.push_str(&format!("\\tikzdatavisualizationset{{visualizer options/{option}/.style={{@handler={{{handler}}}{{{sample}}}}}}}\n"));
     }
-    // style sheets
+    out
+}
+
+/// The style sheets, including `vary thickness and dashing`, `cross marks` and the color series.
+fn style_sheets() -> String {
+    let mut out = String::new();
     for (name, default, numbered) in SHEETS {
         let mut styles = format!("default style/.style={{{default}}}");
         for (i, s) in numbered.iter().enumerate() {
@@ -640,7 +734,12 @@ pub fn definitions() -> String {
     for (name, model, start, step) in SERIES {
         out.push_str(&format!("\\tikzdvdeclarestylesheetcolorseries{{{name}}}{{{model}}}{{{start}}}{{{step}}}\n"));
     }
-    // legends: arrangement, placement, styling
+    out
+}
+
+/// Legend arrangement, placement and styling.
+fn legend_options() -> String {
+    let mut out = String::new();
     let mut legend = String::from("legend options/.cd,");
     for (key, sub, value) in [("ideal number of columns", "@columns or rows", "columns"), ("ideal number of rows", "@columns or rows", "rows")] {
         legend.push_str(&format!("{key}/.style={{\\tikra@dv@legend/{sub}={value},\\tikra@dv@legend/@ideal={{#1}}}},"));
@@ -674,7 +773,12 @@ pub fn definitions() -> String {
     legend.push_str("label style/.style={matrix node style={/tikz/data visualization/every label in legend/.append style={#1}}},");
     legend.push_str("matrix node style/.style={\\tikra@dv@legend/matrix node styling/.append style={#1}}");
     out.push_str(&format!("\\tikzdatavisualizationset{{{legend}}}\n"));
-    // legend entry samples
+    out
+}
+
+/// The samples a legend entry draws for its visualizer.
+fn legend_samples() -> String {
+    let mut out = String::new();
     let mut samples = String::from("legend entry options/.cd,");
     for (name, line, marks) in SAMPLES {
         samples.push_str(&format!("{name}/.style={{label in legend line coordinates={{{line}}},label in legend mark coordinates={{{marks}}}}},"));
@@ -685,7 +789,12 @@ pub fn definitions() -> String {
     let gap = ellipse_points(&[90, 162, 234, 306, 18], "xshift=-1em,yshift=.2ex", "1.4ex and 0.9ex");
     samples.push_str(&format!("gap circular label in legend line/.style={{label in legend line coordinates={{{gap}}},label in legend mark coordinates={{{gap}}}}}"));
     out.push_str(&format!("\\tikzdatavisualizationset{{{samples}}}\n"));
-    // the basic axis systems
+    out
+}
+
+/// `xy Cartesian`, `uv Cartesian` and the two cabinet systems.
+fn cartesian_axes() -> String {
+    let mut out = String::new();
     for (name, names, z) in [("xy Cartesian", ["x", "y"], ""), ("uv Cartesian", ["u", "v"], "")] {
         out.push_str(&format!(
             "\\tikzdatavisualizationset{{{name}/.style={{new Cartesian axis={0} axis,{0} axis={{attribute={0},unit vector={{(1pt,0cm)}}}},\
@@ -698,6 +807,17 @@ pub fn definitions() -> String {
             "\\tikzdatavisualizationset{{{name}/.style={{{base},new Cartesian axis={third} axis,{third} axis={{attribute={third},unit vector={{(-0.353553pt,-0.353553pt)}}}}}}}}\n"
         ));
     }
+    out
+}
+
+/// Everything, as TeX to run once.
+pub fn definitions() -> String {
+    let mut out = String::from(BASE);
+    out.push_str(&tick_styles());
+    out.push_str(&style_sheets());
+    out.push_str(&legend_options());
+    out.push_str(&legend_samples());
+    out.push_str(&cartesian_axes());
     out.push_str(&school_book());
     out.push_str(&scientific());
     out.push_str(&polar());

@@ -5,13 +5,13 @@
 //! Keys that many share one function (`x axis`, `y axis`… or the visualizers' names) tell
 //! themselves apart by the key's path (`Engine::current_key`).
 
-use crate::keys::{self, macro_name};
-use crate::scene::Point;
-use crate::tex::{self, Cat, Meaning, Token};
-use crate::{Error, PT};
+use tikra_engine::keys::{self, macro_name};
+use tikra_engine::scene::Point;
+use tikra_engine::tex::{self, Cat, Meaning, Token};
+use tikra_engine::{Error, PT};
 
-use super::{group, key_text, macro_text, set_key, Engine, Hooks, Object, Signal, Slot};
-use crate::engine::{macro_tokens, options::KeyFn, tikra_tokens};
+use super::{group, key_text, macro_text, set_key, Hooks, Object, Signal, Slot};
+use tikra_engine::engine::{macro_tokens, options::KeyFn, tikra_tokens, Engine};
 
 /// The data visualization keys' root.
 pub const DV: &str = "/tikz/data visualization";
@@ -206,7 +206,7 @@ fn k_hook(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
 }
 
 pub fn add_hook(e: &mut Engine, name: &str, code: Vec<Token>) -> Result<(), Error> {
-    let Some(dv) = e.datavis.last_mut() else { return Ok(()) };
+    let Some(dv) = crate::running(e).last_mut() else { return Ok(()) };
     let h: &mut Hooks = &mut dv.hooks;
     let (list, front) = match name {
         "before survey" => (&mut h.before_survey, false),
@@ -264,7 +264,7 @@ fn k_new_object(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
 /// `data point={x=1, y=2}`: one data point, added to the data.
 fn k_data_point(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
     let code = super::data_point_code(v.unwrap_or_default());
-    e.do_add_data(code)
+    crate::do_add_data(e, code)
 }
 
 // ---------------------------------------------------------------- axes
@@ -304,7 +304,7 @@ fn new_axis(e: &mut Engine, name: &str) -> Result<(), Error> {
         set_key(e, &format!("{axis}/{sub}"), value);
     }
     define_native(e, &axis, k_axis);
-    if let Some(dv) = e.datavis.last_mut() {
+    if let Some(dv) = crate::running(e).last_mut() {
         if !dv.axes.iter().any(|a| a == name) {
             dv.axes.push(name.to_string());
         }
@@ -315,10 +315,10 @@ fn new_axis(e: &mut Engine, name: &str) -> Result<(), Error> {
 /// Makes `path` a key with native code `f` (for keys defined while running, like axes).
 pub fn define_native(e: &mut Engine, path: &str, f: KeyFn) {
     let id = match e.key_fns.iter().position(|g| *g as usize == f as usize) {
-        Some(i) => super::NATIVE_KEY_BASE + i as u16,
+        Some(i) => tikra_engine::engine::NATIVE_KEY_BASE + i as u16,
         None => {
             e.key_fns.push(f);
-            super::NATIVE_KEY_BASE + (e.key_fns.len() - 1) as u16
+            tikra_engine::engine::NATIVE_KEY_BASE + (e.key_fns.len() - 1) as u16
         }
     };
     e.tex.define(&macro_name(&format!("{path}/.@cmd")), Meaning::Native(id));
@@ -327,8 +327,8 @@ pub fn define_native(e: &mut Engine, path: &str, f: KeyFn) {
 /// `reset cm` in a legend's cell: back to the cell's origin, as TeX's cell box keeps it.
 pub fn k_cell_reset_cm(e: &mut Engine, _v: Option<Vec<Token>>) -> Result<(), Error> {
     let t = e.st.transform;
-    e.st.transform = crate::scene::Transform { a: 1.0, b: 0.0, c: 0.0, d: 1.0, ..t };
-    e.st.pending = crate::scene::Transform::default();
+    e.st.transform = tikra_engine::scene::Transform { a: 1.0, b: 0.0, c: 0.0, d: 1.0, ..t };
+    e.st.pending = tikra_engine::scene::Transform::default();
     Ok(())
 }
 
@@ -344,7 +344,7 @@ fn k_new_cartesian_axis(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Err
 
 /// `new polar axes={angle axis}{radius axis}`: two axes and their polar transformer.
 fn k_new_polar_axes(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
-    let args = crate::engine::options::split_arguments(&v.unwrap_or_default(), 2);
+    let args = tikra_engine::engine::options::split_arguments(&v.unwrap_or_default(), 2);
     let angle = e.tex.expand_to_string(args[0].clone())?.trim().to_string();
     let radius = e.tex.expand_to_string(args[1].clone())?.trim().to_string();
     new_axis(e, &angle)?;
@@ -371,7 +371,7 @@ fn k_axis(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
 /// `all axes={options}`: the options for each axis made so far.
 fn k_all_axes(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
     let v = v.unwrap_or_default();
-    let axes = e.datavis.last().map(|d| d.axes.clone()).unwrap_or_default();
+    let axes = crate::running(e).last().map(|d| d.axes.clone()).unwrap_or_default();
     for a in axes {
         let mut item = tikra_tokens(&format!("{a}="));
         item.extend(group(v.clone()));
@@ -383,7 +383,7 @@ fn k_all_axes(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
 /// `new axis system={name}{axes}{default options}{after}`: the style `name={options}` sets the axes
 /// up, then the default options, `every name`, the options, and what comes after.
 fn k_new_axis_system(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
-    let args = crate::engine::options::split_arguments(&v.unwrap_or_default(), 4);
+    let args = tikra_engine::engine::options::split_arguments(&v.unwrap_or_default(), 4);
     let name = e.tex.expand_to_string(args[0].clone())?.trim().to_string();
     let mut body = args[1].clone();
     body.extend(tikra_tokens(&format!(",{name}/.cd,")));
@@ -401,7 +401,7 @@ fn k_new_axis_system(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error>
 /// `common=`, `major=`, `minor=`, `subminor=`: options for those ticks, gathered (but ignored while
 /// a placement strategy is computing the positions).
 fn k_setter(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
-    if e.datavis.last().is_some_and(|d| d.setters_off) {
+    if crate::running(e).last().is_some_and(|d| d.setters_off) {
         return Ok(());
     }
     let key = e.current_key.clone();
@@ -455,7 +455,7 @@ fn k_axis_label(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
 fn k_goto(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
     let axis = current_axis(e);
     let value = text_of(e, v)?;
-    e.goto(&axis, &value)
+    crate::axes::goto(e, &axis, &value)
 }
 
 fn k_goto_pos(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
@@ -472,7 +472,7 @@ fn k_goto_pos(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
 fn k_anchor_at(e: &mut Engine, _v: Option<Vec<Token>>) -> Result<(), Error> {
     let which = if name_of(e).ends_with("min") { "min" } else { "max" };
     let axis = current_axis(e);
-    e.anchor_at(&axis, which)
+    crate::axes::anchor_at(e, &axis, which)
 }
 
 /// `visualize axis=`, `visualize ticks=`, `visualize grid=`, `visualize label=`: drawn after the
@@ -481,7 +481,7 @@ fn k_visualize_part(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> 
     let what = name_of(e);
     let axis = current_axis(e);
     let v = v.unwrap_or_default();
-    let dv = e.dv()?;
+    let dv = crate::dv(e)?;
     let list = match what.as_str() {
         "visualize axis" => &mut dv.actions.axes,
         "visualize ticks" => &mut dv.actions.ticks,
@@ -530,7 +530,7 @@ pub fn scan_point(e: &mut Engine, v: Vec<Token>) -> Result<Point, Error> {
     let s = s.trim();
     let inner = s.strip_prefix('(').and_then(|r| r.strip_suffix(')')).unwrap_or(s).to_string();
     e.begin_group();
-    e.st.transform = crate::scene::Transform::default();
+    e.st.transform = tikra_engine::scene::Transform::default();
     let r = e.coordinate(&inner);
     e.end_group();
     let p = r?.p;
@@ -550,7 +550,7 @@ fn k_unit_vector(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
 
 /// `unit vectors={(a)}{(b)}`: a polar axis' vectors at 0 and 90 degrees.
 fn k_unit_vectors(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
-    let args = crate::engine::options::split_arguments(&v.unwrap_or_default(), 2);
+    let args = tikra_engine::engine::options::split_arguments(&v.unwrap_or_default(), 2);
     let a = scan_point(e, args[0].clone())?;
     let b = scan_point(e, args[1].clone())?;
     let (ka, kb) = (axis_key(e, "unit vector 0 degrees"), axis_key(e, "unit vector 90 degrees"));
@@ -616,7 +616,7 @@ fn k_visualize_as(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
 
 /// `new visualizer={name}{options}{legend options}`.
 fn k_new_visualizer(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
-    let args = crate::engine::options::split_arguments(&v.unwrap_or_default(), 3);
+    let args = tikra_engine::engine::options::split_arguments(&v.unwrap_or_default(), 3);
     let name = e.tex.expand_to_string(args[0].clone())?.trim().to_string();
     new_visualizer(e, &name, args[1].clone(), args[2].clone())
 }
@@ -626,7 +626,7 @@ fn k_new_visualizer(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> 
 fn new_visualizer(e: &mut Engine, name: &str, options: Vec<Token>, legend: Vec<Token>) -> Result<(), Error> {
     define_native(e, &format!("{DV}/{name}"), k_visualizer);
     let n = {
-        let dv = e.dv()?;
+        let dv = crate::dv(e)?;
         dv.visualizers += 1;
         dv.visualizers
     };
@@ -648,7 +648,7 @@ fn k_visualizer(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
     r?;
     let mut set = tikra_tokens("\\pgfkeys");
     set.extend(group(tikra_tokens(&format!("/data point/set={{{name}}}"))));
-    e.do_add_data(set)
+    crate::do_add_data(e, set)
 }
 
 fn current_visualizer(e: &mut Engine) -> String {
@@ -658,7 +658,7 @@ fn current_visualizer(e: &mut Engine) -> String {
 /// `@handler={handler}{legend sample}`: how the visualizer joins its points, and the sample its
 /// legend entry shows.
 fn k_handler(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
-    let args = crate::engine::options::split_arguments(&v.unwrap_or_default(), 2);
+    let args = tikra_engine::engine::options::split_arguments(&v.unwrap_or_default(), 2);
     let handler = e.tex.expand_to_string(args[0].clone())?.trim().to_string();
     let name = current_visualizer(e);
     let base = format!("{DV}/visualizers/{name}");
@@ -671,7 +671,7 @@ fn k_handler(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
 fn k_ignore_style_sheets(e: &mut Engine, _v: Option<Vec<Token>>) -> Result<(), Error> {
     let name = current_visualizer(e);
     dv_text(e, &format!("visualizers/{name}/signal/.code="))?;
-    let dv = e.dv()?;
+    let dv = crate::dv(e)?;
     dv.visualizers = dv.visualizers.saturating_sub(1);
     Ok(())
 }
@@ -690,7 +690,7 @@ fn k_style_sheet_handler(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Er
 }
 
 fn add_style_attribute(e: &mut Engine, attribute: &str, sheet: &str) -> Result<(), Error> {
-    let Some(dv) = e.datavis.last_mut() else { return Ok(()) };
+    let Some(dv) = crate::running(e).last_mut() else { return Ok(()) };
     let id = dv.objects.len();
     dv.objects.push(Object::StyleAttribute { attribute: attribute.to_string(), sheet: sheet.to_string() });
     dv.connect(id, Slot::InvokeStyle, Signal::Style);
@@ -722,8 +722,8 @@ fn k_label_when(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
 fn k_label_at(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
     let name = current_visualizer(e);
     e.tex.define_string("tikra@dv@labelattr", &format!("set/{name}/count"), false);
-    let count = e.object_of(&format!("{DV}/visualizers/{name}/count/obj"));
-    let total = match count.and_then(|c| e.datavis.last().and_then(|d| d.objects.get(c)).cloned()) {
+    let count = crate::object_of(e, &format!("{DV}/visualizers/{name}/count/obj"));
+    let total = match count.and_then(|c| crate::running(e).last().and_then(|d| d.objects.get(c)).cloned()) {
         Some(Object::Count { max, .. }) => max,
         _ => 0.0,
     };
@@ -735,7 +735,7 @@ fn k_label_at(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
         }
         _ => {
             let n = key_text(e, &format!("/data point/set/{name}")).unwrap_or_else(|| "1".into());
-            let all = e.datavis.last().map_or(1, |d| d.visualizers.max(1));
+            let all = crate::running(e).last().map_or(1, |d| d.visualizers.max(1));
             format!("(({n}-0.5)/{all}*{})", super::num(total))
         }
     };

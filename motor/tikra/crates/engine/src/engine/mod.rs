@@ -8,7 +8,6 @@ pub mod basic;
 pub mod chains;
 pub mod circuits;
 pub mod coords;
-pub mod datavis;
 pub mod decorations;
 pub mod fadings;
 pub mod functional;
@@ -168,8 +167,6 @@ pub enum Cmd {
     DecorationBegin,
     DecorationEnd,
     DecorateCurrentPath,
-    /// the commands of data visualizations, dispatched by name (`datavis`)
-    DataVis,
     /// the spy library: `\spy`, and what a spy scope does at its start and end
     Spy,
     SpyBegin,
@@ -543,8 +540,6 @@ pub struct Engine {
     key_lists: usize,
     /// the cap on keys was reached and told
     keys_capped: bool,
-    /// the data visualizations being run, innermost last
-    pub datavis: Vec<datavis::Dv>,
     /// the full path of the native key being run (natives that share code tell keys apart by it)
     pub current_key: String,
     /// the `axis` environment being read, and the one being drawn
@@ -649,7 +644,6 @@ impl Clone for Engine {
             key_lists: self.key_lists,
             keys_capped: self.keys_capped,
             first_char_syntax: self.first_char_syntax,
-            datavis: self.datavis.clone(),
             pgf_path: self.pgf_path.clone(),
             plot_stream: Vec::new(),
             decoration_envs: self.decoration_envs.clone(),
@@ -794,7 +788,6 @@ impl Engine {
             key_lists: 0,
             keys_capped: false,
             first_char_syntax: false,
-            datavis: Vec::new(),
             pgf_path: basic::PgfPath::default(),
             plot_stream: Vec::new(),
             decoration_envs: Vec::new(),
@@ -870,7 +863,6 @@ impl Engine {
         }
         lsystem::define(&mut e);
         options::define_keys(&mut e, pieces);
-        datavis::define(&mut e);
         pgfplots::define(&mut e);
         e
     }
@@ -1417,9 +1409,6 @@ impl Engine {
         }
         if basic::is_basic(id) {
             return self.basic_command(id);
-        }
-        if id == Cmd::DataVis as u16 {
-            return self.datavis_command(t);
         }
         if lsystem::is_lsystem(id) {
             return self.lsystem_command(id);
@@ -2593,14 +2582,8 @@ impl Engine {
     /// `\tikz[options]{…}` or `\tikz[options] statement;`
     fn tikz_command(&mut self) -> Result<(), Error> {
         let o = self.optional()?;
-        // a data visualization reads its data line by line: it reads its own input
+        // a command that reads its own input is run as it comes, so its catcodes see the lines
         if let Some(t) = self.tex.next_nonspace() {
-            if t.is_cs("datavisualization") {
-                self.begin_picture(o)?;
-                let r = self.datavisualization();
-                self.end_picture();
-                return r;
-            }
             if self.reads_its_input(&t) {
                 self.begin_picture(o)?;
                 let r = self.execute(t);

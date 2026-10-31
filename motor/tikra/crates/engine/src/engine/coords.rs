@@ -275,7 +275,6 @@ impl Engine {
                 let local = if system == "canvas polar" { Point::new(rx * c, ry * s) } else { self.st.x.scale(rx * c).plus(self.st.y.scale(ry * s)) };
                 Ok(Coord { p: self.st.transform.apply(local), node: None })
             }
-            "visualization" => Ok(Coord { p: self.visualization_cs(args)?, node: None }),
             "intersection" => {
                 // `first line={(A)--(B)}, second line={(C)--(D)}`
                 let (Some(a), Some(b)) = (get("first line"), get("second line")) else {

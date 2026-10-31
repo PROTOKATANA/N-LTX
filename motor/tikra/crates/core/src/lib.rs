@@ -19,7 +19,7 @@ pub use tikra_engine::describe;
 pub use tikra_engine::extension;
 
 /// The parts of TikZ that are pieces, with which every figure is read.
-const PIECES: &[&Piece] = &[&tikra_calendar::PIECE, &tikra_libraries::folding::PIECE, &tikra_libraries::mindmap::PIECE, &tikra_graphs::PIECE];
+const PIECES: &[&Piece] = &[&tikra_calendar::PIECE, &tikra_libraries::folding::PIECE, &tikra_libraries::mindmap::PIECE, &tikra_graphs::PIECE, &tikra_datavis::PIECE];
 
 /// The engine, built with every piece.
 #[doc(hidden)]

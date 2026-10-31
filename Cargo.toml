@@ -11,6 +11,7 @@ members = [
     "motor/tikra/crates/core",
     "motor/tikra/crates/calendar",
     "motor/tikra/crates/libraries",
+    "motor/tikra/crates/datavis",
     "motor/tikra/crates/canvas",
     "motor/tikra/crates/engine",
     "motor/tikra/crates/graphs",
