@@ -5,6 +5,7 @@ members = [
     "primitivas",
     "documento",
     "animacion",
+    "pintor",
     "adaptador",
     "ejemplo/nativo",
     "motor/tikra/crates/core",

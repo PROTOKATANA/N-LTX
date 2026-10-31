@@ -4,13 +4,14 @@ Motor LaTeX para Flutter sobre la GPU, sin depender de una instalación de TeX. 
 lista neutra de primitivas (glifos, trazados, recortes, grupos) que un pintor convierte en píxeles.
 
 **Estado:** el motor produce la lista para texto, fórmulas, química, física y TikZ, y `ejemplo/` la
-muestra en Flutter con un pintor de referencia sobre Canvas, con animaciones por parámetro. Todavía no
-hay pintor GPU.
+muestra en Flutter con un pintor de referencia sobre Canvas, con animaciones por parámetro. El pintor
+GPU (`pintor/`) ya mueve millones de elementos sobre Vulkan, pero aún no pinta `primitivas`.
 
 ```
 primitivas/   el contrato: la lista neutra y el trait `Compositor`. Sin dependencias.
 documento/    modo texto: LaTeX en flujo continuo, con fórmulas y figuras inyectadas.
 animacion/    animaciones por parámetro: la misma figura, recompuesta en cada fotograma.
+pintor/       pintor GPU en C++ sobre Diligent/Vulkan, unido a Rust por `cxx`.
 adaptador/    `Compositor` sobre el motor. Desaparecerá cuando el motor emita `primitivas`.
 motor/        fork de `mathra` (fórmulas, química, física), `tikra` (TikZ) y `voltik`
               (CircuiTikZ), con su historia (ver motor/README.md).
