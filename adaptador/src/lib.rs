@@ -21,6 +21,8 @@ mod caja;
 mod contorno;
 mod figura;
 mod formula;
+mod incrustados;
 
 pub use figura::FiguraTikra;
 pub use formula::FormulaMathra;
+pub use incrustados::IncrustadosMotor;

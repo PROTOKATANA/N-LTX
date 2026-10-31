@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 primitivas = { path = "../primitivas" }
+documento = { path = "../documento" }
 mathra = { path = "../motor/mathra/crates/core", features = ["latin-modern"] }
 tikra = { path = "../motor/tikra/crates/core" }
 voltik = { path = "../motor/voltik/crates/core" }
