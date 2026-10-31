@@ -1,6 +1,7 @@
 #include "my_application.h"
 
-#include "familia_ltx.h"
+#include "familia_lienzo.h"
+#include "familia_masiva.h"
 #include "presentacion.h"
 #include "texturas.h"
 

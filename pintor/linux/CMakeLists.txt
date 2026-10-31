@@ -6,9 +6,12 @@ if(NOT NLTX_CXX)
 endif()
 
 add_library(cnx_ltx STATIC
-  "familia_ltx.cc"
+  "ejecucion_lienzo.cc"
+  "familia_lienzo.cc"
+  "familia_masiva.cc"
   "gpu_lienzo.cc"
   "gpu_masiva.cc"
+  "recursos_lienzo.cc"
   "${NLTX_CXX}/puente_lienzo.rs.cc"
   "${NLTX_CXX}/puente_masiva.rs.cc"
   "${NLTX_CXX}/src/cxx.cc"

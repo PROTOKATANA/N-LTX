@@ -1,19 +1,17 @@
-// Las familias de N-LTX : sus canales, sus fábricas y sus métodos propios (el
-// resto lo atiende el registro de texturas, N-CNX/gpu/linux/texturas.cc).
+// La familia del lienzo : su canal, su fábrica y sus métodos propios (el resto
+// lo atiende el registro de texturas, N-CNX/gpu/linux/texturas.cc).
 
-# include "familia_ltx.h"
+# include "familia_lienzo.h"
 
 # include <cstring>
 
 # include "gpu_lienzo.h"
 
-# include "gpu_masiva.h"
-
 # include "lienzo.h"
 
 namespace {
 
-// El tamaño de las superficies del lienzo : el monitor más grande
+// El tamaño de las superficies : el monitor más grande
 
 Lienzo lienzo ;
 
@@ -51,7 +49,7 @@ bool fijar_vista(LlamadaTextura & llamada) {
 
 }
 
-bool metodo_lienzo(LlamadaTextura & llamada) {
+bool metodo(LlamadaTextura & llamada) {
 
 	if (std :: strcmp(llamada.nombre , "vista") == 0) { return fijar_vista(llamada) ; }
 
@@ -101,26 +99,6 @@ bool metodo_lienzo(LlamadaTextura & llamada) {
 
 }
 
-bool metodo_masiva(LlamadaTextura & llamada) {
-
-	if (std :: strcmp(llamada.nombre , "medidas") != 0) { return false ; }
-
-	const MedidasMasiva m = llamada.gpu ? static_cast<GpuMasiva *>(llamada.gpu)->medidas() : MedidasMasiva{} ;
-
-	g_autoptr(FlValue) value = fl_value_new_list() ;
-
-	fl_value_append_take(value , fl_value_new_int(m.elementos)) ;
-
-	fl_value_append_take(value , fl_value_new_float(m.fotogramas_por_segundo)) ;
-
-	fl_value_append_take(value , fl_value_new_float(m.ms_carril)) ;
-
-	responder(llamada , value) ;
-
-	return true ;
-
-}
-
 }  // namespace
 
 FamiliaTexturas familia_lienzo() {
@@ -139,25 +117,7 @@ FamiliaTexturas familia_lienzo() {
 
 		} ,
 
-		metodo_lienzo ,
-
-		nullptr
-
-	} ;
-
-}
-
-FamiliaTexturas familia_masiva() {
-
-	return FamiliaTexturas{
-
-		"ltx/masiva" ,
-
-		1 ,
-
-		[](Carril & carril) -> std :: unique_ptr<GpuRenderer> { return std :: make_unique<GpuMasiva>(carril) ; } ,
-
-		metodo_masiva ,
+		metodo ,
 
 		nullptr
 
