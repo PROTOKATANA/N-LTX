@@ -46,7 +46,7 @@ Energía & $E$ & \si{J} \\
   \draw[thick] (0,0) circle (1);
   \draw (1.6,-0.7) -- (5.2,-0.7) (1.6,0.7) -- (5.2,0.7);
   \fill[gray!30,draw=black] (\lx-0.4,-0.6) rectangle (\lx+0.8,0.6);
-  \draw[very thick,blue] (0,0) -- (\px,\py) -- (\lx,0);
+  \draw[very thick,blue,line join=round] (0,0) -- (\px,\py) -- (\lx,0);
   \fill (0,0) circle (0.06) (\px,\py) circle (0.06) (\lx,0) circle (0.06);
   \node at (0,-1.4) {$\theta=\t^\circ$};
 \end{tikzpicture}
