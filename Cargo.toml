@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "formula",
+    "primitivas",
 ]
 
 [workspace.lints.clippy]
