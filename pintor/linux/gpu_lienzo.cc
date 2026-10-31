@@ -20,7 +20,7 @@
 
 # include "gpu_surface.h"
 
-# include "pintor/src/puente.rs.h"
+# include "pintor/src/puente_lienzo.rs.h"
 
 using namespace Diligent ;
 
@@ -31,16 +31,6 @@ constexpr float fondo_lienzo[4] = { 1.0f , 1.0f , 1.0f , 1.0f } ;
 constexpr float transparente[4] = { 0.0f , 0.0f , 0.0f , 0.0f } ;
 
 constexpr TEXTURE_FORMAT formato_color = TEX_FORMAT_RGBA8_UNORM ;
-
-// Lo mismo que las constantes de pintor/src/atlas.rs y lista.rs
-
-constexpr std :: uint32_t lado_atlas = 2048 ;
-
-constexpr std :: uint32_t ancho_rampa = 256 ;
-
-constexpr std :: uint32_t filas_rampas = 512 ;
-
-constexpr std :: uint32_t max_tintas = 4096 ;
 
 using Reloj = std :: chrono :: steady_clock ;
 
@@ -492,7 +482,9 @@ struct Recursos {
 
 		desc.Name = "LTX tintas" ;
 
-		desc.Size = max_tintas * sizeof(ltx :: Tinta) ;
+		const ltx :: Limites limites = ltx :: limites() ;
+
+		desc.Size = limites.max_tintas * sizeof(ltx :: Tinta) ;
 
 		desc.BindFlags = BIND_SHADER_RESOURCE ;
 
@@ -508,9 +500,9 @@ struct Recursos {
 
 		textura.Type = RESOURCE_DIM_TEX_2D ;
 
-		textura.Width = lado_atlas ;
+		textura.Width = limites.lado_atlas ;
 
-		textura.Height = lado_atlas ;
+		textura.Height = limites.lado_atlas ;
 
 		textura.Format = TEX_FORMAT_R8_UNORM ;
 
@@ -524,9 +516,9 @@ struct Recursos {
 
 		textura.Name = "LTX rampas" ;
 
-		textura.Width = ancho_rampa ;
+		textura.Width = limites.ancho_rampa ;
 
-		textura.Height = filas_rampas ;
+		textura.Height = limites.filas_rampas ;
 
 		textura.Format = formato_color ;
 
@@ -1210,9 +1202,11 @@ struct GpuLienzo :: Impl {
 
 		ctx->UpdateBuffer(r.tintas , 0 , tintas.size() * sizeof(ltx :: Tinta) , tintas.data() , RESOURCE_STATE_TRANSITION_MODE_TRANSITION) ;
 
-		subir_filas(ctx , r.atlas , marco.atlas() , marco.atlas_y() , lado_atlas) ;
+		const ltx :: Limites limites = ltx :: limites() ;
 
-		subir_filas(ctx , r.rampas , marco.rampas() , marco.rampas_y() , ancho_rampa * 4) ;
+		subir_filas(ctx , r.atlas , marco.atlas() , marco.atlas_y() , limites.lado_atlas) ;
+
+		subir_filas(ctx , r.rampas , marco.rampas() , marco.rampas_y() , limites.ancho_rampa * 4) ;
 
 		return true ;
 

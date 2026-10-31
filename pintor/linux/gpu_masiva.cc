@@ -14,7 +14,7 @@
 
 # include "gpu_surface.h"
 
-# include "pintor/src/puente.rs.h"
+# include "pintor/src/puente_masiva.rs.h"
 
 using namespace Diligent ;
 

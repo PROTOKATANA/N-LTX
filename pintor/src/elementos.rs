@@ -5,7 +5,7 @@
 
 use std::f32::consts::TAU;
 
-use crate::puente::ffi::Elemento;
+use crate::puente_masiva::ffi::Elemento;
 
 const POR_DEFECTO: u32 = 300_000;
 const BRAZOS: usize = 4;

@@ -1,24 +1,14 @@
-//! La frontera entre Rust y el pintor en C++.
+//! La frontera entre Rust y el pintor del lienzo, en C++. Lo que comparten ambos lados se define
+//! solo aquí: ni los límites ni los tipos de tinta se copian a mano.
 
-use crate::elementos;
-use crate::lienzo::{Marco, preparar};
+use crate::atlas::LADO_ATLAS;
+use crate::lienzo::Marco;
+use crate::pizarra::preparar;
+use crate::rampas::{ANCHO_RAMPA, FILAS_RAMPAS};
+use crate::tintas::MAX_TINTAS;
 
 #[cxx::bridge(namespace = "ltx")]
 pub mod ffi {
-    /// Un elemento animado. El mismo diseño en memoria para Rust, C++ y el vertex shader.
-    #[derive(Clone, Copy, Debug, PartialEq)]
-    pub struct Elemento {
-        /// Posición en reposo, de -1 a 1.
-        pub x: f32,
-        pub y: f32,
-        /// Desfase de su movimiento, en radianes.
-        pub fase: f32,
-        /// En píxeles.
-        pub radio: f32,
-        /// 0xAABBGGRR, el orden de los bytes en memoria.
-        pub rgba: u32,
-    }
-
     /// Un vértice de una lista, en píxeles físicos del documento.
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct Vertice {
@@ -33,11 +23,20 @@ pub mod ffi {
         pub tinta: u32,
     }
 
+    #[derive(Debug)]
+    #[repr(u32)]
+    pub enum TipoTinta {
+        Solido,
+        Glifo,
+        Lineal,
+        Radial,
+        Trazo,
+    }
+
     /// Cómo se colorea lo que no es de un solo color. La lee el pixel shader.
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct Tinta {
-        /// 0 sólido, 1 glifo, 2 degradado lineal, 3 degradado radial.
-        pub tipo: u32,
+        pub tipo: TipoTinta,
         /// Dónde cae su rampa de color, de 0 a 1.
         pub fila: f32,
         pub radio: f32,
@@ -105,13 +104,19 @@ pub mod ffi {
         pub segundos: f64,
     }
 
+    /// Lo que mide lo que viaja a la GPU.
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct Limites {
+        pub lado_atlas: u32,
+        pub ancho_rampa: u32,
+        pub filas_rampas: u32,
+        pub max_tintas: u32,
+    }
+
     extern "Rust" {
         type Marco;
 
-        /// Cuántos elementos pinta la prueba masiva.
-        fn elementos_pedidos() -> u32;
-        /// Escribe los elementos directamente en la memoria que da C++, sin copias.
-        fn llenar_elementos(destino: &mut [Elemento]);
+        fn limites() -> Limites;
 
         /// Lo que hay que pintar en este fotograma. `nuevos`: la GPU aún no tiene nada subido.
         fn preparar(id: u32, vista: Vista, nuevos: bool) -> Box<Marco>;
@@ -136,10 +141,11 @@ pub mod ffi {
     }
 }
 
-fn elementos_pedidos() -> u32 {
-    elementos::pedidos()
-}
-
-fn llenar_elementos(destino: &mut [ffi::Elemento]) {
-    elementos::galaxia(destino);
+fn limites() -> ffi::Limites {
+    ffi::Limites {
+        lado_atlas: LADO_ATLAS,
+        ancho_rampa: ANCHO_RAMPA,
+        filas_rampas: FILAS_RAMPAS,
+        max_tintas: MAX_TINTAS as u32,
+    }
 }

@@ -5,9 +5,14 @@
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
+/// Una frontera por cada renderizador: ninguno ve lo que no usa.
+const PUENTES: [&str; 2] = ["puente_lienzo", "puente_masiva"];
+
 fn main() {
-    let _ = cxx_build::bridge("src/puente.rs");
-    println!("cargo:rerun-if-changed=src/puente.rs");
+    let _ = cxx_build::bridges(PUENTES.map(|p| format!("src/{p}.rs")));
+    for puente in PUENTES {
+        println!("cargo:rerun-if-changed=src/{puente}.rs");
+    }
     exportar_a_cmake();
 }
 
@@ -17,14 +22,15 @@ fn exportar_a_cmake() {
     let perfil = salida.ancestors().nth(3).expect("carpeta del perfil");
     let destino = perfil.join("cxx-pintor");
     let generado = salida.join("cxxbridge");
-    copiar(
-        &generado.join("include/pintor/src/puente.rs.h"),
-        &destino.join("pintor/src/puente.rs.h"),
-    );
-    copiar(
-        &generado.join("sources/pintor/src/puente.rs.cc"),
-        &destino.join("puente.rs.cc"),
-    );
+    for puente in PUENTES {
+        let cabecera = format!("pintor/src/{puente}.rs.h");
+        copiar(&generado.join("include").join(&cabecera), &destino.join(&cabecera));
+        let fuente = format!("{puente}.rs.cc");
+        copiar(
+            &generado.join("sources/pintor/src").join(&fuente),
+            &destino.join(&fuente),
+        );
+    }
     copiar(&generado.join("include/rust/cxx.h"), &destino.join("rust/cxx.h"));
     let cabecera = PathBuf::from(env::var("DEP_CXXBRIDGE1_HEADER").expect("cabecera de cxx"));
     let raiz = cabecera.ancestors().nth(2).expect("raíz del crate cxx");

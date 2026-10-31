@@ -1,22 +1,30 @@
 //! El lienzo: la escena publicada desde el lado de la aplicación y lo que le pide el pintor.
 //!
-//! Dos hilos se encuentran aquí: Flutter publica escenas y el carril del pintor pide fotogramas.
 //! La escena base se compila una sola vez por escala; lo único que cuesta en cada fotograma son
 //! las animaciones que se ven.
 
-use std::collections::HashMap;
-use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::Arc;
 
 use primitivas::{Escena, Punto};
 
-use crate::atlas::{Atlas, Rampas, Sucio};
+use crate::atlas::Atlas;
+use crate::compilador::{Destino, Encuadre, compilar};
 use crate::geometria::Afin;
-use crate::lista::{Destino, Lista, carencias, compilar};
-use crate::puente::ffi::{Comando, Tinta, Vertice, Vista};
+use crate::lista::Lista;
+use crate::puente_lienzo::ffi::{Comando, Tinta, Vertice, Vista};
+use crate::rampas::Rampas;
+use crate::textura::Sucio;
 
 /// Margen alrededor de la escena, en bp.
 pub const MARGEN: f64 = 16.0;
+
+/// Por muy estrecha que sea la vista, el texto no baja de aquí, en bp.
+const MENOR_TEXTO: f64 = 40.0;
+
+/// El ancho que le queda al texto en una vista de `vista` bp.
+pub fn ancho_de_texto(vista: f64) -> f64 {
+    (vista - 2.0 * MARGEN).max(MENOR_TEXTO)
+}
 
 /// Sabe recomponer las animaciones de una escena. Quien lo implementa no debe entrar en pánico:
 /// corre en el hilo de render.
@@ -35,7 +43,7 @@ struct Hecha {
 }
 
 #[derive(Default)]
-struct Lienzo {
+pub(crate) struct Lienzo {
     escena: Escena,
     animador: Option<Arc<dyn Animador>>,
     version: u64,
@@ -51,7 +59,7 @@ fn raiz(escena: &Escena, escala: f64) -> Afin {
 }
 
 impl Lienzo {
-    fn publicar(&mut self, escena: Escena, animador: Option<Arc<dyn Animador>>) {
+    pub(crate) fn publicar(&mut self, escena: Escena, animador: Option<Arc<dyn Animador>>) {
         self.escena = escena;
         self.animador = animador;
         self.version += 1;
@@ -64,17 +72,16 @@ impl Lienzo {
         }
         self.rampas.limpiar();
         let mut lista = Lista::base();
-        compilar(
-            &self.escena,
-            raiz(&self.escena, escala),
-            false,
-            Destino {
-                lista: &mut lista,
-                atlas: &mut self.atlas,
-                rampas: &mut self.rampas,
-                primera_tinta: 0,
-            },
-        );
+        let encuadre = Encuadre {
+            raiz: raiz(&self.escena, escala),
+            recortada: false,
+        };
+        let destino = Destino {
+            lista: &mut lista,
+            atlas: &mut self.atlas,
+            rampas: &mut self.rampas,
+        };
+        compilar(&self.escena, encuadre, destino);
         self.generaciones += 1;
         self.hecha = Some(Hecha {
             version: self.version,
@@ -85,8 +92,9 @@ impl Lienzo {
         });
     }
 
-    fn preparar(&mut self, vista: Vista, nuevos: bool) -> Marco {
+    pub(crate) fn preparar(&mut self, vista: Vista, nuevos: bool) -> Marco {
         let escala = vista.escala.max(1e-3);
+        let vista = Vista { escala, ..vista };
         let al_dia = |h: &Hecha| h.version == self.version && h.escala == escala;
         if !self.hecha.as_ref().is_some_and(al_dia) {
             self.compilar_base(escala);
@@ -100,8 +108,8 @@ impl Lienzo {
             None => (Arc::new(Lista::base()), 0, 0),
         };
         self.rampas.truncar(filas);
-        let mut vivos = Lista::default();
-        let animada = self.animar(vista, escala, base.tintas.len() as u32, &mut vivos);
+        let mut vivos = Lista::tras(&base);
+        let animada = self.animar(vista, &mut vivos);
         let mut tintas = base.tintas.clone();
         tintas.extend_from_slice(&vivos.tintas);
         Marco {
@@ -116,10 +124,11 @@ impl Lienzo {
     }
 
     /// Compone las animaciones que se ven. Las que no, no gastan nada.
-    fn animar(&mut self, vista: Vista, escala: f64, primera_tinta: u32, vivos: &mut Lista) -> bool {
+    fn animar(&mut self, vista: Vista, vivos: &mut Lista) -> bool {
         let Some(animador) = &self.animador else {
             return false;
         };
+        let escala = vista.escala;
         let m = raiz(&self.escena, escala);
         let mut animada = false;
         for zona in &self.escena.zonas {
@@ -135,17 +144,16 @@ impl Lienzo {
                 continue;
             };
             let dentro = Afin::traslacion(zona.caja.x - f.caja.x, zona.caja.y - f.caja.y);
-            compilar(
-                &f,
-                m.por(dentro),
-                true,
-                Destino {
-                    lista: vivos,
-                    atlas: &mut self.atlas,
-                    rampas: &mut self.rampas,
-                    primera_tinta,
-                },
-            );
+            let encuadre = Encuadre {
+                raiz: m.por(dentro),
+                recortada: true,
+            };
+            let destino = Destino {
+                lista: &mut *vivos,
+                atlas: &mut self.atlas,
+                rampas: &mut self.rampas,
+            };
+            compilar(&f, encuadre, destino);
         }
         animada
     }
@@ -163,7 +171,7 @@ pub struct Marco {
 }
 
 impl Marco {
-    fn vacio() -> Marco {
+    pub(crate) fn vacio() -> Marco {
         Marco {
             generacion: 0,
             base: Arc::new(Lista::base()),
@@ -228,36 +236,11 @@ impl Marco {
     }
 }
 
-type Pizarra = Mutex<HashMap<u32, Lienzo>>;
-
-fn pizarra() -> &'static Pizarra {
-    static PIZARRA: OnceLock<Pizarra> = OnceLock::new();
-    PIZARRA.get_or_init(Default::default)
-}
-
-/// Lo que verá la superficie `id` a partir de su próximo fotograma. Devuelve lo que no se podrá
-/// ver como dice la escena: no hay que descartarlo en silencio.
-pub fn publicar(id: u32, escena: Escena, animador: Option<Arc<dyn Animador>>) -> Vec<String> {
-    let avisos = carencias(&escena);
-    let mut lienzos = pizarra().lock().unwrap_or_else(PoisonError::into_inner);
-    lienzos.entry(id).or_default().publicar(escena, animador);
-    avisos
-}
-
-/// Cruza a C++: un pánico aquí tumbaría la aplicación, y un fotograma vacío no.
-pub fn preparar(id: u32, vista: Vista, nuevos: bool) -> Box<Marco> {
-    let marco = catch_unwind(AssertUnwindSafe(|| {
-        let mut lienzos = pizarra().lock().unwrap_or_else(PoisonError::into_inner);
-        lienzos.entry(id).or_default().preparar(vista, nuevos)
-    }));
-    Box::new(marco.unwrap_or_else(|_| Marco::vacio()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::atlas::LADO_ATLAS;
-    use crate::puente::ffi::Orden;
+    use crate::puente_lienzo::ffi::Orden;
     use primitivas::{Caja, Color, GlifoId, Matriz, Pintura, Primitiva, Relleno, Segmento, Zona};
     use std::collections::BTreeMap;
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -467,27 +450,8 @@ mod tests {
     }
 
     #[test]
-    fn un_pintor_que_llega_antes_que_la_escena_no_rompe_y_las_superficies_no_se_mezclan() {
-        let (a, b) = (0xfff0, 0xfff1);
-        publicar(a, escena(Vec::new()), None);
-        assert!(!preparar(a, vista(0.0), false).vertices_base().is_empty());
-        assert!(preparar(b, vista(0.0), false).vertices_base().is_empty());
-    }
-
-    struct Rompe;
-
-    impl Animador for Rompe {
-        fn fotograma(&self, _fuente: &str, _segundos: f64) -> Option<Escena> {
-            panic!("a propósito");
-        }
-    }
-
-    #[test]
-    fn un_panico_da_un_fotograma_vacio_y_el_lienzo_sigue_vivo() {
-        let id = 0xfff2;
-        publicar(id, escena(vec![zona(0.0)]), Some(Arc::new(Rompe)));
-        assert!(preparar(id, vista(0.0), false).comandos_base().is_empty());
-        publicar(id, escena(Vec::new()), None);
-        assert!(!preparar(id, vista(0.0), false).comandos_base().is_empty());
+    fn el_texto_descuenta_los_margenes_y_tiene_un_minimo() {
+        assert_eq!(ancho_de_texto(552.0), 520.0);
+        assert_eq!(ancho_de_texto(10.0), MENOR_TEXTO);
     }
 }

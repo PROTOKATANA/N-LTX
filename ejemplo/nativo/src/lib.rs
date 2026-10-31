@@ -11,7 +11,7 @@ use std::{ptr, slice};
 use adaptador::{FiguraTikra, IncrustadosMotor};
 use animacion::Reproductor;
 use documento::{Documento, Formato, Memoria};
-use pintor::Animador;
+use pintor::{Animador, ancho_de_texto};
 use primitivas::{Color, Composicion, Escena};
 use serde_json::{Value, json};
 
@@ -76,9 +76,10 @@ fn documento() -> &'static Documento {
     })
 }
 
-/// Compone `fuente` y se la entrega al pintor. Devuelve el alto en bp y los avisos.
+/// Compone `fuente` para una vista de `ancho` bp y se la entrega al pintor. Devuelve el alto en bp y
+/// los avisos.
 pub fn publicar(id: u32, fuente: &str, ancho: f64) -> Value {
-    match documento().componer_a(fuente, ancho) {
+    match documento().componer_a(fuente, ancho_de_texto(ancho)) {
         Ok(Composicion { escena, mut avisos }) => {
             let alto = escena.caja.alto + 2.0 * pintor::MARGEN;
             avisos.extend(pintor::publicar(id, escena, Some(Arc::new(AnimadorTikra))));
