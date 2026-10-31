@@ -1,3 +1,0 @@
-# `cargo test -p mathra-wasm --target wasm32-unknown-unknown` runs the tests on Node
-[target.wasm32-unknown-unknown]
-runner = "wasm-bindgen-test-runner"

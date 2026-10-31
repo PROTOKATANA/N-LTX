@@ -1,0 +1,9 @@
+[workspace]
+resolver = "3"
+members = [
+    "formula",
+]
+
+[workspace.lints.clippy]
+# cada bloque unsafe explica por qué es correcto (// SAFETY:)
+undocumented_unsafe_blocks = "warn"
