@@ -200,9 +200,9 @@ fn reset_path_settings(e: &mut Engine) {
 }
 
 fn statement_in_group(e: &mut Engine, defaults: &str, outer: &super::GState) -> Result<(), Error> {
-    e.process_keys(tikra_tokens("every path/.try"), Some("/tikz"))?;
+    e.tikz_keys("every path/.try")?;
     if !defaults.is_empty() {
-        e.process_keys(tikra_tokens(defaults), Some("/tikz"))?;
+        e.tikz_keys(defaults)?;
     }
     // options right after the command, possibly several groups
     loop {

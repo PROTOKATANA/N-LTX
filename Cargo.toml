@@ -13,6 +13,14 @@ members = [
     "motor/voltik/crates/core",
 ]
 
+# RAYO-RS §12, medido con `banco_animacion` (5.000 elementos): 45,6 a 40,8 ms por fotograma, -11 %.
+# `thin` se quedó en -7 % y recompiló más despacio: 50 s frente a 40 s tras tocar un archivo.
+# `panic` sigue en `unwind`: `adaptador` contiene con `catch_unwind` los pánicos de una figura para
+# no perder el documento entero.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+
 [workspace.lints.clippy]
 # cada bloque unsafe explica por qué es correcto (// SAFETY:)
 undocumented_unsafe_blocks = "warn"

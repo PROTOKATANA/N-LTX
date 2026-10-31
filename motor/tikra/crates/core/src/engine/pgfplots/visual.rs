@@ -473,7 +473,8 @@ fn draw_plot_in_group(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], base: &[f64], 
         if let Some(name) = &name_path {
             modes.push_str(&format!("name path={{{name}}},"));
         }
-        for actions in [&mut e.st.preactions, &mut e.st.postactions] {
+        let st = &mut *e.st;
+        for actions in [&mut st.preactions, &mut st.postactions] {
             if !actions.is_empty() {
                 for a in std::rc::Rc::make_mut(actions).iter_mut() {
                     let mut o = super::toks(&modes);

@@ -16,7 +16,6 @@ src/lienzo.rs         qué se compila en cada fotograma
 src/taller.rs         el hilo que lo hace y lleva el ritmo
 src/almacen.rs        lo hecho, hasta que C++ lo copia
 src/puente_lienzo.rs  la frontera cxx del lienzo
-src/puente_masiva.rs  la frontera cxx de la prueba masiva
 linux/                los renderizadores en C++, sus recursos y sus familias de texturas
 ```
 
@@ -61,8 +60,6 @@ cambia la parte que se pinta. Flutter la muestra sin reescalar, recortada a la v
 **Sin soporte todavía**, y por eso se avisa al publicar: las imágenes, los patrones con nombre (salen de
 su color, lisos) y los mosaicos. `Capa::BordesNitidos` se ignora: esos bordes salen suavizados.
 
-**Prueba masiva:** una galaxia cuyos elementos mueve el vertex shader, con la geometría subida una vez.
-
 ## Cómo se compila
 
 La base está en CORTEX: por defecto en `../CORTEX/N-CNX`, u otra ruta con `NLTX_CNX`. Sacarla a su
@@ -72,6 +69,5 @@ El `build.rs` deja lo que genera `cxx` en `pintor/cxx`, que se ignora a sí mism
 `NLTX_CXX`), y el runner lo compila después del hub. `cxx` y `cxx-build` van fijados a una versión
 exacta. El ejecutable enlaza la biblioteca de Rust: C++ la llama directamente, sin `dlopen`.
 
-Se puede medir con `NODOS_BANCO_GPU=1`, cambiar la carga de la prueba masiva con `NLTX_ELEMENTOS=<n>`,
-pedir otro MSAA con `NLTX_MSAA=2|4|8` y volcar cada fotograma a un PPM con `NLTX_VOLCAR_LIENZO=<archivo>`
-o, en la prueba masiva, `NLTX_VOLCAR_GPU=<archivo>`.
+Se puede medir con `NODOS_BANCO_GPU=1`, pedir otro MSAA con `NLTX_MSAA=2|4|8` y volcar cada fotograma a
+un PPM con `NLTX_VOLCAR_LIENZO=<archivo>`.

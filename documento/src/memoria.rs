@@ -9,7 +9,7 @@ use std::sync::{Mutex, PoisonError};
 
 use primitivas::{Caja, Composicion, ErrorComposicion};
 
-use crate::Incrustados;
+use crate::{ColoresEditor, Fragmento, Incrustados, Resaltador};
 
 /// Entradas de cada tipo, como mucho. Un modelo que escribe en directo deja muchas a medias.
 const MAX_RECUERDOS: usize = 1024;
@@ -40,13 +40,14 @@ impl<K: Eq + Hash, V: Clone> Recuerdos<K, V> {
     }
 }
 
-/// Otros `Incrustados` que no repiten trabajo. Los errores también se recuerdan: una fórmula rota
+/// Otros `Incrustados` o un `Resaltador` que no repiten trabajo. Los errores también se recuerdan: una fórmula rota
 /// no se vuelve a intentar en cada pulsación.
 pub struct Memoria<I> {
     dentro: I,
     formulas: Recuerdos<(String, bool, u64), Composicion>,
     figuras: Recuerdos<String, Composicion>,
     cajas: Recuerdos<String, Caja>,
+    resaltados: Recuerdos<(String, String, String), Vec<Fragmento>>,
 }
 
 impl<I> Memoria<I> {
@@ -56,6 +57,7 @@ impl<I> Memoria<I> {
             formulas: Recuerdos::nuevos(),
             figuras: Recuerdos::nuevos(),
             cajas: Recuerdos::nuevos(),
+            resaltados: Recuerdos::nuevos(),
         }
     }
 }
@@ -74,6 +76,19 @@ impl<I: Incrustados> Incrustados for Memoria<I> {
     fn caja_de_animacion(&self, fuente: &str) -> Result<Caja, ErrorComposicion> {
         self.cajas
             .dar(fuente.to_string(), || self.dentro.caja_de_animacion(fuente))
+    }
+}
+
+impl<I: Resaltador> Resaltador for Memoria<I> {
+    fn resaltar(&self, codigo: &str, lenguaje: &str, tema: &str) -> Vec<Fragmento> {
+        let clave = (codigo.to_string(), lenguaje.to_string(), tema.to_string());
+        self.resaltados
+            .dar(clave, || Ok(self.dentro.resaltar(codigo, lenguaje, tema)))
+            .unwrap_or_default()
+    }
+
+    fn editor(&self, tema: &str) -> Option<ColoresEditor> {
+        self.dentro.editor(tema)
     }
 }
 

@@ -26,17 +26,11 @@ class Medidas {
     required this.vertices,
     required this.msTaller,
     required this.msCarril,
-    required this.elementos,
-    required this.fpsMasiva,
-    required this.msMasiva,
   });
 
   final int vertices;
   final double msTaller;
   final double msCarril;
-  final int elementos;
-  final double fpsMasiva;
-  final double msMasiva;
 }
 
 /// Qué parte del documento se ve, en píxeles físicos.
@@ -107,9 +101,6 @@ class RepositorioRinf implements RepositorioMotor {
       vertices: s.message.vertices.toInt(),
       msTaller: s.message.msTaller,
       msCarril: s.message.msCarril,
-      elementos: s.message.elementos.toInt(),
-      fpsMasiva: s.message.fpsMasiva,
-      msMasiva: s.message.msMasiva,
     ),
   );
 }

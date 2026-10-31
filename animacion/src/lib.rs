@@ -10,9 +10,18 @@
 //! \end{animacion}
 //! ```
 //!
-//! Recomponer cuesta unos 10 µs por elemento: sirve hasta el millar de elementos. Lo masivo no
-//! puede pasar por aquí.
+//! Recomponer cuesta del orden de 10 µs por elemento. Por eso los fotogramas se preparan por
+//! adelantado en varios hilos y se guardan ([`Proyector`]): una vuelta que cabe en memoria ya no
+//! recompone nada, y la que no cabe se sigue preparando a tiempo mientras haya núcleos.
 
+mod cuadrilla;
+mod filmoteca;
+mod proyector;
+
+pub use filmoteca::Filmoteca;
+pub use proyector::Proyector;
+
+use cuadrilla::en_paralelo;
 use primitivas::{Caja, Capa, Composicion, Compositor, ErrorComposicion, Matriz, Primitiva, Punto};
 
 /// Valores del recorrido con los que se calcula la caja fija.
@@ -105,7 +114,7 @@ pub struct Reproductor<C> {
     caja: Caja,
 }
 
-impl<C: Compositor> Reproductor<C> {
+impl<C: Compositor + Sync> Reproductor<C> {
     pub fn nuevo(fuente: &str, compositor: C) -> Result<Self, ErrorComposicion> {
         let animacion = Animacion::leer(fuente)?;
         let caja = caja_del_recorrido(&animacion, &compositor)?;
@@ -115,7 +124,9 @@ impl<C: Compositor> Reproductor<C> {
             caja,
         })
     }
+}
 
+impl<C: Compositor> Reproductor<C> {
     pub fn caja(&self) -> Caja {
         self.caja
     }
@@ -126,7 +137,11 @@ impl<C: Compositor> Reproductor<C> {
 
     /// El fotograma de los `segundos`, colocado en la caja fija.
     pub fn fotograma(&self, segundos: f64) -> Result<Composicion, ErrorComposicion> {
-        let valor = self.animacion.valor(segundos);
+        self.fotograma_de(self.animacion.valor(segundos))
+    }
+
+    /// El fotograma con el parámetro en `valor`, colocado en la caja fija.
+    pub fn fotograma_de(&self, valor: f64) -> Result<Composicion, ErrorComposicion> {
         let mut c = self.compositor.componer(&self.animacion.con_valor(valor))?;
         let origen = c.escena.origen;
         let primitivas = std::mem::take(&mut c.escena.primitivas);
@@ -154,16 +169,21 @@ fn traslacion(origen: Punto) -> Matriz {
 }
 
 /// La caja que contiene el recorrido entero, medida desde el origen del dibujo.
-fn caja_del_recorrido(animacion: &Animacion, compositor: &dyn Compositor) -> Result<Caja, ErrorComposicion> {
-    let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
-    for n in 0..=MUESTRAS {
+fn caja_del_recorrido<C: Compositor + Sync>(animacion: &Animacion, compositor: &C) -> Result<Caja, ErrorComposicion> {
+    let muestras = en_paralelo(MUESTRAS + 1, |n| {
         let valor = animacion.desde + (animacion.hasta - animacion.desde) * n as f64 / MUESTRAS as f64;
-        let e = compositor.componer(&animacion.con_valor(valor))?.escena;
-        let (x, y) = (e.caja.x - e.origen.x, e.caja.y - e.origen.y);
+        compositor.componer(&animacion.con_valor(valor)).map(|c| {
+            let e = c.escena;
+            (e.caja.x - e.origen.x, e.caja.y - e.origen.y, e.caja.ancho, e.caja.alto)
+        })
+    });
+    let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for muestra in muestras {
+        let (x, y, ancho, alto) = muestra?;
         x0 = x0.min(x);
         y0 = y0.min(y);
-        x1 = x1.max(x + e.caja.ancho);
-        y1 = y1.max(y + e.caja.alto);
+        x1 = x1.max(x + ancho);
+        y1 = y1.max(y + alto);
     }
     Ok(Caja {
         x: x0,

@@ -116,8 +116,6 @@ pub enum Cmd {
     Pgfset,
     Pgfplotsset,
     Tikzstyle,
-    Key,
-    SetPath,
     Foreach,
     Definecolor,
     Colorlet,
@@ -250,8 +248,6 @@ const COMMANDS: &[(&str, Cmd)] = &[
     ("pgfset", Cmd::Pgfset),
     ("pgfplotsset", Cmd::Pgfplotsset),
     ("tikzstyle", Cmd::Tikzstyle),
-    ("tikra@key", Cmd::Key),
-    ("tikra@setpath", Cmd::SetPath),
     ("foreach", Cmd::Foreach),
     ("definecolor", Cmd::Definecolor),
     ("providecolor", Cmd::Definecolor),
@@ -400,15 +396,18 @@ struct PgfScope {
     pub clipped: bool,
 }
 
-/// Cap on statements per figure: nested loops do not hang the caller.
-pub const MAX_STEPS: usize = 100_000;
+/// Cap on statements per figure: nested loops do not hang the caller. It is high enough for a figure
+/// of tens of thousands of elements, and still cuts a runaway loop in under a second.
+pub const MAX_STEPS: usize = 300_000;
+/// Cap on the segments of one decoration: a tiny `segment length` does not fill the output.
+pub const MAX_DECORATION_STEPS: usize = 100_000;
 /// Cap on nesting of scopes, loops and environments.
 pub const MAX_DEPTH: usize = 64;
 
 pub struct Engine {
     pub tex: Tex,
-    pub st: GState,
-    saved: Vec<GState>,
+    pub st: state::Shared<GState>,
+    saved: Vec<state::Shared<GState>>,
     pub canvas: Canvas,
     pub nodes: HashMap<String, nodes::NodeInfo>,
     pub colors: HashMap<String, Color>,
@@ -536,6 +535,12 @@ pub struct Engine {
     /// `/handlers/first char syntax` was set: keys are checked for a handler of their first character.
     pub first_char_syntax: bool,
     pub keys_run: usize,
+    /// how many keys may run: grows with the lists of the figure
+    keys_allowed: usize,
+    /// the key lists being run, innermost last: more than one is a style's
+    key_lists: usize,
+    /// the cap on keys was reached and told
+    keys_capped: bool,
     /// the data visualizations being run, innermost last
     pub datavis: Vec<datavis::Dv>,
     /// the full path of the native key being run (natives that share code tell keys apart by it)
@@ -592,9 +597,13 @@ enum Layout {
 
 /// Cap on nested runs (a style calling itself).
 pub const MAX_NESTING: usize = 150;
-/// Cap on keys per figure (styles that multiply: `s/.style={t,t,t,t}`…). The figures of the manuals
-/// and the corpus run at most about 10,000.
+/// Cap on the keys of a figure beyond [`KEYS_PER_LIST`] (styles that multiply:
+/// `s/.style={t,t,t,t}`…). The figures of the manuals and the corpus run at most about 10,000.
 pub const MAX_KEYS: usize = 50_000;
+/// The keys each list in the figure itself adds to [`MAX_KEYS`], not those a style brings: a figure
+/// of many elements is no style that multiplies, and with a fixed cap it lost everything after its
+/// 16,000th `\fill[red]`.
+pub const KEYS_PER_LIST: usize = 16;
 
 /// Ids at and above this are native keys (`\pgfk@…/.@cmd`), below are commands.
 pub const NATIVE_KEY_BASE: u16 = 1000;
@@ -632,6 +641,9 @@ impl Clone for Engine {
             canvas_frozen: self.canvas_frozen,
             nesting: self.nesting,
             keys_run: self.keys_run,
+            keys_allowed: self.keys_allowed,
+            key_lists: self.key_lists,
+            keys_capped: self.keys_capped,
             first_char_syntax: self.first_char_syntax,
             datavis: self.datavis.clone(),
             pgf_path: self.pgf_path.clone(),
@@ -760,7 +772,7 @@ impl Engine {
     fn build() -> Engine {
         let mut e = Engine {
             tex: Tex::new(),
-            st: GState::default(),
+            st: state::Shared::default(),
             saved: Vec::new(),
             canvas: Canvas::default(),
             nodes: HashMap::new(),
@@ -779,6 +791,9 @@ impl Engine {
             canvas_frozen: false,
             nesting: 0,
             keys_run: 0,
+            keys_allowed: MAX_KEYS,
+            key_lists: 0,
+            keys_capped: false,
             first_char_syntax: false,
             datavis: Vec::new(),
             pgf_path: basic::PgfPath::default(),
@@ -878,6 +893,15 @@ impl Engine {
 
     /// Runs `tokens` to completion (a loop body, a style's code), then returns.
     pub fn run_tokens(&mut self, tokens: Vec<Token>) -> Result<(), Error> {
+        self.nested(|e, depth| {
+            e.tex.push_frame(tokens);
+            e.run_until(depth)
+        })
+    }
+
+    /// Runs `work` one level deeper, with the depth of the input it started at: if it fails, what
+    /// it left there is dropped.
+    pub(crate) fn nested(&mut self, work: impl FnOnce(&mut Engine, usize) -> Result<(), Error>) -> Result<(), Error> {
         if self.nesting >= MAX_NESTING {
             // a style or macro that calls itself: TeX would run out of memory
             self.warn(format!("styles or macros nested more than {MAX_NESTING} levels (one calls itself?): the rest ignored"));
@@ -885,18 +909,20 @@ impl Engine {
         }
         self.nesting += 1;
         let depth = self.tex.depth();
-        self.tex.push_frame(tokens);
-        let r = (|| {
-            while let Some(t) = self.tex.get_x_token_until(depth)? {
-                self.execute(t)?;
-            }
-            Ok(())
-        })();
+        let r = work(self, depth);
         if r.is_err() {
             self.tex.drain_to(depth);
         }
         self.nesting -= 1;
         r
+    }
+
+    /// Runs what is in the input above `depth`.
+    pub(crate) fn run_until(&mut self, depth: usize) -> Result<(), Error> {
+        while let Some(t) = self.tex.get_x_token_until(depth)? {
+            self.execute(t)?;
+        }
+        Ok(())
     }
 
     fn count_step(&mut self) -> Result<(), Error> {
@@ -972,10 +998,6 @@ impl Engine {
                 // a key's code used as a command: nothing to do outside key processing
             }
             Meaning::Native(id) => {
-                // keys run by a key list are not statements, and their errors go to whoever runs the list
-                if id == Cmd::Key as u16 || id == Cmd::SetPath as u16 {
-                    return self.command(id, &t);
-                }
                 self.count_step()?;
                 self.tex.new_statement();
                 let r = self.command(id, &t);
@@ -1080,7 +1102,7 @@ impl Engine {
             return Ok(());
         }
         if self.picture_depth > 0 {
-            let rest = self.skip_statement()?;
+            let rest = self.skip_up_to(STATEMENTS)?;
             self.warn(format!("\\{name} not supported: '{}' ignored", rest.chars().take(40).collect::<String>().trim()));
         }
         Ok(())
@@ -1088,6 +1110,12 @@ impl Engine {
 
     /// Reads up to the `;` that ends a statement (outside braces), and returns it as text.
     pub fn skip_statement(&mut self) -> Result<String, Error> {
+        self.skip_up_to(&[])
+    }
+
+    /// [`Self::skip_statement`], stopping too before any of the commands `next`: a command of a
+    /// package may not end in `;`, and the statement after it has nothing to do with it.
+    fn skip_up_to(&mut self, next: &[&str]) -> Result<String, Error> {
         let mut out = Vec::new();
         let mut depth = 0usize;
         while let Some(t) = self.tex.get_token() {
@@ -1101,6 +1129,10 @@ impl Engine {
                     depth -= 1;
                 }
                 Token::Char(';', _) if depth == 0 => break,
+                ref x if depth == 0 && next.iter().any(|n| x.is_cs(n)) => {
+                    self.tex.back(t);
+                    break;
+                }
                 _ => {}
             }
             out.push(t);
@@ -1661,12 +1693,6 @@ impl Engine {
                 v.extend(o);
                 v.push(Token::Char('}', Cat::End));
                 self.keys_command(v, Some("/tikz"), true)
-            }
-            Cmd::Key => self.invoke_key_command(),
-            Cmd::SetPath => {
-                let p = self.argument_string()?;
-                self.st.key_path = p;
-                Ok(())
             }
             Cmd::Foreach => self.foreach(),
             Cmd::Definecolor => {
@@ -3499,6 +3525,10 @@ fn tables(boxes: &[PictureBox], layout: &[Layout], labels: &[crate::scene::Label
     (all, out)
 }
 
+/// What starts a statement of a picture, or ends the picture.
+const STATEMENTS: &[&str] =
+    &["begin", "clip", "coordinate", "draw", "end", "fill", "filldraw", "foreach", "graph", "matrix", "node", "path", "pic", "shade", "shadedraw", "useasboundingbox"];
+
 /// Runs a whole document (or figure) and returns the canvas and the warnings.
 pub fn run_document(code: &str) -> Result<(Canvas, Vec<String>), Error> {
     run_document_noting(code).map(|(canvas, warnings, _)| (canvas, warnings))
@@ -3515,7 +3545,11 @@ pub fn run_document_with(code: &str, libraries: &[&'static crate::extension::Lib
     crate::expr::reset_random();
     // tikra's margin around a figure, unless a standalone border says otherwise
     e.canvas.margin = 2.0 * crate::PT;
-    e.tex.push_text(code);
+    let (code, files) = pgfplots::table::split_filecontents(code);
+    for (name, lines) in files {
+        e.tex.define_string(&format!("tikra@file@{name}"), &lines, true);
+    }
+    e.tex.push_text(&code);
     e.run()?;
     // anything left open is closed
     while e.picture_depth > 0 {

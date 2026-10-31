@@ -1349,7 +1349,7 @@ pub fn compose_label(text: &str, font: &str, text_width: Option<f64>, align: cha
     let text = long_arrows(&text);
     if let Some(rows) = tabular(&text, size, stretch, &mut |cell: &str, w: &mut Vec<String>| typeset(&families(cell, all, bold, face), bold, sc, face, w), warnings) {
         let lines = rows.into_iter().map(|b| widen(b, stretch as f32)).collect();
-        let mut label = Label { lines, scale, color, align: drawn, line_height: 1.2 * EM_CM * size, stretch, skips: Vec::new(), font: face, lift: 0.0 };
+        let mut label = Label { lines, scale, color, align: drawn, line_height: 1.2 * EM_CM * size, stretch, line_stretch: Vec::new(), skips: Vec::new(), font: face, lift: 0.0 };
         // a `tabular` is centered on the math axis (2.5 pt at 10 pt)
         let n = label.lines.len();
         if n > 0 {
@@ -1429,7 +1429,10 @@ pub fn compose_label(text: &str, font: &str, text_width: Option<f64>, align: cha
             skips[k] += 2.54 / 72.27 - gap;
         }
     }
-    let mut label = Label { lines, scale, color, align: drawn, line_height, stretch, skips, font: face, lift: 0.0 };
+    // the lines' positions are widened line by line above: their glyphs have to be too, or those
+    // of a large line under a `\tiny` one come out as wide as `\tiny`'s design and run together
+    let line_stretch = if per_line { sizes.iter().map(|s| stretch * design_width(10.0 * s, fam) / design_width(10.0 * size, fam)).collect() } else { Vec::new() };
+    let mut label = Label { lines, scale, color, align: drawn, line_height, stretch, line_stretch, skips, font: face, lift: 0.0 };
     // lines of their own (`align=`) are an \halign in a \vbox, on the last one's baseline; in a
     // text width, a \vtop on the first's
     if text_width.is_none() {

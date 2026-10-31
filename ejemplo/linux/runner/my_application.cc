@@ -1,7 +1,6 @@
 #include "my_application.h"
 
 #include "familia_lienzo.h"
-#include "familia_masiva.h"
 #include "presentacion.h"
 #include "texturas.h"
 
@@ -84,7 +83,7 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
-  registrar_texturas(view, {familia_lienzo(), familia_masiva()});
+  registrar_texturas(view, {familia_lienzo()});
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

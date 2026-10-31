@@ -2,7 +2,7 @@
 
 mod comun;
 
-use adaptador::{FiguraTikra, IncrustadosMotor};
+use adaptador::{FiguraTikra, piezas_del_motor};
 use animacion::Reproductor;
 use documento::{Documento, Formato};
 use primitivas::{Capa, Color, Compositor, Matriz, Primitiva, Segmento};
@@ -67,7 +67,7 @@ fn todos_los_fotogramas_comparten_caja() {
 #[test]
 fn un_documento_reserva_la_zona_de_su_animacion() {
     let negro = Color { r: 0.0, g: 0.0, b: 0.0 };
-    let doc = Documento::nuevo(Formato::default(), Box::new(IncrustadosMotor { color: negro }));
+    let doc = Documento::nuevo(Formato::default(), piezas_del_motor(negro));
     let c = doc.componer(&format!("Un péndulo:\n\n{PENDULO}\n\nFin.")).unwrap();
     assert!(c.avisos.is_empty(), "{:?}", c.avisos);
     let [zona] = &c.escena.zonas[..] else {

@@ -28,6 +28,22 @@ fn se_entiende_entera(latex: &str) {
 
 /// La batería que probaba el motor del visor de HILO.
 #[test]
+fn una_linea_que_empieza_por_letra_no_se_vuelve_una_orden() {
+    for linea in ["e^{ix}=1", "u+v", "i+1", "o+1", "an+1"] {
+        se_entiende_entera(&format!("\\begin{{gather*}} a \\\\\n{linea} \\end{{gather*}}"));
+        se_entiende_entera(&format!("\\begin{{gather*}} a \\\\\t{linea} \\end{{gather*}}"));
+        se_entiende_entera(&format!("a +\n{linea}"));
+    }
+}
+
+#[test]
+fn una_orden_larga_comida_por_json_se_recupera() {
+    let c = componer("\nabla f + \theta", false).unwrap();
+    assert!(!c.avisos.is_empty(), "se avisa de la reparación");
+    assert!(c.avisos.iter().all(|a| a.contains("E-REC-2")), "{:?}", c.avisos);
+}
+
+#[test]
 fn las_formulas_habituales_se_maquetan() {
     for latex in [
         r"x^{0}=1",

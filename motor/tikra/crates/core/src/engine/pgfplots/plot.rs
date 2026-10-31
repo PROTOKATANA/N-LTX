@@ -61,6 +61,8 @@ pub struct Plot {
     /// What follows the input up to the `;` (`\closedcycle`, `-- cycle`, `node {…}`).
     pub post: Vec<Token>,
     pub forget: bool,
+    /// `update limits=false`: it is drawn, but the axis makes no room for it
+    pub keep_limits: bool,
     /// `/tikz/@plot handler` (empty: lines or `smooth`)
     pub handler: String,
     /// The plot's number (`\plotnum`) and its number among plots of the same handler.
@@ -337,6 +339,7 @@ fn survey(e: &mut Engine, style: &[Token], three_d: bool) -> Result<Plot, Error>
 
 fn survey_input(e: &mut Engine, plot: &mut Plot, three_d: bool) -> Result<(), Error> {
     plot.forget = keys::flag(e, "/pgfplots/forget plot");
+    plot.keep_limits = !keys::flag(e, "/pgfplots/update limits");
     plot.mesh = match keys::value(e, "/pgfplots/@mesh").as_str() {
         "m" => Some('m'),
         "s" => Some('s'),

@@ -1,15 +1,13 @@
 //! Compone documentos en su propio hilo: la primera vez puede tardar, y el bucle de señales no debe
 //! bloquearse nunca. Si llegan varios encargos seguidos, solo se hace el último.
 
-use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::mpsc::{Receiver, Sender, channel};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, OnceLock};
 use std::thread::JoinHandle;
 
-use adaptador::{FiguraTikra, IncrustadosMotor};
-use animacion::Reproductor;
-use documento::{Apartado, Documento, Formato, Memoria};
+use adaptador::{filmoteca, piezas_del_motor};
+use documento::{Apartado, Documento, Formato};
 use pintor::{Animador, Taller, ancho_de_texto, carencias, hilos};
 use primitivas::{Color, Composicion, ErrorComposicion, Escena};
 
@@ -63,7 +61,12 @@ impl Compositor {
     pub fn abrir<D: Destino, A: Avisos>(destino: Arc<D>, avisos: A, muestras: Muestras) -> Compositor {
         let (tx, rx) = channel();
         let hilo = hilos::lanzar("nltx-compositor", move || {
-            trabajar(&rx, destino.as_ref(), &avisos, &muestras);
+            let trabajo = Trabajo {
+                destino: destino.as_ref(),
+                avisos: &avisos,
+                muestras: &muestras,
+            };
+            trabajar(&rx, &trabajo);
         });
         Compositor {
             encargos: Some(tx),
@@ -89,12 +92,19 @@ impl Drop for Compositor {
     }
 }
 
-fn trabajar(encargos: &Receiver<Encargo>, destino: &dyn Destino, avisos: &dyn Avisos, muestras: &Muestras) {
+/// A quién sirve el hilo del compositor.
+struct Trabajo<'a> {
+    destino: &'a dyn Destino,
+    avisos: &'a dyn Avisos,
+    muestras: &'a Muestras,
+}
+
+fn trabajar(encargos: &Receiver<Encargo>, t: &Trabajo<'_>) {
     while let Ok(mut encargo) = encargos.recv() {
         while let Ok(siguiente) = encargos.try_recv() {
             encargo = siguiente;
         }
-        avisos.publicado(componer(&encargo, muestras, destino));
+        t.avisos.publicado(componer(&encargo, t.muestras, t.destino));
     }
 }
 
@@ -107,7 +117,7 @@ fn documento() -> &'static Documento {
             color: NEGRO,
             ..Formato::default()
         };
-        Documento::nuevo(formato, Box::new(Memoria::nueva(IncrustadosMotor { color: NEGRO })))
+        Documento::nuevo(formato, piezas_del_motor(NEGRO))
     })
 }
 
@@ -152,33 +162,12 @@ fn componer(encargo: &Encargo, muestras: &Muestras, destino: &dyn Destino) -> Re
     }
 }
 
-type Reproductores = HashMap<String, Result<Arc<Reproductor<FiguraTikra>>, String>>;
-
-/// Prepara una animación una sola vez: su caja exige componer el recorrido.
-fn reproductor(fuente: &str) -> Result<Arc<Reproductor<FiguraTikra>>, String> {
-    static LISTOS: OnceLock<Mutex<Reproductores>> = OnceLock::new();
-    let mut listos = LISTOS
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner);
-    listos
-        .entry(fuente.to_string())
-        .or_insert_with(|| {
-            Reproductor::nuevo(fuente, FiguraTikra::default())
-                .map(Arc::new)
-                .map_err(|e| e.to_string())
-        })
-        .clone()
-}
-
-/// Recompone las animaciones en el hilo del taller.
+/// Da los fotogramas de las animaciones: los prepara la filmoteca, por delante de lo que se ve.
 struct AnimadorTikra;
 
 impl Animador for AnimadorTikra {
-    fn fotograma(&self, fuente: &str, segundos: f64) -> Option<Escena> {
-        let composicion =
-            catch_unwind(|| reproductor(fuente).and_then(|r| r.fotograma(segundos).map_err(|e| e.to_string())));
-        composicion.ok()?.ok().map(|c| c.escena)
+    fn fotograma(&self, fuente: &str, segundos: f64) -> Option<Arc<Escena>> {
+        filmoteca().fotograma(fuente, segundos)
     }
 }
 
@@ -205,6 +194,57 @@ mod tests {
 
     fn sin_muestras() -> Muestras {
         Muestras::default()
+    }
+
+    use std::sync::Mutex;
+
+    use adaptador::FiguraTikra;
+    use animacion::Reproductor;
+
+    const K1: &str = include_str!("../../../assets/k1.tex");
+
+    /// Los hilos de prueba tienen poca pila, y K1 es largo.
+    fn con_pila<T: Send + 'static>(trabajo: impl FnOnce() -> T + Send + 'static) -> T {
+        std::thread::Builder::new()
+            .stack_size(64 << 20)
+            .spawn(trabajo)
+            .unwrap()
+            .join()
+            .unwrap()
+    }
+
+    #[test]
+    fn k1_se_compone_sin_avisos() {
+        let resultado = con_pila(|| componer(&encargo(K1, 800.0), &sin_muestras(), &Falso::default()));
+        assert_eq!(resultado.error, "");
+        assert!(resultado.avisos.is_empty(), "{:#?}", resultado.avisos);
+    }
+
+    /// Una animación cambia de valores en cada fotograma: uno solo puede romperse sin que se note.
+    #[test]
+    fn ningun_fotograma_de_k1_da_avisos() {
+        let preambulo = &K1[..K1.find("\\section").unwrap()];
+        let trozos = K1.split("\\begin{animacion}").skip(1);
+        let fuentes: Vec<String> = trozos
+            .map(|t| {
+                let cuerpo = &t[..t.find("\\end{animacion}").unwrap()];
+                format!("{preambulo}\\begin{{animacion}}{cuerpo}\\end{{animacion}}")
+            })
+            .collect();
+        assert!(fuentes.len() >= 20);
+        let malos = con_pila(move || {
+            let mut malos = Vec::new();
+            for fuente in &fuentes {
+                let r = Reproductor::nuevo(fuente, FiguraTikra::default()).unwrap();
+                let duracion = r.animacion().duracion;
+                for n in 0..48 {
+                    let c = r.fotograma(duracion * f64::from(n) / 48.0).unwrap();
+                    malos.extend(c.avisos.into_iter().map(|a| format!("{n}: {a}")));
+                }
+            }
+            malos
+        });
+        assert!(malos.is_empty(), "{malos:#?}");
     }
 
     #[test]

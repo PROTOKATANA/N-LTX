@@ -22,8 +22,9 @@ mod contorno;
 mod figura;
 mod formula;
 mod incrustados;
+mod resaltado;
 mod traduccion;
 
 pub use figura::FiguraTikra;
 pub use formula::FormulaMathra;
-pub use incrustados::IncrustadosMotor;
+pub use incrustados::{IncrustadosMotor, filmoteca, piezas_del_motor};

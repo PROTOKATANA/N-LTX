@@ -144,6 +144,34 @@ pub fn parse_number(s: &str) -> Option<f64> {
     t.parse::<f64>().ok()
 }
 
+/// Takes the `filecontents` environments out of `code`, with the file (name, lines) each one
+/// writes: the file has to keep its lines, which the tokens of a text do not.
+pub fn split_filecontents(code: &str) -> (String, Vec<(String, String)>) {
+    const BEGIN: &str = "\\begin{filecontents";
+    let (mut rest, mut kept, mut files) = (code, String::new(), Vec::new());
+    while let Some(at) = rest.find(BEGIN) {
+        let Some((name, lines, after)) = filecontents_at(&rest[at + BEGIN.len()..]) else { break };
+        kept.push_str(&rest[..at]);
+        files.push((name, lines));
+        rest = after;
+    }
+    kept.push_str(rest);
+    (kept, files)
+}
+
+/// What comes after `\begin{filecontents`: `*}[options]{name}`, the lines and its `\end`.
+fn filecontents_at(t: &str) -> Option<(String, String, &str)> {
+    let (star, t) = t.strip_prefix('*').map_or(("", t), |r| ("*", r));
+    let t = t.strip_prefix('}')?.trim_start();
+    let t = match t.strip_prefix('[') {
+        Some(r) => r.split_once(']')?.1.trim_start(),
+        None => t,
+    };
+    let (name, t) = t.strip_prefix('{')?.split_once('}')?;
+    let (lines, after) = t.split_once(&format!("\\end{{filecontents{star}}}"))?;
+    Some((name.trim().to_string(), lines.to_string(), after))
+}
+
 /// Reads a table file, if it may be read: the folders searched and the reason it was refused.
 pub fn read_file(name: &str, search: &[String]) -> Result<String, String> {
     let bytes = read_bytes(name, search, MAX_FILE)?;
@@ -193,6 +221,16 @@ pub fn find_file(name: &str, search: &[String]) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn filecontents_leaves_the_text_and_keeps_the_lines() {
+        let (kept, files) = split_filecontents("a\\begin{filecontents*}[overwrite]{x.dat}\n1 2\n3 4\n\\end{filecontents*}b");
+        assert_eq!(kept, "ab");
+        assert_eq!(files, [("x.dat".to_string(), "\n1 2\n3 4\n".to_string())]);
+        let (kept, files) = split_filecontents("\\begin{filecontents}{y}\n1\n\\end{filecontents}\\begin{filecontents}{z}");
+        assert_eq!(kept, "\\begin{filecontents}{z}", "the one that does not end stays");
+        assert_eq!(files.len(), 1);
+    }
 
     #[test]
     fn header_and_rows() {

@@ -7,7 +7,9 @@ impl<'a> Lector<'a> {
     pub(super) fn tramos_propios(&mut self, texto: &str) -> Vec<Tramo> {
         let mut otro = Lector::nuevo(texto);
         otro.profundidad = self.profundidad;
+        otro.salida.colores = std::mem::take(&mut self.salida.colores);
         let tramos = otro.tramos_de(texto);
+        self.salida.colores = std::mem::take(&mut otro.salida.colores);
         for aviso in otro.salida.avisos {
             self.avisar(aviso);
         }
@@ -30,7 +32,6 @@ impl<'a> Lector<'a> {
                 let fin = cierre(t, '{', '}').unwrap_or(t.len());
                 self.salta(fin + 1);
                 let dentro = &t[1.min(t.len())..fin.max(1).min(t.len())];
-                let (dentro, estilo) = estilo_de_grupo(dentro, estilo);
                 fundir(tramos, self.tramos_con(dentro, estilo));
             }
             '}' => self.avanza(c),
@@ -98,6 +99,25 @@ impl<'a> Lector<'a> {
             return;
         }
         self.salta(1 + nombre.len());
+        if let Some(declarado) = declaracion(nombre, estilo) {
+            self.declarado = Some(declarado);
+            self.saltar_espacios();
+            return;
+        }
+        if nombre == "color" {
+            let nombre = self.argumento();
+            let color = Some(self.indice_de_color(nombre));
+            self.declarado = Some(Estilo { color, ..estilo });
+            return;
+        }
+        if nombre == "estilotabla" {
+            self.definir_estilo_de_tabla();
+            return;
+        }
+        if nombre == "estilocodigo" {
+            self.definir_estilo_de_codigo();
+            return;
+        }
         if ORDENES_PREAMBULO.contains(&nombre) {
             let inicio = self.i;
             self.opcional();
@@ -115,6 +135,13 @@ impl<'a> Lector<'a> {
         }
         if ORDENES_MACRO.contains(&nombre) || nombre == "def" {
             self.macro_propia(nombre);
+            return;
+        }
+        if nombre == "tikzmath" {
+            let inicio = self.i;
+            self.argumento();
+            let texto = format!("\\tikzmath{}\n", &self.t[inicio..self.i]);
+            self.calculos.push_str(&texto);
             return;
         }
         if let Some((_, args)) = ORDENES_IGNORADAS.iter().find(|(n, _)| *n == nombre) {
@@ -136,9 +163,9 @@ impl<'a> Lector<'a> {
             e
         };
         let envuelto = match nombre {
-            "textbf" | "bfseries" => Some(con(|e| e.negrita = true)),
-            "textit" | "emph" | "textsl" | "itshape" => Some(con(|e| e.cursiva = true)),
-            "texttt" => Some(con(|e| e.mono = true)),
+            "textbf" => Some(con(|e| e.negrita = true)),
+            "textit" | "emph" | "textsl" => Some(con(|e| e.cursiva = true)),
+            "texttt" => Some(con(a_mono)),
             "underline" => Some(con(|e| e.subrayado = true)),
             "textrm" | "textsc" | "textnormal" | "textsf" | "mbox" | "text" => Some(estilo),
             _ => None,
@@ -153,10 +180,21 @@ impl<'a> Lector<'a> {
                 self.argumento();
             }
             "item" => {}
+            "makecell" => {
+                self.opcional();
+                let lineas = self.argumento();
+                for (n, linea) in partir(lineas, "\\\\").into_iter().enumerate() {
+                    if n > 0 {
+                        tramos.push(Tramo::Salto);
+                    }
+                    fundir(tramos, self.tramos_con(linea.trim(), estilo));
+                }
+            }
             "textcolor" => {
-                self.argumento();
+                let nombre = self.argumento();
+                let color = Some(self.indice_de_color(nombre));
                 let texto = self.argumento();
-                fundir(tramos, self.tramos_con(texto, estilo));
+                fundir(tramos, self.tramos_con(texto, Estilo { color, ..estilo }));
             }
             "href" => {
                 self.argumento();
@@ -165,9 +203,9 @@ impl<'a> Lector<'a> {
             }
             "url" => {
                 let texto = self.argumento();
-                fundir(tramos, self.tramos_con(texto, con(|e| e.mono = true)));
+                fundir(tramos, self.tramos_con(texto, con(a_mono)));
             }
-            "verb" => self.verbatim_en_linea(con(|e| e.mono = true), tramos),
+            "verb" => self.verbatim_en_linea(con(a_mono), tramos),
             "footnote" => {
                 let texto = self.argumento();
                 let nota = self.tramos_de(texto);
@@ -201,6 +239,20 @@ impl<'a> Lector<'a> {
                 }
             }
         }
+    }
+
+    fn saltar_espacios(&mut self) {
+        while let Some(c @ (' ' | '\n' | '\t')) = self.mira() {
+            self.avanza(c);
+        }
+    }
+
+    fn indice_de_color(&mut self, nombre: &str) -> usize {
+        let colores = &mut self.salida.colores;
+        colores.iter().position(|c| c == nombre).unwrap_or_else(|| {
+            colores.push(nombre.to_string());
+            colores.len() - 1
+        })
     }
 
     pub(super) fn verbatim_en_linea(&mut self, estilo: Estilo, tramos: &mut Vec<Tramo>) {

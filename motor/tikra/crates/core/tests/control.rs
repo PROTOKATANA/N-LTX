@@ -350,3 +350,18 @@ fn page_lengths_of_latex() {
     let (w, _) = size(r"{article}\usepackage[paper=a5paper]{geometry}");
     assert!((w - 42.11).abs() < 0.5, "{w}");
 }
+
+#[test]
+fn a_figure_of_many_elements_keeps_the_options_of_all_of_them() {
+    let elements = 30_000;
+    let r = no_warnings(&format!(r"\begin{{tikzpicture}}\foreach \i in {{1,...,{elements}}} {{ \fill[red] (\i*0.001,0) circle (0.04); }}\end{{tikzpicture}}"));
+    assert_eq!(r.svg.matches("<circle").count() + r.svg.matches("<path").count(), elements);
+}
+
+#[test]
+fn styles_that_multiply_still_stop() {
+    let levels: String = (b'a'..b'n').map(|c| format!("{0}/.style={{{1},{1},{1},{1}}},", c as char, (c + 1) as char)).collect();
+    let r = tikra::engine::run_document(&format!(r"\tikzset{{{levels} n/.style={{}}}}\begin{{tikzpicture}}\draw[a] (0,0) -- (1,1);\end{{tikzpicture}}"));
+    let warnings = r.unwrap().1;
+    assert!(warnings.iter().any(|w| w.contains("styles that multiply")), "{warnings:?}");
+}

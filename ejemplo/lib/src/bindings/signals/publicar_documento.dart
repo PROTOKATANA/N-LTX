@@ -56,9 +56,9 @@ class PublicarDocumento {
   }
 
   Uint8List bincodeSerialize() {
-    final serializer = BincodeSerializer();
-    serialize(serializer);
-    return serializer.bytes;
+      final serializer = BincodeSerializer();
+      serialize(serializer);
+      return serializer.bytes;
   }
 
   @override
@@ -66,26 +66,29 @@ class PublicarDocumento {
     if (identical(this, other)) return true;
     if (other.runtimeType != runtimeType) return false;
 
-    return other is PublicarDocumento &&
-        fuente == other.fuente &&
-        ancho == other.ancho &&
-        conMuestras == other.conMuestras;
+    return other is PublicarDocumento
+      && fuente == other.fuente
+      && ancho == other.ancho
+      && conMuestras == other.conMuestras;
   }
 
   @override
-  int get hashCode => Object.hash(fuente, ancho, conMuestras);
+  int get hashCode => Object.hash(
+        fuente,
+        ancho,
+        conMuestras,
+      );
 
   @override
   String toString() {
     String? fullString;
 
     assert(() {
-      fullString =
-          '$runtimeType('
-          'fuente: $fuente, '
-          'ancho: $ancho, '
-          'conMuestras: $conMuestras'
-          ')';
+      fullString = '$runtimeType('
+        'fuente: $fuente, '
+        'ancho: $ancho, '
+        'conMuestras: $conMuestras'
+        ')';
       return true;
     }());
 

@@ -37,7 +37,12 @@ class VerDocumento {
   final double escala;
   final double y;
 
-  VerDocumento copyWith({int? ancho, int? alto, double? escala, double? y}) {
+  VerDocumento copyWith({
+    int? ancho,
+    int? alto,
+    double? escala,
+    double? y,
+  }) {
     return VerDocumento(
       ancho: ancho ?? this.ancho,
       alto: alto ?? this.alto,
@@ -56,9 +61,9 @@ class VerDocumento {
   }
 
   Uint8List bincodeSerialize() {
-    final serializer = BincodeSerializer();
-    serialize(serializer);
-    return serializer.bytes;
+      final serializer = BincodeSerializer();
+      serialize(serializer);
+      return serializer.bytes;
   }
 
   @override
@@ -66,28 +71,32 @@ class VerDocumento {
     if (identical(this, other)) return true;
     if (other.runtimeType != runtimeType) return false;
 
-    return other is VerDocumento &&
-        ancho == other.ancho &&
-        alto == other.alto &&
-        escala == other.escala &&
-        y == other.y;
+    return other is VerDocumento
+      && ancho == other.ancho
+      && alto == other.alto
+      && escala == other.escala
+      && y == other.y;
   }
 
   @override
-  int get hashCode => Object.hash(ancho, alto, escala, y);
+  int get hashCode => Object.hash(
+        ancho,
+        alto,
+        escala,
+        y,
+      );
 
   @override
   String toString() {
     String? fullString;
 
     assert(() {
-      fullString =
-          '$runtimeType('
-          'ancho: $ancho, '
-          'alto: $alto, '
-          'escala: $escala, '
-          'y: $y'
-          ')';
+      fullString = '$runtimeType('
+        'ancho: $ancho, '
+        'alto: $alto, '
+        'escala: $escala, '
+        'y: $y'
+        ')';
       return true;
     }());
 
@@ -102,6 +111,10 @@ extension VerDocumentoDartSignalExt on VerDocumento {
   void sendSignalToRust() {
     final messageBytes = bincodeSerialize();
     final binary = Uint8List(0);
-    sendDartSignal('rinf_send_dart_signal_ver_documento', messageBytes, binary);
+    sendDartSignal(
+      'rinf_send_dart_signal_ver_documento',
+      messageBytes,
+      binary,
+    );
   }
 }

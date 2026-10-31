@@ -83,7 +83,22 @@ impl Compositor for FiguraTikra {
 
 /// Una figura se deja tal cual y unas órdenes sueltas se envuelven en un `tikzpicture`, como hace
 /// `tikra::convert`.
+/// Órdenes de paquetes que solo añaden algo que aquí no existe: se reducen a lo que se ve.
+const ORDENES_DE_CORTESIA: [(&str, &str); 2] = [
+    ("\\pdftooltip", "\\newcommand{\\pdftooltip}[2]{#1}\n"),
+    ("\\tikzcdset", "\\newcommand{\\tikzcdset}[1]{}\n"),
+];
+
 fn preparar(fuente: &str) -> Result<String, ErrorComposicion> {
+    let cortesia: String = ORDENES_DE_CORTESIA
+        .iter()
+        .filter(|(orden, _)| fuente.contains(orden))
+        .map(|(_, definicion)| *definicion)
+        .collect();
+    envolver(fuente).map(|f| format!("{cortesia}{f}"))
+}
+
+fn envolver(fuente: &str) -> Result<String, ErrorComposicion> {
     let texto = sin_comentarios(fuente);
     let es_figura = ["\\begin{tikzpicture}", "\\begin{pgfpicture}", "\\pgfuseshading"]
         .iter()

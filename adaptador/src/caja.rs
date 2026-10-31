@@ -183,7 +183,7 @@ impl Destino {
     /// silencio.
     fn color(&mut self, propio: &Option<String>, heredado: Color) -> Color {
         let Some(texto) = propio else { return heredado };
-        let leido = color_xcolor(texto).or_else(|| {
+        let leido = color_xcolor(texto, &[]).or_else(|| {
             svgtypes::Color::from_str(texto).ok().map(|c| Color {
                 r: f64::from(c.red) / 255.0,
                 g: f64::from(c.green) / 255.0,

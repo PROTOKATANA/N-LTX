@@ -3194,7 +3194,8 @@ pub fn string_tokens(s: &str) -> Vec<Token> {
 
 /// Tokens as text: control sequences as `\name` followed by a space when the name is a word.
 pub fn tokens_to_string(v: &[Token]) -> String {
-    let mut s = String::new();
+    // a reservation for the usual text: growing took as long as filling it
+    let mut s = String::with_capacity(v.len());
     for (i, t) in v.iter().enumerate() {
         match t {
             Token::Cs(n) => {

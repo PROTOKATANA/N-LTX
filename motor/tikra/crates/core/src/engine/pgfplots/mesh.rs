@@ -51,7 +51,7 @@ pub fn mapped_colors(e: &mut Engine, mut f: impl FnMut(&mut Engine) -> Result<()
     e.colors.insert("mapped color".into(), Color::rgb(0.0, 0.0, 0.0));
     let draw = Linear::from(states[0].stroke_color(), states[1].stroke_color());
     let fill = Linear::from(states[0].fill_paint_color(), states[1].fill_paint_color());
-    Ok((draw, fill, states.swap_remove(1)))
+    Ok((draw, fill, (*states.swap_remove(1)).clone()))
 }
 
 /// A color as a function of `mapped color`.

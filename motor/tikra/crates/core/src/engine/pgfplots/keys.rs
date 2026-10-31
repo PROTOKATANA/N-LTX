@@ -325,6 +325,7 @@ const SWITCHES: &[(&str, &str)] = &[
     ("ternary limits relative", "true"),
     ("transpose legend", "false"),
     ("unit rescale keep size", "unless limits declared"),
+    ("update limits", "true"),
     ("use units", "true"),
     ("x tick label as interval", "false"),
     ("y tick label as interval", "false"),

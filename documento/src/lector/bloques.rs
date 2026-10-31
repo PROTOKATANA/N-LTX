@@ -19,6 +19,8 @@ impl<'a> Lector<'a> {
                 salida.extend(bloques);
             } else {
                 self.uno(Estilo::default(), &mut tramos);
+                // fuera de un grupo no hay dónde acabaría: una figura no cierra el suyo aquí
+                self.declarado = None;
             }
         }
         cerrar_parrafo(&mut tramos, &mut salida);
@@ -62,15 +64,51 @@ impl<'a> Lector<'a> {
                 self.salta(1 + nombre.len());
                 Some(vec![Bloque::Regla])
             }
+            n if ORDENES_ENVOLTORIO.iter().any(|(o, _)| *o == n) => Some(self.envoltorio(n)),
+            n if extensiones::buscar(n).is_some() => Some(self.extension(n)),
             "tikz" => {
                 // `\tikz …;` llega hasta su punto y coma, fuera de llaves
                 let t = self.resto();
                 let fin = fin_de_instruccion(t);
                 self.salta(fin);
-                Some(vec![Bloque::Figura(t[..fin].to_string())])
+                Some(vec![Bloque::Figura(format!("{}{}", self.calculos, &t[..fin]))])
             }
             _ => None,
         }
+    }
+
+    /// Una extensión: se lee lo que escribe, como si estuviera en la fuente.
+    fn extension(&mut self, orden: &str) -> Vec<Bloque> {
+        self.salta(1 + orden.len());
+        let opciones = self.opcional().map(leer_opciones).unwrap_or_default();
+        let Some(extension) = extensiones::buscar(orden) else {
+            return Vec::new();
+        };
+        let fuente = extension.expandir(&opciones);
+        let mut otro = Lector::nuevo(&fuente);
+        otro.profundidad = self.profundidad + 1;
+        std::mem::swap(&mut otro.salida, &mut self.salida);
+        let bloques = otro.bloques(&Parada::Final);
+        std::mem::swap(&mut otro.salida, &mut self.salida);
+        bloques
+    }
+
+    /// Lo de dentro de una caja, leído en este mismo lector: sus notas y macros son del documento.
+    fn envoltorio(&mut self, nombre: &str) -> Vec<Bloque> {
+        self.salta(1 + nombre.len());
+        self.opcional();
+        let previos = ORDENES_ENVOLTORIO
+            .iter()
+            .find_map(|(o, n)| (*o == nombre).then_some(*n));
+        for _ in 0..previos.unwrap_or(0) {
+            self.argumento();
+        }
+        let dentro = self.argumento();
+        let (t, i) = (self.t, self.i);
+        (self.t, self.i) = (dentro, 0);
+        let bloques = self.bloques(&Parada::Final);
+        (self.t, self.i) = (t, i);
+        bloques
     }
 
     pub(super) fn titulo(&mut self, nivel: u8, nombre: &str) -> Bloque {
@@ -98,8 +136,10 @@ impl<'a> Lector<'a> {
         self.t = texto;
         self.i = 0;
         self.profundidad += 1;
+        let mut estilo = estilo;
         while !self.fin() {
             self.uno(estilo, &mut tramos);
+            estilo = self.declarado.take().unwrap_or(estilo);
         }
         self.profundidad -= 1;
         self.t = t;
@@ -124,7 +164,10 @@ impl<'a> Lector<'a> {
         }
         if ENTORNOS_FIGURA.contains(&nombre) {
             return Some(match self.hasta_fin_de(nombre) {
-                Some(cuerpo) => vec![Bloque::Figura(format!("\\begin{{{nombre}}}{cuerpo}\\end{{{nombre}}}"))],
+                Some(cuerpo) => vec![Bloque::Figura(format!(
+                    "{}\\begin{{{nombre}}}{cuerpo}\\end{{{nombre}}}",
+                    self.calculos
+                ))],
                 None => {
                     self.avisar(format!("figura sin cerrar: {nombre}"));
                     Vec::new()
@@ -143,14 +186,27 @@ impl<'a> Lector<'a> {
             });
         }
         if ENTORNOS_CODIGO.contains(&nombre) {
-            self.opcional();
+            let opciones = self.opcional().map(leer_opciones).unwrap_or_default();
+            let propio = opciones.iter().find(|(c, _)| c == "language").map(|(_, v)| v.clone());
+            let lenguaje = if nombre == "minted" {
+                Some(self.argumento().trim().to_string())
+            } else {
+                propio
+            };
             return Some(match self.hasta_fin_de(nombre) {
-                Some(cuerpo) => vec![Bloque::Codigo(cuerpo.trim_matches('\n').to_string())],
+                Some(cuerpo) => vec![Bloque::Codigo {
+                    texto: cuerpo.trim_matches('\n').to_string(),
+                    lenguaje,
+                    opciones,
+                }],
                 None => Vec::new(),
             });
         }
         if ENTORNOS_TRANSPARENTES.contains(&nombre) {
             self.opcional();
+            if ENTORNOS_CON_ANCHO.contains(&nombre) {
+                self.argumento();
+            }
             return Some(Vec::new());
         }
         match nombre {
@@ -168,6 +224,23 @@ impl<'a> Lector<'a> {
         }
     }
 
+    /// `\item[etiqueta]`: va en negrita por delante de lo que diga el elemento.
+    fn etiquetar(&mut self, item: &mut Vec<Bloque>, etiqueta: &'a str) {
+        let negrita = Estilo {
+            negrita: true,
+            ..Estilo::default()
+        };
+        let mut tramos = self.tramos_con(etiqueta, negrita);
+        empujar(&mut tramos, " ", Estilo::default());
+        match item.first_mut() {
+            Some(Bloque::Parrafo(resto)) => {
+                tramos.append(resto);
+                *resto = tramos;
+            }
+            _ => item.insert(0, Bloque::Parrafo(tramos)),
+        }
+    }
+
     pub(super) fn lista(&mut self, nombre: &str) -> Bloque {
         self.opcional();
         let mut items = Vec::new();
@@ -176,44 +249,17 @@ impl<'a> Lector<'a> {
         self.bloques(&parada);
         while self.nombre_si_orden() == Some("item") {
             self.salta("\\item".len());
-            self.opcional();
-            items.push(self.bloques(&parada));
+            let etiqueta = self.opcional();
+            let mut item = self.bloques(&parada);
+            if let Some(etiqueta) = etiqueta {
+                self.etiquetar(&mut item, etiqueta);
+            }
+            items.push(item);
         }
         self.hasta_fin_de(nombre);
         Bloque::Lista {
             ordenada: nombre == "enumerate",
             items,
         }
-    }
-
-    pub(super) fn tabla(&mut self, nombre: &str) -> Bloque {
-        self.opcional();
-        if nombre != "tabular" {
-            self.argumento();
-        }
-        self.argumento();
-        let cuerpo = self.hasta_fin_de(nombre).unwrap_or("");
-        let mut filas = Vec::new();
-        for fila in partir(cuerpo, "\\\\") {
-            let limpia = sin_reglas(fila);
-            if limpia.trim().is_empty() {
-                continue;
-            }
-            let celdas: Vec<String> = partir(&limpia, "&").into_iter().map(str::to_string).collect();
-            filas.push(celdas);
-        }
-        let filas = filas
-            .into_iter()
-            .map(|celdas| {
-                celdas
-                    .into_iter()
-                    .map(|c| {
-                        let texto = c.trim().to_string();
-                        self.tramos_propios(&texto)
-                    })
-                    .collect()
-            })
-            .collect();
-        Bloque::Tabla(filas)
     }
 }

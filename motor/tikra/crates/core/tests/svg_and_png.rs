@@ -51,7 +51,18 @@ fn empty_canvas_has_minimum_size() {
     assert!(svg.contains("viewBox"));
     // a text whose label has no lines
     let mut c = Canvas::default();
-    let label = Label { lines: Vec::new(), scale: 1.0, color: Color::BLACK, align: 'c', line_height: 0.0, stretch: 1.0, skips: Vec::new(), font: tikra::label::FONT, lift: 0.0 };
+    let label = Label {
+        lines: Vec::new(),
+        scale: 1.0,
+        color: Color::BLACK,
+        align: 'c',
+        line_height: 0.0,
+        stretch: 1.0,
+        line_stretch: Vec::new(),
+        skips: Vec::new(),
+        font: tikra::label::FONT,
+        lift: 0.0,
+    };
     assert_eq!(label.depth(), 0.0);
     assert_eq!(label.height(), 0.0);
     c.push(Item::Text { label, place: Transform::default(), opacity: 1.0 });

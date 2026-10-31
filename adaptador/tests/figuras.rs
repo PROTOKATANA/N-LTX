@@ -3,7 +3,7 @@
 mod comun;
 
 use adaptador::FiguraTikra;
-use primitivas::{Capa, Compositor, Pintura, Primitiva, Segmento};
+use primitivas::{Capa, Compositor, LIMITE_INGLETE, Pintura, Primitiva, Segmento};
 use tikra::extension::{Context, Library, Tokens};
 
 /// Bp por centímetro.
@@ -18,6 +18,147 @@ fn trazados(primitivas: &[Primitiva]) -> Vec<&Primitiva> {
         .iter()
         .filter(|p| matches!(p, Primitiva::Trazado { .. }))
         .collect()
+}
+
+fn sin_avisos(fuente: &str) -> primitivas::Composicion {
+    let c = componer(fuente);
+    assert!(c.avisos.is_empty(), "{:?}", c.avisos);
+    assert!(!c.escena.primitivas.is_empty());
+    c
+}
+
+#[test]
+fn las_opciones_de_una_celda_admiten_corchetes_entre_llaves() {
+    sin_avisos(
+        r"\usetikzlibrary{matrix}\begin{tikzpicture}
+        \matrix [matrix of nodes] { |[label={[draw]:a}]|b & c \\ };
+        \end{tikzpicture}",
+    );
+}
+
+#[test]
+fn smash_en_el_texto_de_un_nodo_deja_ver_lo_que_lleva() {
+    sin_avisos(r"\begin{tikzpicture}\node {\smash{a} \smash[b]{b}};\end{tikzpicture}");
+}
+
+#[test]
+fn pdftooltip_se_queda_en_lo_que_se_ve() {
+    sin_avisos(r"\begin{tikzpicture}\node {\pdftooltip{a}{una nota}};\end{tikzpicture}");
+}
+
+#[test]
+fn tikzmath_antes_de_la_figura_le_llega_a_la_figura() {
+    sin_avisos(
+        r"\usetikzlibrary{math}\tikzmath{ \R = 2; }\begin{tikzpicture}\draw (0,0) circle (\R);\end{tikzpicture}",
+    );
+}
+
+#[test]
+fn tikzcdset_no_se_pinta_como_texto() {
+    let figura = r"\begin{tikzpicture}\node {x};\end{tikzpicture}";
+    let con = sin_avisos(&format!(r"\tikzcdset{{cells={{nodes={{draw}}}}}}{figura}"));
+    assert_eq!(format!("{:?}", con.escena), format!("{:?}", componer(figura).escena));
+}
+
+fn limites_de_inglete(fuente: &str) -> Vec<f64> {
+    componer(fuente)
+        .escena
+        .primitivas
+        .iter()
+        .filter_map(|p| match p {
+            Primitiva::Trazado { trazo: Some(t), .. } => Some(t.limite_inglete),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn un_trazo_sin_limite_pedido_usa_el_del_motor_y_uno_pedido_se_respeta() {
+    let codo = r"(0,0) -- (1,0) -- (0,0.2);\end{tikzpicture}";
+    assert_eq!(
+        limites_de_inglete(&format!(r"\begin{{tikzpicture}}\draw {codo}")),
+        [LIMITE_INGLETE]
+    );
+    let pedido = format!(r"\begin{{tikzpicture}}\draw[miter limit=20] {codo}");
+    assert_eq!(limites_de_inglete(&pedido), [20.0]);
+}
+
+/// El ancho de cada glifo frente a su alto: 1 si la letra no está deformada.
+fn proporciones(fuente: &str) -> Vec<f64> {
+    componer(fuente)
+        .escena
+        .primitivas
+        .iter()
+        .filter_map(|p| match p {
+            Primitiva::Glifo { matriz, .. } => Some((matriz.a / matriz.d).abs()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn una_linea_grande_bajo_una_pequena_no_ensancha_sus_letras() {
+    let sola = proporciones(r"\begin{tikzpicture}\node {Na};\end{tikzpicture}");
+    let bajo = proporciones(r"\begin{tikzpicture}\node[align=center] {\tiny 11\\Na};\end{tikzpicture}");
+    assert_eq!(bajo.len(), sola.len() + 2);
+    let dos_ultimas = &bajo[bajo.len() - 2..];
+    assert!((dos_ultimas[0] - sola[0]).abs() < 1e-6, "{bajo:?} frente a {sola:?}");
+    assert!((dos_ultimas[1] - sola[1]).abs() < 1e-6, "{bajo:?} frente a {sola:?}");
+}
+
+#[test]
+fn subrayar_en_el_texto_de_un_nodo() {
+    sin_avisos(r"\begin{tikzpicture}\node {\underline{movie\_id}};\end{tikzpicture}");
+}
+
+#[test]
+fn un_diagrama_conmutativo_dentro_de_un_nodo() {
+    sin_avisos(r"\begin{tikzpicture}\node {\begin{tikzcd} a \ar[r] & b \end{tikzcd}};\end{tikzpicture}");
+}
+
+#[test]
+fn una_orden_desconocida_no_se_lleva_la_instruccion_siguiente() {
+    let c = componer(r"\begin{tikzpicture}\desconocida[a=1]\otra \node {x};\end{tikzpicture}");
+    assert!(c.avisos.iter().any(|a| a.contains("not supported")), "{:?}", c.avisos);
+    assert!(!c.escena.primitivas.is_empty());
+}
+
+const TABLA: &str = "\\begin{filecontents*}{datos.dat}\nx y\n0 0\n1 2\n2 1\n\\end{filecontents*}\n";
+
+#[test]
+fn una_tabla_de_filecontents_se_lee_y_no_se_pinta_como_texto() {
+    let c = sin_avisos(&format!(
+        r"{TABLA}\begin{{tikzpicture}}\begin{{axis}}\addplot table {{datos.dat}};\end{{axis}}\end{{tikzpicture}}"
+    ));
+    let sin_tabla = componer(
+        r"\begin{tikzpicture}\begin{axis}\addplot coordinates {(0,0) (1,2) (2,1)};\end{axis}\end{tikzpicture}",
+    );
+    let (a, b) = (
+        format!("{:?}", trazados(&c.escena.primitivas)),
+        format!("{:?}", trazados(&sin_tabla.escena.primitivas)),
+    );
+    assert_eq!(a, b);
+}
+
+#[test]
+fn update_limits_false_pinta_sin_mover_los_limites() {
+    let eje = |plots: &str| {
+        componer(&format!(
+            r"\begin{{tikzpicture}}\begin{{axis}}\addplot coordinates {{(0,0) (1,1)}};{plots}\end{{axis}}\end{{tikzpicture}}"
+        ))
+    };
+    let (solo, con) = (
+        eje(""),
+        eje(r"\addplot [update limits=false] coordinates {(0,0) (9,9)};"),
+    );
+    assert!(con.avisos.is_empty(), "{:?}", con.avisos);
+    let dibujado: Vec<String> = trazados(&con.escena.primitivas)
+        .iter()
+        .map(|t| format!("{t:?}"))
+        .collect();
+    for t in trazados(&solo.escena.primitivas) {
+        assert!(dibujado.contains(&format!("{t:?}")), "ha cambiado: {t:?}");
+    }
 }
 
 #[test]

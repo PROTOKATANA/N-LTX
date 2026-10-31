@@ -113,6 +113,8 @@ pub struct Label {
     /// Horizontal scale of the glyphs (the boxes' positions already carry it): TeX's fonts of
     /// other design sizes are wider or narrower than the one font labels are drawn with.
     pub stretch: f64,
+    /// The same, line by line, when they are in different sizes; empty if all are `stretch`.
+    pub line_stretch: Vec<f64>,
     /// Space added after each line besides the baselines' distance (`\\[2pt]`), in cm; may be
     /// shorter than the lines.
     pub skips: Vec<f64>,
@@ -124,6 +126,11 @@ pub struct Label {
 }
 
 impl Label {
+    /// The horizontal scale of the glyphs of line `k`.
+    pub fn stretch_of(&self, k: usize) -> f64 {
+        self.line_stretch.get(k).copied().unwrap_or(self.stretch)
+    }
+
     pub fn width(&self) -> f64 {
         self.lines.iter().map(|c| c.width).fold(0.0f32, f32::max) as f64 * self.scale
     }

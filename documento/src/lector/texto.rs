@@ -2,30 +2,61 @@
 
 use super::*;
 
-/// Las órdenes de tamaño y forma que afectan a todo su grupo: `{\bf texto}`, `{\small texto}`.
-pub(super) fn estilo_de_grupo(dentro: &str, mut estilo: Estilo) -> (&str, Estilo) {
-    let t = dentro.trim_start();
-    for (orden, cambio) in [
-        ("\\bfseries", 0),
-        ("\\bf", 0),
-        ("\\itshape", 1),
-        ("\\it", 1),
-        ("\\em", 1),
-        ("\\ttfamily", 2),
-        ("\\tt", 2),
-    ] {
-        if let Some(resto) = t.strip_prefix(orden)
-            && !resto.starts_with(|c: char| c.is_ascii_alphabetic())
-        {
-            match cambio {
-                0 => estilo.negrita = true,
-                1 => estilo.cursiva = true,
-                _ => estilo.mono = true,
-            }
-            return (resto, estilo);
-        }
+/// El tamaño de una orden como `\\tiny`, en tanto por ciento del normal: los de LaTeX a 10 pt.
+fn escala_de(orden: &str) -> Option<u16> {
+    let escala = match orden {
+        "tiny" => 50,
+        "scriptsize" => 70,
+        "footnotesize" => 80,
+        "small" => 90,
+        "normalsize" => 100,
+        "large" => 120,
+        "Large" => 144,
+        "LARGE" => 173,
+        "huge" => 207,
+        "Huge" => 249,
+        _ => return None,
+    };
+    Some(escala)
+}
+
+/// El código entre el texto: un poco menor, porque la letra de código es más ancha que la romana.
+pub(super) fn a_mono(estilo: &mut Estilo) {
+    estilo.mono = true;
+    estilo.escala = estilo.escala.or(Some(90));
+}
+
+/// Lo que hace una orden que cambia el estilo de lo que le sigue, hasta el fin de su grupo.
+pub(super) fn declaracion(orden: &str, mut estilo: Estilo) -> Option<Estilo> {
+    match orden {
+        "bfseries" | "bf" => estilo.negrita = true,
+        "itshape" | "it" | "em" | "slshape" | "sl" => estilo.cursiva = true,
+        "ttfamily" | "tt" => a_mono(&mut estilo),
+        "mdseries" => estilo.negrita = false,
+        "upshape" => estilo.cursiva = false,
+        _ => estilo.escala = Some(escala_de(orden)?),
     }
-    (dentro, estilo)
+    Some(estilo)
+}
+
+/// Los `\\definecolor{nombre}{modelo}{valor}` de un preámbulo.
+pub(super) fn colores_definidos(preambulo: &str) -> Vec<ColorDefinido> {
+    const ORDEN: &str = "\\definecolor";
+    let argumento = |t: &'_ str| -> Option<(String, usize)> {
+        let abre = t.find('{')?;
+        let fin = cierre(&t[abre..], '{', '}')?;
+        Some((t[abre + 1..abre + fin].trim().to_string(), abre + fin + 1))
+    };
+    preambulo
+        .match_indices(ORDEN)
+        .filter_map(|(i, _)| {
+            let t = &preambulo[i + ORDEN.len()..];
+            let (nombre, a) = argumento(t)?;
+            let (modelo, b) = argumento(&t[a..])?;
+            let (valor, _) = argumento(&t[a + b..])?;
+            Some(ColorDefinido { nombre, modelo, valor })
+        })
+        .collect()
 }
 
 pub(super) fn cerrar_parrafo(tramos: &mut Vec<Tramo>, salida: &mut Vec<Bloque>) {

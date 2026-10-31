@@ -215,10 +215,10 @@ mod tests {
     }
 
     impl Animador for Falso {
-        fn fotograma(&self, _fuente: &str, _segundos: f64) -> Option<Escena> {
+        fn fotograma(&self, _fuente: &str, _segundos: f64) -> Option<Arc<Escena>> {
             let n = self.fotogramas.fetch_add(1, Ordering::Relaxed);
             assert!(!(self.romper && n == 1), "a propósito");
-            Some(escena(Vec::new()))
+            Some(Arc::new(escena(Vec::new())))
         }
     }
 

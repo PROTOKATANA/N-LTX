@@ -66,6 +66,12 @@ pub struct Discontinuo {
     pub fase: f64,
 }
 
+/// Hasta dónde llega la punta de un codo desde su vértice, en medios anchos de línea: más allá, el
+/// codo se bisela. Así un trazo no sobresale de su vértice más que un ancho, sea cual sea el ángulo,
+/// y aún deja en punta un triángulo equilátero (razón 2). El 10 de PDF permite puntas de cinco anchos,
+/// que en un codo muy cerrado se ven como una línea que se pasa del punto donde debía acabar.
+pub const LIMITE_INGLETE: f64 = 2.1;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Trazo {
     pub color: Color,
@@ -86,7 +92,7 @@ impl Trazo {
             discontinuo: None,
             remate: Remate::Plano,
             union: Union::Inglete,
-            limite_inglete: 4.0,
+            limite_inglete: LIMITE_INGLETE,
             opacidad: 1.0,
         }
     }

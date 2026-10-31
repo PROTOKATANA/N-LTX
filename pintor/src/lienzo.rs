@@ -29,8 +29,9 @@ pub fn ancho_de_texto(vista: f64) -> f64 {
 /// Sabe recomponer las animaciones de una escena. Quien lo implementa no debe entrar en pánico:
 /// corre en el hilo del taller.
 pub trait Animador: Send + Sync {
-    /// El fotograma de `fuente` a los `segundos`, o `None` si esa fuente no se puede componer.
-    fn fotograma(&self, fuente: &str, segundos: f64) -> Option<Escena>;
+    /// El fotograma de `fuente` a los `segundos`, o `None` si esa fuente no se puede componer. No
+    /// debe esperar a componerlo: se llama en cada fotograma, desde el hilo que pinta.
+    fn fotograma(&self, fuente: &str, segundos: f64) -> Option<Arc<Escena>>;
 }
 
 /// La lista base y para qué escena y escala se compiló.
@@ -255,9 +256,9 @@ mod tests {
     struct Cuenta(AtomicU32);
 
     impl Animador for Cuenta {
-        fn fotograma(&self, _fuente: &str, _segundos: f64) -> Option<Escena> {
+        fn fotograma(&self, _fuente: &str, _segundos: f64) -> Option<Arc<Escena>> {
             self.0.fetch_add(1, Ordering::Relaxed);
-            Some(Escena {
+            Some(Arc::new(Escena {
                 caja: Caja {
                     x: -5.0,
                     y: -5.0,
@@ -266,7 +267,7 @@ mod tests {
                 },
                 primitivas: vec![cuadro()],
                 ..Escena::default()
-            })
+            }))
         }
     }
 

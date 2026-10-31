@@ -22,4 +22,23 @@ Con `NLTX_MUESTRAS=<carpeta>`, la pestaña Muestras pone todos los `.tex` de esa
 cada uno con su título y sus avisos debajo: sirve para ver cómo se comporta el motor con LaTeX de fuera, por ejemplo con [DaTikZ](https://huggingface.co/datasets/nllg/datikz).
 Las muestras no se versionan: ese conjunto no declara licencia y mezcla orígenes distintos.
 
+La pestaña K1 es `assets/k1.tex`: un solo documento con todo lo que el motor sabe pintar (texto, matemáticas,
+física, química, diagramas, electrónica y animaciones). Una prueba del hub exige que se componga sin avisos,
+también en cada fotograma de sus animaciones. Sin avisos no significa bien: hay que mirarlo pintado.
+
+Una tabla es una rejilla más un estilo: `\begin{tabular}[estilo=…]{lcr}` admite lo estándar de LaTeX
+(`\multicolumn`, `\multirow`, `\rowcolor`, `\cellcolor`, `\makecell`) y las claves de
+`documento/src/tema.rs`; `\estilotabla{nombre}{opciones}` les pone nombre y pueden heredar con `estilo=`.
+Lo que no se dice viene del tema de `Formato`. `\tablaperiodica` es una extensión: escribe una tabla más.
+
+Un bloque de código se ve como un editor: `\begin{lstlisting}[language=Rust,title=a.rs,firstnumber=10,tema=Nord]`.
+`numbers=none` quita los números, `guias=no` las guías de sangría y `\estilocodigo{tema=…}` cambia todos los del documento. El tema es
+cualquiera de los de `two-face`, y da a la vez los colores de la sintaxis y los del panel.
+
+Las animaciones se escriben con `\begin{animacion}[t=0:360, duracion=4]` y un `tikzpicture` que use `\t`.
+Cada fotograma solo depende de su instante: `animacion::Proyector` los compone por adelantado en varios
+hilos y los guarda, así que una vuelta que cabe en memoria (256 MiB entre todas) deja de gastar CPU. Solo
+trabajan las que están en pantalla, y ninguna se lleva más de la mitad de los hilos: si no le alcanza, baja
+de 60 fps. El coste se mide con `cargo test --release -p hub --test banco_animacion -- --ignored --nocapture`.
+
 El runner desactiva Impeller, como en CORTEX: en esta GPU pixela los recortes y los trazados.

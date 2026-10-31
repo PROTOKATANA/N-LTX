@@ -7,6 +7,12 @@
 //! El pintor en C++ lee del almacén de `pintor` por `cxx`: esta biblioteca exporta esos símbolos y
 //! el ejecutable la enlaza.
 
+/// El intérprete de TikZ pide y suelta memoria por cada elemento. Con `banco_animacion` (5.000
+/// elementos), frente al asignador del sistema: entre un 5 % y un 13 % menos por fotograma, a cambio
+/// de un 14 % más de memoria pico (621 frente a 543 MiB, en una ejecución).
+#[global_allocator]
+static ASIGNADOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 mod avisos;
 mod compositor;
 mod muestras;

@@ -54,15 +54,33 @@ impl<'e> Glifos<'e> {
         let Some(p) = *self.preparados.entry(glifo).or_insert_with(|| preparar(contorno)) else {
             return Colocado::Nada;
         };
-        match en_atlas(contorno, p, d, atlas) {
+        let aparicion = Aparicion {
+            contorno,
+            preparado: p,
+            d,
+        };
+        match en_atlas(aparicion, atlas) {
             Some((entrada, x, y)) => Colocado::EnAtlas { entrada, x, y },
             None => Colocado::Contorno(contorno),
         }
     }
 }
 
+/// Un glifo en un sitio: su contorno, lo que ya se sabe de él y adónde lo lleva `d`.
+#[derive(Clone, Copy)]
+struct Aparicion<'c> {
+    contorno: &'c [Segmento],
+    preparado: Preparado,
+    d: Afin,
+}
+
 /// La máscara del glifo y dónde va su origen, si es lo bastante pequeño y cabe en el atlas.
-fn en_atlas(contorno: &[Segmento], p: Preparado, d: Afin, atlas: &mut Atlas) -> Option<(Entrada, f64, f64)> {
+fn en_atlas(aparicion: Aparicion<'_>, atlas: &mut Atlas) -> Option<(Entrada, f64, f64)> {
+    let Aparicion {
+        contorno,
+        preparado: p,
+        d,
+    } = aparicion;
     if lado_en_pixeles(p, d) > MAYOR_GLIFO {
         return None;
     }

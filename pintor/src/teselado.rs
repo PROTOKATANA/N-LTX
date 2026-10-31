@@ -125,6 +125,7 @@ impl Teselador {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use primitivas::LIMITE_INGLETE;
     use primitivas::{Color, Punto};
 
     const NEGRO: Color = Color { r: 0.0, g: 0.0, b: 0.0 };
@@ -194,6 +195,44 @@ mod tests {
         assert!(t.trazar(&s, pincel));
         // lo que queda detrás del codo, en el sentido contrario a los dos tramos
         t.malla().0.iter().map(|v| -v.x).fold(f32::MIN, f32::max)
+    }
+
+    fn distancia_al_tramo(v: &Bruto, a: (f64, f64), b: (f64, f64)) -> f64 {
+        let (x, y) = (f64::from(v.x), f64::from(v.y));
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let t = (((x - a.0) * dx + (y - a.1) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
+        (x - a.0 - t * dx).hypot(y - a.1 - t * dy)
+    }
+
+    /// La regla, para cualquier ángulo: la malla no se aleja de la línea más que `LIMITE_INGLETE`
+    /// medios anchos, y un trazo no sobresale de sus vértices.
+    #[test]
+    fn ningun_codo_sobresale_mas_de_un_ancho_sea_cual_sea_su_angulo() {
+        let trazo = Trazo::simple(NEGRO, 1.0);
+        let mut t = Teselador::default();
+        for decimas in 2..1800 {
+            let a = (f64::from(decimas) / 10.0).to_radians();
+            let (vertice, punta) = ((0.0, 0.0), (100.0 * a.cos(), 100.0 * a.sin()));
+            let s = [
+                Segmento::Mover(p(100.0, 0.0)),
+                Segmento::Linea(p(vertice.0, vertice.1)),
+                Segmento::Linea(p(punta.0, punta.1)),
+            ];
+            let pincel = Pincel {
+                trazo: &trazo,
+                ancho: 1.0,
+                factor: 1.0,
+            };
+            assert!(t.trazar(&s, pincel));
+            for v in t.malla().0 {
+                let d = distancia_al_tramo(v, (100.0, 0.0), vertice).min(distancia_al_tramo(v, vertice, punta));
+                assert!(
+                    d <= LIMITE_INGLETE / 2.0 + 1e-3,
+                    "{} grados: {d}",
+                    f64::from(decimas) / 10.0
+                );
+            }
+        }
     }
 
     #[test]

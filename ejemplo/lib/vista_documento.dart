@@ -11,12 +11,16 @@ class VistaDocumento extends StatefulWidget {
   const VistaDocumento({
     super.key,
     required this.motor,
+    required this.pagina,
     required this.fuente,
     required this.zoom,
     this.conMuestras = false,
   });
 
   final RepositorioMotor motor;
+
+  /// Qué se está viendo: al cambiar de página, se vuelve arriba.
+  final Object pagina;
   final String fuente;
   final double zoom;
 
@@ -89,7 +93,7 @@ class _VistaDocumentoState extends State<VistaDocumento> {
   @override
   void didUpdateWidget(VistaDocumento antes) {
     super.didUpdateWidget(antes);
-    if (antes.conMuestras != widget.conMuestras) {
+    if (antes.pagina != widget.pagina) {
       if (_desplazamiento.hasClients) _desplazamiento.jumpTo(0);
       setState(() => _componiendo = true);
     }

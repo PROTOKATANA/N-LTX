@@ -1,11 +1,14 @@
 //! Lo que el modo texto lleva dentro: fórmulas y figuras compuestas por el motor.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::OnceLock;
 
-use animacion::Reproductor;
-use documento::Incrustados;
+use animacion::Filmoteca;
+use documento::{Incrustados, Memoria, Piezas};
 use primitivas::{Caja, Color, Composicion, Compositor, ErrorComposicion};
 
+use crate::resaltado::ResaltadorSyntect;
+use crate::traduccion::ColoresXcolor;
 use crate::{FiguraTikra, FormulaMathra};
 
 /// Un pánico del motor en una figura no debe llevarse el documento entero: pasa a ser un error, y
@@ -18,6 +21,13 @@ fn protegido<T>(componer: impl FnOnce() -> Result<T, ErrorComposicion>) -> Resul
 /// Compone con `mathra` y `tikra`, recuperándose de lo que no entienda con un aviso.
 pub struct IncrustadosMotor {
     pub color: Color,
+}
+
+/// Las animaciones de toda la aplicación: el documento pide su caja y el pintor sus fotogramas, y
+/// prepararlas cuesta demasiado para hacerlo dos veces.
+pub fn filmoteca() -> &'static Filmoteca<FiguraTikra> {
+    static FILMOTECA: OnceLock<Filmoteca<FiguraTikra>> = OnceLock::new();
+    FILMOTECA.get_or_init(|| Filmoteca::nueva(FiguraTikra::default))
 }
 
 impl Incrustados for IncrustadosMotor {
@@ -36,7 +46,16 @@ impl Incrustados for IncrustadosMotor {
     }
 
     fn caja_de_animacion(&self, fuente: &str) -> Result<Caja, ErrorComposicion> {
-        protegido(|| Ok(Reproductor::nuevo(fuente, FiguraTikra::default())?.caja()))
+        protegido(|| filmoteca().caja(fuente).map_err(ErrorComposicion))
+    }
+}
+
+/// Las piezas que componen de verdad, sin repetir trabajo: `mathra` y `tikra`, `xcolor` y `syntect`.
+pub fn piezas_del_motor(color: Color) -> Piezas {
+    Piezas {
+        incrustados: Box::new(Memoria::nueva(IncrustadosMotor { color })),
+        colores: Box::new(ColoresXcolor),
+        resaltador: Box::new(Memoria::nueva(ResaltadorSyntect)),
     }
 }
 

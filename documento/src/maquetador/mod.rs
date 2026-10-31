@@ -9,10 +9,14 @@ use primitivas::{
 };
 
 use crate::lector::{Bloque, Estilo, Lectura, Tramo};
-use crate::{Formato, Incrustados};
+use crate::tema::Opciones;
+use crate::{ColorDefinido, Formato, Piezas};
 
+mod editor;
+mod tablas;
 mod texto;
 
+use editor::BloqueDeCodigo;
 use texto::Letra;
 
 /// Separación entre bloques y sangría de las listas, en cuerpos de letra.
@@ -20,11 +24,6 @@ const SEPARACION: f64 = 0.7;
 const SANGRIA: f64 = 1.8;
 /// Ancho de las reglas, en bp.
 const REGLA: f64 = 0.4;
-const FONDO_CODIGO: Color = Color {
-    r: 0.95,
-    g: 0.95,
-    b: 0.96,
-};
 
 /// Un documento dentro de una serie, ya leído.
 pub(crate) struct Entrada<'t> {
@@ -32,13 +31,8 @@ pub(crate) struct Entrada<'t> {
     pub(crate) lectura: Lectura,
 }
 
-pub(crate) fn maquetar(
-    lectura: Lectura,
-    formato: Formato,
-    incrustados: &dyn Incrustados,
-    sistema: &mut FontSystem,
-) -> Composicion {
-    let mut m = Maquetador::nuevo(formato, incrustados, sistema);
+pub(crate) fn maquetar(lectura: Lectura, formato: Formato, piezas: &Piezas, sistema: &mut FontSystem) -> Composicion {
+    let mut m = Maquetador::nuevo(formato, piezas, sistema);
     let bloques = m.adoptar(lectura);
     m.bloques(&bloques, m.columna());
     m.cerrar()
@@ -49,10 +43,10 @@ pub(crate) fn maquetar(
 pub(crate) fn maquetar_serie(
     entradas: Vec<Entrada<'_>>,
     formato: Formato,
-    incrustados: &dyn Incrustados,
+    piezas: &Piezas,
     sistema: &mut FontSystem,
 ) -> Composicion {
-    let mut m = Maquetador::nuevo(formato, incrustados, sistema);
+    let mut m = Maquetador::nuevo(formato, piezas, sistema);
     for (n, entrada) in entradas.into_iter().enumerate() {
         m.entrada(entrada, n == 0);
     }
@@ -61,10 +55,15 @@ pub(crate) fn maquetar_serie(
 
 struct Maquetador<'a> {
     formato: Formato,
-    incrustados: &'a dyn Incrustados,
+    piezas: &'a Piezas,
     sistema: &'a mut FontSystem,
     preambulo: String,
     macros: String,
+    /// Los colores de `\textcolor`, en el orden de [`Lectura::colores`].
+    colores: Vec<Option<Color>>,
+    definidos: Vec<ColorDefinido>,
+    estilos: Vec<(String, Opciones)>,
+    codigo_del_documento: Opciones,
     avisos: Vec<String>,
     primitivas: Vec<Primitiva>,
     contornos: BTreeMap<GlifoId, Vec<Segmento>>,
@@ -110,13 +109,17 @@ impl Columna {
 }
 
 impl<'a> Maquetador<'a> {
-    fn nuevo(formato: Formato, incrustados: &'a dyn Incrustados, sistema: &'a mut FontSystem) -> Self {
+    fn nuevo(formato: Formato, piezas: &'a Piezas, sistema: &'a mut FontSystem) -> Self {
         Maquetador {
             formato,
-            incrustados,
+            piezas,
             sistema,
             preambulo: String::new(),
             macros: String::new(),
+            colores: Vec::new(),
+            definidos: Vec::new(),
+            estilos: Vec::new(),
+            codigo_del_documento: Vec::new(),
             avisos: Vec::new(),
             primitivas: Vec::new(),
             contornos: BTreeMap::new(),
@@ -139,10 +142,21 @@ impl<'a> Maquetador<'a> {
             bloques,
             preambulo,
             macros,
+            colores,
+            definidos,
+            estilos,
+            codigo,
             avisos,
         } = lectura;
         self.preambulo = preambulo;
         self.macros = macros;
+        self.colores = colores
+            .iter()
+            .map(|n| self.piezas.colores.color(n, &definidos))
+            .collect();
+        self.definidos = definidos;
+        self.estilos = estilos;
+        self.codigo_del_documento = codigo;
         self.avisos.extend(avisos);
         bloques
     }
@@ -270,11 +284,22 @@ impl Maquetador<'_> {
                 };
                 self.primitivas.push(rectangulo(barra, gris));
             }
-            Bloque::Codigo(codigo) => self.codigo(codigo, c),
+            Bloque::Codigo {
+                texto,
+                lenguaje,
+                opciones,
+            } => {
+                let bloque = BloqueDeCodigo {
+                    texto,
+                    lenguaje: lenguaje.as_deref(),
+                    opciones,
+                };
+                self.editor(bloque, c);
+            }
             Bloque::Formula(latex) => self.formula_en_bloque(latex, c),
             Bloque::Figura(fuente) => self.figura(fuente, c),
             Bloque::Animacion(fuente) => self.animacion(fuente, c),
-            Bloque::Tabla(filas) => self.tabla(filas, c),
+            Bloque::Tabla(tabla) => self.tabla(tabla, c),
             Bloque::Regla => {
                 self.separar(0.4);
                 let color = self.formato.color;
@@ -302,9 +327,18 @@ impl Maquetador<'_> {
         self.separar(0.2);
     }
 
-    fn codigo(&mut self, codigo: &str, c: Columna) {
-        let tam = self.formato.tam * 0.9;
-        let margen = tam * 0.5;
+    fn indice_de_color(&mut self, color: Color) -> usize {
+        let buscado = Some(color);
+        self.colores.iter().position(|c| *c == buscado).unwrap_or_else(|| {
+            self.colores.push(buscado);
+            self.colores.len() - 1
+        })
+    }
+
+    /// La fuente de lo que no se pudo componer, en un bloque sencillo.
+    fn fuente_cruda(&mut self, fuente: &str, c: Columna) {
+        let tam = self.formato.tam * 0.84;
+        let margen = tam * 0.75;
         let inicio = self.primitivas.len();
         let arriba = self.y;
         self.y += margen;
@@ -312,11 +346,11 @@ impl Maquetador<'_> {
             mono: true,
             ..Estilo::default()
         };
-        let tramos = [Tramo::Texto(codigo.to_string(), mono)];
+        let tramos = [Tramo::Texto(fuente.to_string(), mono)];
         self.texto(&tramos, c.con_margen(margen), Letra { tam, base: mono });
         self.y += margen;
         // el fondo va debajo de lo que ya se ha escrito
-        let fondo = rectangulo(c.franja(arriba, self.y - arriba), FONDO_CODIGO);
+        let fondo = rectangulo(c.franja(arriba, self.y - arriba), self.formato.tema.fondo_codigo);
         self.primitivas.insert(inicio, fondo);
         self.separar(SEPARACION);
     }
@@ -327,7 +361,7 @@ impl Maquetador<'_> {
 
     fn formula_en_bloque(&mut self, latex: &str, columna: Columna) {
         let fuente = self.con_macros(latex);
-        match self.incrustados.formula(&fuente, true, self.formato.tam) {
+        match self.piezas.incrustados.formula(&fuente, true, self.formato.tam) {
             Ok(c) => {
                 self.separar(0.3);
                 let colocable = self.absorber(c);
@@ -358,7 +392,7 @@ impl Maquetador<'_> {
 
     fn figura(&mut self, fuente: &str, columna: Columna) {
         let completa = format!("{}{fuente}", self.preambulo);
-        match self.incrustados.figura(&completa) {
+        match self.piezas.incrustados.figura(&completa) {
             Ok(c) => {
                 self.separar(0.3);
                 let colocable = self.absorber(c);
@@ -372,7 +406,7 @@ impl Maquetador<'_> {
     /// Una animación reserva su sitio: el pintor la reproduce ahí.
     fn animacion(&mut self, fuente: &str, c: Columna) {
         let completa = format!("{}{fuente}", self.preambulo);
-        match self.incrustados.caja_de_animacion(&completa) {
+        match self.piezas.incrustados.caja_de_animacion(&completa) {
             Ok(caja) => {
                 self.separar(0.3);
                 let px = c.x + ((c.ancho - caja.ancho) / 2.0).max(0.0);
@@ -395,7 +429,7 @@ impl Maquetador<'_> {
     /// Lo que no se pudo componer se ve como fuente: el lector sabe que algo falta.
     fn fuente_visible(&mut self, fuente: &str, error: &ErrorComposicion, c: Columna) {
         self.avisos.push(error.to_string());
-        self.codigo(fuente, c);
+        self.fuente_cruda(fuente, c);
     }
 
     /// Hace suyos los contornos y avisos de lo incrustado.
@@ -420,41 +454,5 @@ impl Maquetador<'_> {
         })));
         self.primitivas.extend(colocable.composicion.escena.primitivas);
         self.primitivas.push(Primitiva::Cerrar);
-    }
-
-    fn tabla(&mut self, filas: &[Vec<Vec<Tramo>>], t: Columna) {
-        let columnas = filas.iter().map(Vec::len).max().unwrap_or(0);
-        if columnas == 0 {
-            return;
-        }
-        let (tam, color) = (self.formato.tam, self.formato.color);
-        let margen = tam * 0.5;
-        let hueco = t.ancho / columnas as f64;
-        self.primitivas.push(rectangulo(t.franja(self.y, REGLA), color));
-        for (n, fila) in filas.iter().enumerate() {
-            let arriba = self.y + margen * 0.5;
-            let mut abajo = arriba;
-            for (c, celda) in fila.iter().enumerate() {
-                self.y = arriba;
-                let negrita = Estilo {
-                    negrita: n == 0,
-                    ..Estilo::default()
-                };
-                let columna = Columna {
-                    x: t.x + hueco * c as f64 + margen,
-                    ancho: hueco - 2.0 * margen,
-                };
-                self.texto(celda, columna, Letra { tam, base: negrita });
-                abajo = abajo.max(self.y);
-            }
-            self.y = abajo + margen * 0.5;
-            let grosor = if n == 0 || n + 1 == filas.len() {
-                REGLA
-            } else {
-                REGLA / 2.0
-            };
-            self.primitivas.push(rectangulo(t.franja(self.y, grosor), color));
-        }
-        self.separar(SEPARACION);
     }
 }

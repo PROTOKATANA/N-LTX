@@ -2171,6 +2171,15 @@ impl Reader<'_> {
                     while c.get(i) == Some(&' ') {
                         i += 1;
                     }
+                    if name == "begin" {
+                        if let Some(end) = text_diagram_end(&c, i) {
+                            let tex = format!("\\begin{}", c[i..end].iter().collect::<String>());
+                            i = end;
+                            split_text(&mut parts, &mut current, &open_until);
+                            parts.push(TextPart::Math(self.sub_reader(&tex, math_variant)?));
+                            continue;
+                        }
+                    }
                     match name.as_str() {
                         "textbf" | "mathbf" => {
                             current.push(BOLD_START);
@@ -2207,6 +2216,15 @@ impl Reader<'_> {
                         }
                         "textrm" | "textsf" | "text" | "mbox" | "textup" | "textnormal" | "rm" | "sf" | "small" | "scriptsize" | "footnotesize" | "tiny" | "large"
                         | "normalsize" | "mdseries" | "selectfont" => {}
+                        // in text there is no height to hide: only its optional [t] or [b] goes
+                        "smash" => {
+                            if c.get(i) == Some(&'[') {
+                                while i < c.len() && c[i] != ']' {
+                                    i += 1;
+                                }
+                                i += 1;
+                            }
+                        }
                         // L-ENT-3: the size comes from whoever uses the SVG
                         "fontsize" => {
                             text_arguments(&c, &mut i, "{{");
@@ -2214,6 +2232,11 @@ impl Reader<'_> {
                         "boldmath" => bold_math = Some(bold_math.map_or(level, |at| at.min(level))),
                         "unboldmath" => bold_math = None,
                         // L-TXT-2: commands that TeX sets as math inside text
+                        "underline" => {
+                            let tex = format!("\\underline{{\\text{}}}", text_arguments(&c, &mut i, "{"));
+                            split_text(&mut parts, &mut current, &open_until);
+                            parts.push(TextPart::Math(self.sub_reader(&tex, math_variant)?));
+                        }
                         "textsubscript" | "textsuperscript" | "ensuremath" => {
                             let tex = format!("\\{name}{}", text_arguments(&c, &mut i, "{"));
                             split_text(&mut parts, &mut current, &open_until);
@@ -3051,6 +3074,18 @@ fn split_text(parts: &mut Vec<TextPart>, current: &mut String, open: &[(usize, c
 /// The arguments of a command inside text, as written, to read them again with the command: `spec` has
 /// `{` for each mandatory argument, `[` for each optional one and `*` for an optional star, in order. A
 /// mandatory argument without braces is one character or one command, as in TeX.
+/// Where the `tikzcd` whose `\begin` is just behind `i` ends, if that is what comes: a diagram is
+/// math, also in the middle of a text like that of a TikZ node.
+fn text_diagram_end(c: &[char], i: usize) -> Option<usize> {
+    let open: Vec<char> = "{tikzcd}".chars().collect();
+    let close: Vec<char> = "\\end{tikzcd}".chars().collect();
+    let rest = c.get(i..)?;
+    if !rest.starts_with(&open) {
+        return None;
+    }
+    rest.windows(close.len()).position(|w| w == close).map(|p| i + p + close.len())
+}
+
 fn text_arguments(c: &[char], i: &mut usize, spec: &str) -> String {
     let mut out = String::new();
     for kind in spec.chars() {
@@ -4075,6 +4110,7 @@ fn repair_controls(s: &str) -> Option<String> {
     if !s.chars().any(|c| letter_of(c).is_some()) {
         return None;
     }
+    let lines = s.contains("\\\\") || s.contains("\\begin");
     let c: Vec<char> = s.chars().collect();
     let mut output = String::with_capacity(s.len() + 8);
     let mut changed = false;
@@ -4085,7 +4121,11 @@ fn repair_controls(s: &str) -> Option<String> {
         };
         let following: String = c[i + 1..].iter().take_while(|x| x.is_ascii_alphabetic()).collect();
         let name = format!("{letter}{following}");
-        let rebuild = (1..=name.len()).rev().any(|n| known(&name[..n]) && n > 1);
+        // a line break or a tab is also what a formula of several lines has: a line `e^x` is not
+        // `\ne^x`. There only a long name is unmistakable; a form feed never belongs in a formula.
+        let glued = i > 0 && !c[i - 1].is_whitespace();
+        let shortest = if matches!(*ch, '\n' | '\r' | '\t') && (lines || glued) { 4 } else { 2 };
+        let rebuild = (shortest..=name.len()).rev().any(|n| known(&name[..n]));
         if rebuild {
             output.push('\\');
             output.push(letter);

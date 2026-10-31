@@ -594,7 +594,7 @@ impl<'a> Run<'a> {
         let mut guard = 0usize;
         loop {
             guard += 1;
-            if guard > crate::engine::MAX_STEPS {
+            if guard > crate::engine::MAX_DECORATION_STEPS {
                 self.e.warn("meta-decoration: too many steps, stopped");
                 break;
             }
@@ -688,7 +688,7 @@ impl<'a> Run<'a> {
         let mut guard = 0usize;
         loop {
             guard += 1;
-            if guard > crate::engine::MAX_STEPS {
+            if guard > crate::engine::MAX_DECORATION_STEPS {
                 self.e.warn("decoration: too many steps, stopped");
                 break;
             }
@@ -736,7 +736,7 @@ impl<'a> Run<'a> {
                 return Ok(());
             }
             guard += 1;
-            if guard > crate::engine::MAX_STEPS {
+            if guard > crate::engine::MAX_DECORATION_STEPS {
                 self.e.warn("decoration: too many steps (segment length too small?): stopped");
                 return Ok(());
             }

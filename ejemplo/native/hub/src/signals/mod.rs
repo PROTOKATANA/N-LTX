@@ -36,7 +36,4 @@ pub struct MedidasPintor {
     pub vertices: u64,
     pub ms_taller: f64,
     pub ms_carril: f64,
-    pub elementos: u64,
-    pub fps_masiva: f64,
-    pub ms_masiva: f64,
 }

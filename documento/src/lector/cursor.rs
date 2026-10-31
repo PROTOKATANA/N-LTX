@@ -9,6 +9,8 @@ impl<'a> Lector<'a> {
             i: 0,
             profundidad: 0,
             notas: Vec::new(),
+            calculos: String::new(),
+            declarado: None,
             salida: Lectura::default(),
         }
     }
@@ -47,6 +49,16 @@ impl<'a> Lector<'a> {
                 if ORDENES_MACRO.contains(&nombre) || nombre == "def" {
                     self.salta(1 + nombre.len());
                     self.macro_propia(nombre);
+                    continue;
+                }
+                if nombre == "estilotabla" {
+                    self.salta(1 + nombre.len());
+                    self.definir_estilo_de_tabla();
+                    continue;
+                }
+                if nombre == "estilocodigo" {
+                    self.salta(1 + nombre.len());
+                    self.definir_estilo_de_codigo();
                     continue;
                 }
             }

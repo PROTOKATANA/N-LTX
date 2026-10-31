@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::{env, fs};
 
 /// Una frontera por cada renderizador: ninguno ve lo que no usa.
-const PUENTES: [&str; 2] = ["puente_lienzo", "puente_masiva"];
+const PUENTES: [&str; 1] = ["puente_lienzo"];
 
 fn main() -> Result<(), Box<dyn Error>> {
     let _ = cxx_build::bridges(PUENTES.map(|p| format!("src/{p}.rs")));

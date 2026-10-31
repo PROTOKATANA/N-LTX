@@ -1,14 +1,10 @@
 // ignore_for_file: type=lint, type=warning
 part of 'signals.dart';
-
 class TraitHelpers {
-  static void serializeVectorStr(
-    List<String> value,
-    BinarySerializer serializer,
-  ) {
+  static void serializeVectorStr(List<String> value, BinarySerializer serializer) {
     serializer.serializeLength(value.length);
     for (final item in value) {
-      serializer.serializeString(item);
+        serializer.serializeString(item);
     }
   }
 
@@ -16,4 +12,6 @@ class TraitHelpers {
     final length = deserializer.deserializeLength();
     return List.generate(length, (_) => deserializer.deserializeString());
   }
+
 }
+

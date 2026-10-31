@@ -25,9 +25,6 @@ pub fn enviar_medidas(m: Medidas) {
         vertices: m.vertices,
         ms_taller: m.ms_taller,
         ms_carril: m.ms_carril,
-        elementos: m.elementos,
-        fps_masiva: m.fps_masiva,
-        ms_masiva: m.ms_masiva,
     }
     .send_signal_to_dart();
 }

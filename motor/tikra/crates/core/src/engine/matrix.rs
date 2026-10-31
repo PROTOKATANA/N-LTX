@@ -486,6 +486,20 @@ impl Engine {
 }
 
 /// `|(name) [red]| text` → (`name=name,red`, `text`).
+/// Where `close` is, at brace level 0: inside braces it belongs to another option, as in
+/// `|[label={[draw]:text}]|`.
+fn closing(tokens: &[Token], close: char) -> Option<usize> {
+    let mut depth = 0usize;
+    tokens.iter().position(|x| {
+        match x {
+            Token::Char(_, Cat::Begin) => depth += 1,
+            Token::Char(_, Cat::End) => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        depth == 0 && x.is_char(close)
+    })
+}
+
 fn cell_options(cell: &[Token]) -> (Vec<Token>, Vec<Token>) {
     let t = crate::keys::trim(cell);
     if t.first().is_some_and(|x| x.is_char('|')) {
@@ -502,7 +516,7 @@ fn cell_options(cell: &[Token]) -> (Vec<Token>, Vec<Token>) {
                     i += 1;
                     continue;
                 };
-                let Some(len) = inner[i + 1..].iter().position(|x| x.is_char(close)) else { break };
+                let Some(len) = closing(&inner[i + 1..], close) else { break };
                 if !options.is_empty() {
                     options.push(Token::other(','));
                 }

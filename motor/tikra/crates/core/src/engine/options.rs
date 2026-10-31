@@ -23,6 +23,18 @@ fn group(v: Vec<Token>) -> Vec<Token> {
     out
 }
 
+/// Where a key list runs: its default path, and whether that path ends with the list.
+#[derive(Clone, Copy)]
+struct ListPath<'a> {
+    path: Option<&'a str>,
+    restore: bool,
+}
+
+/// What a key may have to be text alone: nothing that TeX reads as anything else.
+fn is_plain(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b" /.-!:<>|_+*'\"".contains(&b)
+}
+
 fn is_novalue(v: &[Token]) -> bool {
     let v: Vec<&Token> = v.iter().filter(|t| !t.is_space()).collect();
     v.len() == 1 && v[0].is_cs("pgfkeysnovalue")
@@ -31,58 +43,85 @@ fn is_novalue(v: &[Token]) -> bool {
 impl Engine {
     /// Runs a key list now, with `path` as the default path (or the current one).
     pub fn process_keys(&mut self, list: Vec<Token>, path: Option<&str>) -> Result<(), Error> {
-        let tokens = self.key_invocations(list, path, true);
-        self.run_tokens(tokens)
+        self.keys_command(list, path, true)
     }
 
-    /// `\tikzset`, `\pgfkeys`, `\pgfkeysalso`: the list's keys, one after the other.
+    /// `\tikzset`, `\pgfkeys`, `\pgfkeysalso`: the list's keys, one after the other. They run
+    /// directly and not as tokens through the interpreter: a key costs one lookup instead of being
+    /// lexed, expanded and read back, 22 % less per element (`banco_animacion`, 5,000 elements:
+    /// 68.1 to 53.0 ms per frame).
     pub fn keys_command(&mut self, list: Vec<Token>, path: Option<&str>, restore: bool) -> Result<(), Error> {
-        let tokens = self.key_invocations(list, path, restore);
-        self.run_tokens(tokens)
+        self.run_items(keys::split_list(&list), ListPath { path, restore })
     }
 
-    fn key_invocations(&mut self, list: Vec<Token>, path: Option<&str>, restore: bool) -> Vec<Token> {
-        let old = self.st.key_path.clone();
-        let mut out = Vec::new();
-        if let Some(p) = path {
-            out.push(Token::cs("tikra@setpath"));
-            out.extend(group(tex::string_tokens(p)));
+    /// [`process_keys`] under `/tikz`, for what every path runs (`every path/.try`, `fill,draw`):
+    /// a list of plain keys has nothing to read as TeX, which is 5 % of a `\fill` in a `\foreach`
+    /// (`banco_animacion`, 5,000 elements: 40.8 to 38.8 ms per frame).
+    ///
+    /// [`process_keys`]: Engine::process_keys
+    pub fn tikz_keys(&mut self, list: &str) -> Result<(), Error> {
+        if !list.bytes().all(|b| is_plain(b) || b == b',') {
+            return self.process_keys(tikra_tokens(list), Some("/tikz"));
         }
-        for item in keys::split_list(&list) {
+        let items = list.split(',').map(|k| keys::Item { key: k.to_string(), value: None });
+        self.run_items(items.collect(), ListPath { path: Some("/tikz"), restore: true })
+    }
+
+    fn run_items(&mut self, items: Vec<keys::Item>, at: ListPath<'_>) -> Result<(), Error> {
+        if self.key_lists == 0 {
+            self.keys_allowed += super::KEYS_PER_LIST;
+        }
+        self.key_lists += 1;
+        let r = self.nested(|e, depth| e.list_of(items, at, depth));
+        self.key_lists -= 1;
+        r
+    }
+
+    fn list_of(&mut self, items: Vec<keys::Item>, at: ListPath<'_>, depth: usize) -> Result<(), Error> {
+        let old = self.st.key_path.clone();
+        if let Some(p) = at.path {
+            self.st.key_path = p.trim().to_string();
+        }
+        for item in items {
             // a style called without a value passes `\pgfkeysnovalue` on: pgfkeys skips it
             if item.key.trim() == "\\pgfkeysnovalue" && item.value.is_none() {
                 continue;
             }
-            out.push(Token::cs("tikra@key"));
-            out.extend(group(tikra_tokens(&item.key)));
-            out.extend(group(item.value.unwrap_or_else(|| vec![Token::cs("pgfkeysnovalue")])));
+            let key = self.key_name(&item.key)?;
+            self.run_item(&key, item.value)?;
+            // what a key leaves in the input (a stored value is "typeset") goes before the next key
+            self.run_until(depth)?;
         }
-        if restore && path.is_some() {
-            out.push(Token::cs("tikra@setpath"));
-            out.extend(group(tex::string_tokens(&old)));
+        if at.restore && at.path.is_some() {
+            self.st.key_path = old;
         }
-        out
+        Ok(())
     }
 
-    /// `\tikra@key{key}{value}`: one key.
-    pub fn invoke_key_command(&mut self) -> Result<(), Error> {
-        let key = self.argument_string()?;
-        let value = self.argument()?;
-        let value = if is_novalue(&value) { None } else { Some(value) };
+    /// A key as written, which a macro in it may complete. Text alone has nothing to expand.
+    fn key_name(&mut self, text: &str) -> Result<String, Error> {
+        if text.bytes().all(is_plain) && !text.contains("  ") {
+            return Ok(text.trim().to_string());
+        }
+        Ok(self.tex.expand_to_string(tikra_tokens(text))?.trim().to_string())
+    }
+
+    fn run_item(&mut self, key: &str, value: Option<Vec<Token>>) -> Result<(), Error> {
+        let value = value.filter(|v| !is_novalue(v));
         // a label's text is a node's: it keeps them with `handle active characters in nodes`
-        let text = matches!(key.trim(), "label" | "pin" | "node contents");
+        let text = matches!(key, "label" | "pin" | "node contents");
         let value = match value {
             Some(v) if self.st.active_in_code && !(text && self.st.active_in_nodes) => Some(deactivate(v)),
             v => v,
         };
-        self.invoke(&key, value)
+        self.invoke(key, value)
     }
 
     pub fn invoke(&mut self, key: &str, value: Option<Vec<Token>>) -> Result<(), Error> {
         self.keys_run += 1;
-        if self.keys_run > super::MAX_KEYS {
-            if self.keys_run == super::MAX_KEYS + 1 {
-                self.warn(format!("more than {} options (styles that multiply?): the rest ignored", super::MAX_KEYS));
+        if self.keys_run > self.keys_allowed {
+            if !std::mem::replace(&mut self.keys_capped, true) {
+                self.warn(format!("more than {} options (styles that multiply?): the rest ignored", self.keys_allowed));
             }
             return Ok(());
         }
@@ -135,8 +174,14 @@ impl Engine {
 
     /// Runs the key at `path` if it is defined; false if it is not.
     pub fn run_key(&mut self, path: &str, value: Option<Vec<Token>>) -> Result<bool, Error> {
-        let cmd = self.tex.meaning_of(&macro_name(&format!("{path}/.@cmd")));
-        let value = value.or_else(|| keys::value(&self.tex, &format!("{path}/.@def")));
+        // the two names differ in their end: one text for both, as this runs for every key
+        let mut name = macro_name(path);
+        let length = name.len();
+        name.push_str("/.@cmd");
+        let cmd = self.tex.meaning_of(&name);
+        name.truncate(length);
+        name.push_str("/.@def");
+        let value = value.or_else(|| keys::stored(&self.tex, &name));
         match cmd {
             Meaning::Native(id) if id >= EXTENSION_KEY_BASE => {
                 let f = self.extension_fns[(id - EXTENSION_KEY_BASE) as usize];

@@ -2,9 +2,10 @@
 
 use std::collections::HashMap;
 
+use documento::{ColorDefinido, Colores};
 use primitivas::{
-    Capa, Color, Degradado, Discontinuo, Matriz, Parada, Pintura, Primitiva, Punto, Relleno, Remate, Segmento, Trazo,
-    Union,
+    Capa, Color, Degradado, Discontinuo, LIMITE_INGLETE, Matriz, Parada, Pintura, Primitiva, Punto, Relleno, Remate,
+    Segmento, Trazo, Union,
 };
 use tikra::canvas::{Cap, Fill, Item, Join, Paint, Shading, Stroke};
 use tikra::scene::{Label, Point, Segment, Transform};
@@ -27,7 +28,13 @@ pub(crate) fn traducir(items: &[Item], esquina: Punto, d: &mut Destino) {
                     trazo: stroke.as_ref().map(trazo),
                 });
             }
-            Item::Text { label, place, opacity } => etiqueta(label, (place, *opacity), d),
+            Item::Text { label, place, opacity } => {
+                let puesto = Puesto {
+                    lugar: place,
+                    opacidad: *opacity,
+                };
+                etiqueta(label, puesto, d);
+            }
             Item::Clip { segments, even_odd } => d.primitivas.push(Primitiva::Abrir(Capa::Recorte {
                 segmentos: segmentos(segments),
                 par_impar: *even_odd,
@@ -72,7 +79,13 @@ fn aparte(items: &[Item], esquina: Punto, d: &mut Destino) -> Vec<Primitiva> {
     std::mem::replace(&mut d.primitivas, principal)
 }
 
-fn etiqueta(l: &Label, (lugar, opacidad): (&Transform, f64), d: &mut Destino) {
+/// Dónde va un texto y con qué opacidad.
+struct Puesto<'a> {
+    lugar: &'a Transform,
+    opacidad: f64,
+}
+
+fn etiqueta(l: &Label, Puesto { lugar, opacidad }: Puesto<'_>, d: &mut Destino) {
     d.primitivas.push(Primitiva::Abrir(Capa::Transformacion(matriz(lugar))));
     if opacidad < 1.0 {
         d.primitivas.push(Primitiva::Abrir(Capa::Grupo { opacidad }));
@@ -93,7 +106,7 @@ fn etiqueta(l: &Label, (lugar, opacidad): (&Transform, f64), d: &mut Destino) {
                     y: -l.baseline(k) * BP,
                 },
                 escala: l.scale * BP,
-                ancho_glifo: l.stretch,
+                ancho_glifo: l.stretch_of(k),
                 fuente: l.font,
                 color: color(&l.color),
             },
@@ -153,10 +166,30 @@ fn matriz(t: &Transform) -> Matriz {
     }
 }
 
+/// Los colores con el nombre que les da `xcolor`.
+pub struct ColoresXcolor;
+
+impl Colores for ColoresXcolor {
+    fn color(&self, nombre: &str, definidos: &[ColorDefinido]) -> Option<Color> {
+        color_xcolor(nombre, definidos)
+    }
+}
+
 /// Un nombre de color según xcolor, que es lo que significa en LaTeX: `green` es #00ff00, no el
 /// #008000 de CSS, y `OliveGreen` existe.
-pub(crate) fn color_xcolor(nombre: &str) -> Option<Color> {
-    tikra::color::parse(nombre, &HashMap::new()).map(|c| color(&c))
+pub(crate) fn color_xcolor(nombre: &str, definidos: &[ColorDefinido]) -> Option<Color> {
+    use tikra::color::{define, parse};
+    if let Some(html) = nombre.strip_prefix('#') {
+        return define("HTML", html).map(|c| color(&c));
+    }
+    if let Some((modelo, valor)) = nombre.split_once(':') {
+        return define(modelo, valor).map(|c| color(&c));
+    }
+    let propios: HashMap<_, _> = definidos
+        .iter()
+        .filter_map(|d| Some((d.nombre.clone(), define(&d.modelo, &d.valor)?)))
+        .collect();
+    parse(nombre, &propios).map(|c| color(&c))
 }
 
 pub(crate) fn color(c: &tikra::color::Color) -> Color {
@@ -164,6 +197,16 @@ pub(crate) fn color(c: &tikra::color::Color) -> Color {
         r: c.r.clamp(0.0, 1.0),
         g: c.g.clamp(0.0, 1.0),
         b: c.b.clamp(0.0, 1.0),
+    }
+}
+
+/// Lo que TikZ hereda de PDF: si es este, la fuente no ha pedido ninguno y manda el del motor.
+fn limite_de_inglete(pedido: f64) -> f64 {
+    const POR_OMISION_EN_TIKZ: f64 = 10.0;
+    if pedido == POR_OMISION_EN_TIKZ {
+        LIMITE_INGLETE
+    } else {
+        pedido.max(1.0)
     }
 }
 
@@ -182,7 +225,7 @@ fn trazo(s: &Stroke) -> Trazo {
             Join::Round => Union::Redonda,
             Join::Bevel => Union::Biselada,
         },
-        limite_inglete: s.miter_limit.max(1.0),
+        limite_inglete: limite_de_inglete(s.miter_limit),
         opacidad: s.opacity.clamp(0.0, 1.0),
     }
 }

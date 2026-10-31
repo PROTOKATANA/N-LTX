@@ -8,9 +8,9 @@ class DocumentoPublicado {
   /// It supports multiple subscriptions.
   /// Make sure to cancel the subscription when it's no longer needed,
   /// such as when a widget is disposed.
-  static final rustSignalStream = _documentoPublicadoStreamController.stream
-      .asBroadcastStream();
-
+  static final rustSignalStream =
+      _documentoPublicadoStreamController.stream.asBroadcastStream();
+        
   /// The latest signal value received from Rust.
   /// This is updated every time a new signal is received.
   /// It can be null if no signals have been received yet.
@@ -73,9 +73,9 @@ class DocumentoPublicado {
   }
 
   Uint8List bincodeSerialize() {
-    final serializer = BincodeSerializer();
-    serialize(serializer);
-    return serializer.bytes;
+      final serializer = BincodeSerializer();
+      serialize(serializer);
+      return serializer.bytes;
   }
 
   @override
@@ -83,28 +83,32 @@ class DocumentoPublicado {
     if (identical(this, other)) return true;
     if (other.runtimeType != runtimeType) return false;
 
-    return other is DocumentoPublicado &&
-        alto == other.alto &&
-        listEquals(avisos, other.avisos) &&
-        error == other.error &&
-        muestras == other.muestras;
+    return other is DocumentoPublicado
+      && alto == other.alto
+      && listEquals(avisos, other.avisos)
+      && error == other.error
+      && muestras == other.muestras;
   }
 
   @override
-  int get hashCode => Object.hash(alto, avisos, error, muestras);
+  int get hashCode => Object.hash(
+        alto,
+        avisos,
+        error,
+        muestras,
+      );
 
   @override
   String toString() {
     String? fullString;
 
     assert(() {
-      fullString =
-          '$runtimeType('
-          'alto: $alto, '
-          'avisos: $avisos, '
-          'error: $error, '
-          'muestras: $muestras'
-          ')';
+      fullString = '$runtimeType('
+        'alto: $alto, '
+        'avisos: $avisos, '
+        'error: $error, '
+        'muestras: $muestras'
+        ')';
       return true;
     }());
 

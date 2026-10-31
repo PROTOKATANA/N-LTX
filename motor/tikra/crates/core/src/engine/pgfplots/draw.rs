@@ -874,7 +874,7 @@ fn setup(e: &mut Engine, axis: &Axis) -> Result<Setup, Error> {
                 }
             }
         }
-        for c in &v {
+        for c in v.iter().filter(|_| !p.keep_limits) {
             if !(c[0].is_finite() && c[1].is_finite()) {
                 continue;
             }

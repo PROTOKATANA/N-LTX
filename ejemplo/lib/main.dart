@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:rinf/rinf.dart';
 
+import 'k1.dart';
 import 'muestras.dart';
 import 'repositorio.dart';
 import 'src/bindings/bindings.dart';
 import 'vista_documento.dart';
-import 'vista_masiva.dart';
 
 Future<void> main() async {
   await initializeRust(assignRustSignal);
@@ -29,7 +29,7 @@ class Ejemplo extends StatelessWidget {
   );
 }
 
-enum Pantalla { documento, masiva, muestras }
+enum Pantalla { documento, muestras, k1 }
 
 class Galeria extends StatefulWidget {
   const Galeria({super.key, required this.motor});
@@ -46,6 +46,15 @@ class _GaleriaState extends State<Galeria> {
   );
   double _zoom = 1.6;
   Pantalla _pantalla = Pantalla.documento;
+  String _k1 = '';
+
+  @override
+  void initState() {
+    super.initState();
+    cargarK1().then((fuente) {
+      if (mounted) setState(() => _k1 = fuente);
+    });
+  }
 
   @override
   void dispose() {
@@ -53,41 +62,47 @@ class _GaleriaState extends State<Galeria> {
     super.dispose();
   }
 
-  Widget _panel() {
-    final conMuestras = _pantalla == Pantalla.muestras;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          width: 340,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _editor,
-              expands: true,
-              maxLines: null,
-              textAlignVertical: TextAlignVertical.top,
-              onChanged: (_) => setState(() {}),
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-              decoration: const InputDecoration(
-                labelText: 'Escribe LaTeX',
-                alignLabelWithHint: true,
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
+  String get _fuente => switch (_pantalla) {
+    Pantalla.k1 => _k1,
+    Pantalla.muestras => _editor.text,
+    Pantalla.documento => '${_editor.text}\n\n$galeria',
+  };
+
+  Widget _escritura() => SizedBox(
+    width: 340,
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: TextField(
+        controller: _editor,
+        expands: true,
+        maxLines: null,
+        textAlignVertical: TextAlignVertical.top,
+        onChanged: (_) => setState(() {}),
+        style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+        decoration: const InputDecoration(
+          labelText: 'Escribe LaTeX',
+          alignLabelWithHint: true,
+          border: OutlineInputBorder(),
         ),
-        Expanded(
-          child: VistaDocumento(
-            motor: widget.motor,
-            fuente: conMuestras ? _editor.text : '${_editor.text}\n\n$galeria',
-            zoom: _zoom,
-            conMuestras: conMuestras,
-          ),
+      ),
+    ),
+  );
+
+  Widget _panel() => Row(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (_pantalla != Pantalla.k1) _escritura(),
+      Expanded(
+        child: VistaDocumento(
+          motor: widget.motor,
+          pagina: _pantalla,
+          fuente: _fuente,
+          zoom: _zoom,
+          conMuestras: _pantalla == Pantalla.muestras,
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -100,7 +115,7 @@ class _GaleriaState extends State<Galeria> {
           segments: const [
             ButtonSegment(value: Pantalla.documento, label: Text('Documento')),
             ButtonSegment(value: Pantalla.muestras, label: Text('Muestras')),
-            ButtonSegment(value: Pantalla.masiva, label: Text('Prueba masiva')),
+            ButtonSegment(value: Pantalla.k1, label: Text('K1')),
           ],
           selected: {_pantalla},
           onSelectionChanged: (s) => setState(() => _pantalla = s.first),
@@ -119,8 +134,6 @@ class _GaleriaState extends State<Galeria> {
         const SizedBox(width: 8),
       ],
     ),
-    body: _pantalla == Pantalla.masiva
-        ? Center(child: VistaMasiva(motor: widget.motor))
-        : _panel(),
+    body: _panel(),
   );
 }

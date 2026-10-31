@@ -2,7 +2,7 @@
 
 mod comun;
 
-use adaptador::IncrustadosMotor;
+use adaptador::piezas_del_motor;
 use documento::{Documento, Formato};
 use primitivas::{Color, Composicion, Compositor, Primitiva};
 
@@ -14,7 +14,7 @@ fn componer(ancho: f64, fuente: &str) -> Composicion {
             ancho,
             ..Formato::default()
         },
-        Box::new(IncrustadosMotor { color: NEGRO }),
+        piezas_del_motor(NEGRO),
     )
     .componer(fuente)
     .expect("documento")
@@ -69,7 +69,7 @@ fn estrechar_el_documento_lo_alarga() {
 /// Lo que recibe el motor mientras el modelo escribe.
 #[test]
 fn un_documento_a_medio_escribir_se_compone_en_cada_paso() {
-    let doc = Documento::nuevo(Formato::default(), Box::new(IncrustadosMotor { color: NEGRO }));
+    let doc = Documento::nuevo(Formato::default(), piezas_del_motor(NEGRO));
     for (i, _) in COMPLETO.char_indices().step_by(7) {
         let c = doc.componer(&COMPLETO[..i]).expect("prefijo");
         assert!(comun::capas_equilibradas(&c.escena.primitivas), "prefijo {i}");

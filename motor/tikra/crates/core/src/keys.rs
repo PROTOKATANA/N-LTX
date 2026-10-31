@@ -7,7 +7,12 @@ use crate::tex::{Cat, Meaning, Tex, Token};
 
 /// The macro holding a key's value, code (`/.@cmd`) or default (`/.@def`).
 pub fn macro_name(path: &str) -> String {
-    format!("pgfk@{path}")
+    // with room for `/.@cmd` and `/.@def`, which this name goes on to look up. With the reservation
+    // in `tokens_to_string` and `full_path`, 8 % less per element (`banco_animacion`: 49.7 to 45.6 ms)
+    let mut name = String::with_capacity(path.len() + 16);
+    name.push_str("pgfk@");
+    name.push_str(path);
+    name
 }
 
 /// Splits text at top-level commas, respecting `{}`, `()` and `[]`; trims the parts and drops the
@@ -138,13 +143,28 @@ pub fn trim(v: &[Token]) -> &[Token] {
 /// `/tikz/draw` from the default path `/tikz` and the key `draw`; an absolute key stays as it is.
 pub fn full_path(default: &str, key: &str) -> String {
     let key = key.trim();
-    if key.starts_with('/') {
-        return normalize(key);
+    let base = if key.starts_with('/') { "" } else { default.trim_end_matches('/') };
+    let mut path = String::with_capacity(base.len() + key.len() + 1);
+    path.push_str(base);
+    if !key.starts_with('/') {
+        path.push('/');
     }
-    if default.is_empty() || default == "/" {
-        return normalize(&format!("/{key}"));
+    path.push_str(key);
+    if is_normal(&path) {
+        path
+    } else {
+        normalize(&path)
     }
-    normalize(&format!("{}/{key}", default.trim_end_matches('/')))
+}
+
+/// Whether [`normalize`] would leave `path` as it is, which is what keys almost always are.
+fn is_normal(path: &str) -> bool {
+    let mut before = b'/';
+    path.bytes().all(|b| {
+        let fine = if b == b' ' { !matches!(before, b'/' | b' ') } else { b.is_ascii_graphic() };
+        before = b;
+        fine
+    })
 }
 
 /// Collapses runs of spaces, as pgfkeys compares keys after `\pgfkeys@spdef`.
@@ -188,7 +208,12 @@ pub fn parent(path: &str) -> &str {
 
 /// The stored value of a key, as tokens, if it has one.
 pub fn value(tex: &Tex, path: &str) -> Option<Vec<Token>> {
-    match tex.meaning_of(&macro_name(path)) {
+    stored(tex, &macro_name(path))
+}
+
+/// [`value`], from the name of its macro.
+pub fn stored(tex: &Tex, name: &str) -> Option<Vec<Token>> {
+    match tex.meaning_of(name) {
         Meaning::Macro(m) if m.params.is_empty() => Some(crate::tex::substitute(&m.body, &[])),
         _ => None,
     }
@@ -197,6 +222,23 @@ pub fn value(tex: &Tex, path: &str) -> Option<Vec<Token>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_full_path_is_the_same_with_or_without_the_shortcut() {
+        let defaults = ["", "/", "/tikz", "/tikz/", " /tikz", "/a b"];
+        let keys = ["draw", "/x/y", "a b", "a  b", "a/ b", "a /b", "a\tb", " a", "a ", "/ a", "é b", "a\u{a0}b", ""];
+        for (default, key) in defaults.iter().flat_map(|d| keys.iter().map(move |k| (d, k))) {
+            let key = key.trim();
+            let plain = if key.starts_with('/') {
+                key.to_string()
+            } else if default.is_empty() || *default == "/" {
+                format!("/{key}")
+            } else {
+                format!("{}/{key}", default.trim_end_matches('/'))
+            };
+            assert_eq!(full_path(default, key), normalize(&plain), "{default:?} {key:?}");
+        }
+    }
 
     fn tokens(s: &str) -> Vec<Token> {
         let mut t = Tex::new();

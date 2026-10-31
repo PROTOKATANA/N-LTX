@@ -5,7 +5,6 @@
 library bincode;
 
 import 'dart:typed_data';
-
 import '../serde/serde.dart';
 
 part 'bincode_deserializer.dart';
