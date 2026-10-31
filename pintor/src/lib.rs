@@ -12,6 +12,7 @@ pub mod compilador;
 pub mod elementos;
 pub mod geometria;
 pub mod glifos;
+pub mod hilos;
 pub mod lienzo;
 pub mod lista;
 pub mod medidas;

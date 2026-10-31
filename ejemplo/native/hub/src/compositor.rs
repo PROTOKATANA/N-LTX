@@ -5,12 +5,12 @@ use std::collections::HashMap;
 use std::panic::catch_unwind;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
-use std::thread::{self, JoinHandle};
+use std::thread::JoinHandle;
 
 use adaptador::{FiguraTikra, IncrustadosMotor};
 use animacion::Reproductor;
 use documento::{Documento, Formato, Memoria};
-use pintor::{Animador, Taller, ancho_de_texto, carencias};
+use pintor::{Animador, Taller, ancho_de_texto, carencias, hilos};
 use primitivas::{Color, Composicion, Escena};
 
 /// Bp por em del texto y de las fórmulas.
@@ -57,10 +57,10 @@ pub struct Compositor {
 impl Compositor {
     pub fn abrir<D: Destino, A: Avisos>(destino: Arc<D>, avisos: A) -> Compositor {
         let (tx, rx) = channel();
-        let hilo = thread::spawn(move || trabajar(&rx, destino.as_ref(), &avisos));
+        let hilo = hilos::lanzar("nltx-compositor", move || trabajar(&rx, destino.as_ref(), &avisos));
         Compositor {
             encargos: Some(tx),
-            hilo: Some(hilo),
+            hilo,
         }
     }
 

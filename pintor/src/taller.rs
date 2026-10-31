@@ -4,12 +4,13 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
-use std::thread::{self, JoinHandle};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use primitivas::Escena;
 
 use crate::almacen::Almacen;
+use crate::hilos;
 use crate::lienzo::{Animador, Lienzo};
 use crate::medidas;
 use crate::puente_lienzo::ffi::Vista;
@@ -35,10 +36,10 @@ impl Taller {
     pub fn abrir(id: u32, almacen: Arc<Almacen>) -> Taller {
         let (tx, rx) = channel();
         almacen.conectar(id, tx.clone());
-        let hilo = thread::spawn(move || trabajar(id, &almacen, &rx));
+        let hilo = hilos::lanzar("nltx-taller", move || trabajar(id, &almacen, &rx));
         Taller {
             ordenes: Some(tx),
-            hilo: Some(hilo),
+            hilo,
         }
     }
 
