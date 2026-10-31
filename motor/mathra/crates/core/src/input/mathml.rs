@@ -12,6 +12,8 @@ use crate::Error;
 use super::latex::NESTING_LIMIT;
 use super::symbols;
 
+mod entity;
+
 type R<T> = Result<T, Error>;
 
 /// Does this text start with a `<math>` element (with or without a namespace prefix or an XML prolog)?
@@ -128,28 +130,13 @@ impl Reader<'_> {
         let name = node.tag_name().name();
         let node_out = match name {
             "math" | "mrow" | "mpadded" | "mtd" => self.row(node, variant)?,
-            "mstyle" => {
-                let base = self.row(node, variant)?;
-                let base = match node.attribute("displaystyle") {
-                    Some("true") => Node::Style { level: 0, base: Box::new(base) },
-                    Some("false") => Node::Style { level: 1, base: Box::new(base) },
-                    _ => base,
-                };
-                self.paint(node, base)
-            }
+            "mstyle" => self.styled_math(node, variant)?,
             "semantics" => match Self::elements(node).into_iter().find(|c| !c.tag_name().name().starts_with("annotation")) {
                 Some(first) => self.element(first, variant)?,
                 None => Node::row(vec![]),
             },
             "annotation" | "annotation-xml" | "none" | "mprescripts" | "malignmark" | "maligngroup" => Node::row(vec![]),
-            "maction" => {
-                let children = Self::elements(node);
-                let selection = node.attribute("selection").and_then(|s| s.parse::<usize>().ok()).unwrap_or(1);
-                match children.get(selection.saturating_sub(1)).or(children.first()) {
-                    Some(c) => self.element(*c, variant)?,
-                    None => Node::row(vec![]),
-                }
-            }
+            "maction" => self.chosen_action(node, variant)?,
             "merror" => Node::Colored { color: "#c0392b".into(), base: Box::new(self.row(node, variant)?) },
             "mphantom" => Node::Phantom { base: Box::new(self.row(node, variant)?), width: true, height: true },
             "mi" => self.identifier(node, variant),
@@ -182,47 +169,74 @@ impl Reader<'_> {
             }
             "munder" | "mover" | "munderover" => self.under_over(node, variant)?,
             "mmultiscripts" => self.multiscripts(node, variant)?,
-            "mfenced" => {
-                let open = node.attribute("open").unwrap_or("(").trim().chars().next();
-                let close = node.attribute("close").unwrap_or(")").trim().chars().next();
-                let separators: Vec<char> = node.attribute("separators").unwrap_or(",").chars().filter(|c| !c.is_whitespace()).collect();
-                let mut inner = Vec::new();
-                for (i, child) in Self::elements(node).into_iter().enumerate() {
-                    if i > 0 {
-                        if let Some(&s) = separators.get(i - 1).or(separators.last()) {
-                            inner.push(operator(&s.to_string()));
-                        }
-                    }
-                    inner.push(self.element(child, variant)?);
-                }
-                let inner = Node::row(inner).simplify();
-                if matches!(inner, Node::Table { .. }) {
-                    // a table between the fences: a matrix or cases, as in an mrow
-                    let fence = |c: Option<char>| c.map_or(Node::row(vec![]), |c| operator(&c.to_string()));
-                    let children = [fence(open), inner, fence(close)].into_iter().filter(|n| *n != Node::row(vec![])).collect();
-                    fences(children)
-                } else {
-                    Node::Delimited { open, close, parts: vec![inner], middles: vec![] }
-                }
-            }
+            "mfenced" => self.fenced(node, variant)?,
             "menclose" => self.enclose(node, variant)?,
             "mtable" => self.table(node, variant)?,
             "mtr" | "mlabeledtr" => {
                 // a row outside a table: its cells side by side
                 self.row(node, variant)?
             }
-            other => {
-                let problem = if matches!(other, "apply" | "ci" | "cn" | "csymbol" | "bind" | "bvar") {
-                    format!("content MathML <{other}> is not supported (only presentation MathML)")
-                } else {
-                    format!("unknown MathML element <{other}>")
-                };
-                self.tolerate(node, problem, "its children read as a row")?;
-                self.row(node, variant)?
-            }
+            other => self.unknown_element(node, other, variant)?,
         };
         // mstyle already painted itself, around its style
         Ok(if name == "mstyle" { node_out } else { self.paint(node, node_out) })
+    }
+
+    /// `mstyle`: display or text style around the row, then its own color.
+    fn styled_math(&mut self, node: Xml, variant: Variant) -> R<Node> {
+        let base = self.row(node, variant)?;
+        let base = match node.attribute("displaystyle") {
+            Some("true") => Node::Style { level: 0, base: Box::new(base) },
+            Some("false") => Node::Style { level: 1, base: Box::new(base) },
+            _ => base,
+        };
+        Ok(self.paint(node, base))
+    }
+
+    /// `maction`: the child chosen by `selection` (1-based), or the first, or nothing.
+    fn chosen_action(&mut self, node: Xml, variant: Variant) -> R<Node> {
+        let children = Self::elements(node);
+        let selection = node.attribute("selection").and_then(|s| s.parse::<usize>().ok()).unwrap_or(1);
+        Ok(match children.get(selection.saturating_sub(1)).or(children.first()) {
+            Some(c) => self.element(*c, variant)?,
+            None => Node::row(vec![]),
+        })
+    }
+
+    /// `mfenced`: separators between the children, and fences. A table keeps the fences beside it.
+    fn fenced(&mut self, node: Xml, variant: Variant) -> R<Node> {
+        let open = node.attribute("open").unwrap_or("(").trim().chars().next();
+        let close = node.attribute("close").unwrap_or(")").trim().chars().next();
+        let separators: Vec<char> = node.attribute("separators").unwrap_or(",").chars().filter(|c| !c.is_whitespace()).collect();
+        let mut inner = Vec::new();
+        for (i, child) in Self::elements(node).into_iter().enumerate() {
+            if i > 0 {
+                if let Some(&s) = separators.get(i - 1).or(separators.last()) {
+                    inner.push(operator(&s.to_string()));
+                }
+            }
+            inner.push(self.element(child, variant)?);
+        }
+        let inner = Node::row(inner).simplify();
+        if matches!(inner, Node::Table { .. }) {
+            // a table between the fences: a matrix or cases, as in an mrow
+            let fence = |c: Option<char>| c.map_or(Node::row(vec![]), |c| operator(&c.to_string()));
+            let children = [fence(open), inner, fence(close)].into_iter().filter(|n| *n != Node::row(vec![])).collect();
+            Ok(fences(children))
+        } else {
+            Ok(Node::Delimited { open, close, parts: vec![inner], middles: vec![] })
+        }
+    }
+
+    /// An element this reader does not draw. Content MathML is named as such; the children are a row.
+    fn unknown_element(&mut self, node: Xml, name: &str, variant: Variant) -> R<Node> {
+        let problem = if matches!(name, "apply" | "ci" | "cn" | "csymbol" | "bind" | "bvar") {
+            format!("content MathML <{name}> is not supported (only presentation MathML)")
+        } else {
+            format!("unknown MathML element <{name}>")
+        };
+        self.tolerate(node, problem, "its children read as a row")?;
+        self.row(node, variant)
     }
 
     /// `mathcolor` and `mathbackground`, on any element that carries them.
@@ -767,7 +781,7 @@ fn replace_entities(source: &str, registry: &mut Registry, strict: bool) -> R<St
         let name: String = after.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
         if !name.is_empty() && after[name.len()..].starts_with(';') && !matches!(name.as_str(), "lt" | "gt" | "amp" | "quot" | "apos") {
             let column = source[..offset + i].chars().count() + 1;
-            match entity(&name) {
+            match entity::entity(&name) {
                 Some(c) => out.push(c),
                 None if strict => return Err(Error::Syntax { column, message: format!("unknown entity &{name};") }),
                 None => registry.warn(rules::E_REC_10, format!("column {column}: unknown entity &{name}; ignored")),
@@ -782,174 +796,4 @@ fn replace_entities(source: &str, registry: &mut Registry, strict: bool) -> R<St
     }
     out.push_str(rest);
     Ok(out)
-}
-
-fn entity(name: &str) -> Option<char> {
-    if let Some(g) = symbols::greek(name) {
-        return Some(g);
-    }
-    Some(match name {
-        "ApplyFunction" | "af" => '\u{2061}',
-        "InvisibleTimes" | "it" => '\u{2062}',
-        "InvisibleComma" | "ic" => '\u{2063}',
-        "nbsp" | "NonBreakingSpace" => '\u{00A0}',
-        "ThinSpace" | "thinsp" => '\u{2009}',
-        "MediumSpace" => '\u{205F}',
-        "times" => '×',
-        "divide" | "div" => '÷',
-        "minus" => '−',
-        "plusmn" | "PlusMinus" | "pm" => '±',
-        "mnplus" | "MinusPlus" | "mp" => '∓',
-        "sdot" | "middot" | "centerdot" | "CenterDot" => '·',
-        "ast" => '∗',
-        "compfn" | "SmallCircle" => '∘',
-        "le" | "leq" | "LessEqual" => '≤',
-        "ge" | "geq" | "GreaterEqual" => '≥',
-        "ne" | "NotEqual" => '≠',
-        "equiv" | "Congruent" => '≡',
-        "approx" | "TildeTilde" => '≈',
-        "sim" | "Tilde" => '∼',
-        "cong" | "TildeFullEqual" => '≅',
-        "prop" | "Proportional" | "propto" => '∝',
-        "Lt" | "ll" => '≪',
-        "Gt" | "gg" => '≫',
-        "isin" | "in" | "Element" => '∈',
-        "notin" | "NotElement" => '∉',
-        "ni" | "ReverseElement" => '∋',
-        "sub" | "subset" => '⊂',
-        "sup" | "supset" => '⊃',
-        "sube" | "subseteq" | "SubsetEqual" => '⊆',
-        "supe" | "supseteq" | "SupersetEqual" => '⊇',
-        "cap" | "Intersection" => '∩',
-        "cup" | "Union" => '∪',
-        "and" | "wedge" => '∧',
-        "or" | "vee" => '∨',
-        "not" | "Not" => '¬',
-        "forall" | "ForAll" => '∀',
-        "exist" | "Exists" => '∃',
-        "nexist" | "NotExists" => '∄',
-        "empty" | "emptyset" | "EmptySet" | "varnothing" => '∅',
-        "nabla" | "Del" => '∇',
-        "part" | "PartialD" => '∂',
-        "DifferentialD" | "dd" => 'ⅆ',
-        "ExponentialE" | "ee" => 'ⅇ',
-        "ImaginaryI" | "ii" => 'ⅈ',
-        "infin" | "infty" | "Infinity" => '∞',
-        "int" | "Integral" => '∫',
-        "Int" => '∬',
-        "tint" | "iiint" => '∭',
-        "conint" | "oint" | "ContourIntegral" => '∮',
-        "sum" | "Sum" => '∑',
-        "prod" | "Product" => '∏',
-        "coprod" | "Coproduct" => '∐',
-        "radic" | "Sqrt" => '√',
-        "deg" => '°',
-        "prime" => '′',
-        "Prime" => '″',
-        "tprime" => '‴',
-        "hellip" | "mldr" => '…',
-        "ctdot" | "cdots" => '⋯',
-        "vellip" | "vdots" => '⋮',
-        "dtdot" | "ddots" => '⋱',
-        "perp" | "bottom" | "UpTee" => '⊥',
-        "par" | "parallel" | "DoubleVerticalBar" => '∥',
-        "ang" | "angle" => '∠',
-        "angmsd" | "measuredangle" => '∡',
-        "rarr" | "rightarrow" | "RightArrow" | "srarr" => '→',
-        "larr" | "leftarrow" | "LeftArrow" | "slarr" => '←',
-        "harr" | "leftrightarrow" | "LeftRightArrow" => '↔',
-        "uarr" | "uparrow" | "UpArrow" => '↑',
-        "darr" | "downarrow" | "DownArrow" => '↓',
-        "rArr" | "Rightarrow" | "DoubleRightArrow" | "Implies" => '⇒',
-        "lArr" | "Leftarrow" | "DoubleLeftArrow" => '⇐',
-        "hArr" | "iff" | "Leftrightarrow" | "DoubleLeftRightArrow" => '⇔',
-        "map" | "mapsto" | "RightTeeArrow" => '↦',
-        "rlhar" | "Equilibrium" | "rightleftharpoons" => '⇌',
-        "lang" | "langle" | "LeftAngleBracket" => '⟨',
-        "rang" | "rangle" | "RightAngleBracket" => '⟩',
-        "lceil" | "LeftCeiling" => '⌈',
-        "rceil" | "RightCeiling" => '⌉',
-        "lfloor" | "LeftFloor" => '⌊',
-        "rfloor" | "RightFloor" => '⌋',
-        "lbrace" | "lcub" => '{',
-        "rbrace" | "rcub" => '}',
-        "lsqb" | "lbrack" => '[',
-        "rsqb" | "rbrack" => ']',
-        "lpar" => '(',
-        "rpar" => ')',
-        "verbar" | "vert" | "VerticalLine" => '|',
-        "Verbar" | "Vert" => '‖',
-        "OverBar" => '‾',
-        "UnderBar" | "lowbar" => '_',
-        "OverBrace" => '⏞',
-        "UnderBrace" => '⏟',
-        "OverParenthesis" => '⏜',
-        "UnderParenthesis" => '⏝',
-        "Hat" => '^',
-        "DiacriticalTilde" | "tilde" => '˜',
-        "DiacriticalDot" | "dot" => '˙',
-        "die" | "Dot" | "uml" => '¨',
-        "macr" | "strns" => '¯',
-        "hbar" | "planck" | "plankv" => 'ℏ',
-        "ell" => 'ℓ',
-        "weierp" | "wp" => '℘',
-        "real" | "Re" => 'ℜ',
-        "image" | "Im" => 'ℑ',
-        "aleph" => 'ℵ',
-        "Ropf" | "reals" => 'ℝ',
-        "Nopf" | "naturals" => 'ℕ',
-        "Zopf" | "integers" => 'ℤ',
-        "Qopf" | "rationals" => 'ℚ',
-        "Copf" | "complexes" => 'ℂ',
-        "there4" | "therefore" => '∴',
-        "becaus" | "because" => '∵',
-        "setminus" | "setmn" | "Backslash" => '∖',
-        "oplus" | "CirclePlus" => '⊕',
-        "otimes" | "CircleTimes" => '⊗',
-        "odot" | "CircleDot" => '⊙',
-        "star" => '⋆',
-        "bull" | "bullet" => '•',
-        "dagger" => '†',
-        "Dagger" => '‡',
-        "check" | "checkmark" => '✓',
-        "copy" => '©',
-        "reg" => '®',
-        "sect" => '§',
-        "para" => '¶',
-        "micro" => 'µ',
-        "ohm" => 'Ω',
-        "angst" => 'Å',
-        "permil" => '‰',
-        "percnt" => '%',
-        "dollar" => '$',
-        "euro" => '€',
-        "pound" => '£',
-        "yen" => '¥',
-        "cent" => '¢',
-        "excl" => '!',
-        "quest" => '?',
-        "comma" => ',',
-        "period" => '.',
-        "colon" => ':',
-        "semi" => ';',
-        "num" => '#',
-        "plus" => '+',
-        "equals" => '=',
-        "sol" => '/',
-        "bsol" => '\\',
-        "Hacek" => 'ˇ',
-        "Breve" | "breve" => '˘',
-        "acute" | "DiacriticalAcute" => '´',
-        "grave" | "DiacriticalGrave" => '`',
-        "lt" => '<',
-        "gt" => '>',
-        "ndash" => '–',
-        "mdash" => '—',
-        "epsi" => 'ϵ',
-        "epsiv" => 'ε',
-        "phiv" => 'φ',
-        "thetav" => 'ϑ',
-        "sigmaf" => 'ς',
-        _ => return None,
-    })
 }

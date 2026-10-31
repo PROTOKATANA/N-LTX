@@ -258,34 +258,7 @@ impl Reader<'_> {
             }
             if let Some(rest) = item.strip_prefix('"') {
                 // "label" followed by its own keys: ' (swap), description, near start…
-                let Some(end) = quote_end(rest) else {
-                    self.tolerate(rules::E_REC_4, col, format!("label without its closing quote: {item}"), "read up to the end")?;
-                    let node = self.sub_reader(rest, Variant::Italic)?;
-                    a.labels.push(ArrowLabel { node, side: LabelSide::Left, position: f32::NAN });
-                    continue;
-                };
-                let (text, keys) = (&rest[..end], rest[end + 1..].trim());
-                let text = text.strip_prefix('{').and_then(|t| t.strip_suffix('}')).unwrap_or(text);
-                let mut side = LabelSide::Left;
-                let mut at = None;
-                let words: Vec<&str> = keys.trim_start_matches('\'').split_whitespace().collect();
-                for key in &words {
-                    match *key {
-                        "'" | "swap" => side = LabelSide::Right,
-                        "description" => side = LabelSide::On,
-                        _ => {}
-                    }
-                }
-                for n in (1..=3).rev() {
-                    for w in words.windows(n) {
-                        at = at.or_else(|| position(&w.join(" ")));
-                    }
-                }
-                if keys.starts_with('\'') {
-                    side = LabelSide::Right;
-                }
-                let node = self.sub_reader(text, Variant::Italic)?;
-                a.labels.push(ArrowLabel { node, side, position: at.unwrap_or(f32::NAN) });
+                a.labels.push(self.tikzcd_label(rest, item, col)?);
                 continue;
             }
             let (key, value) = match item.split_once('=') {
@@ -298,7 +271,7 @@ impl Reader<'_> {
             }
             match key {
                 "to" | "from" => {
-                    let cell = value.and_then(|v| v.split_once('-')).and_then(|(r, c)| Some((r.trim().parse::<usize>().ok()?, c.trim().parse::<usize>().ok()?)));
+                    let cell = row_column(value);
                     match cell {
                         Some((r, c)) if r > 0 && c > 0 => {
                             if key == "to" {
@@ -448,105 +421,18 @@ impl Reader<'_> {
                     i += 1;
                 }
                 match c.get(i) {
-                    Some('@') => {
-                        i += 1;
-                        match c.get(i) {
-                            Some('{') => {
-                                let style = group(&c, &mut i, '{', '}');
-                                xy_style(&style, &mut a);
-                            }
-                            Some('/') => {
-                                i += 1;
-                                let mut curve = String::new();
-                                while i < c.len() && c[i] != '/' {
-                                    curve.push(c[i]);
-                                    i += 1;
-                                }
-                                i += 1;
-                                let size = curve.trim_start_matches(['^', '_']).trim();
-                                let degrees = if size.is_empty() { 30 } else { 40 };
-                                a.bend = if curve.trim_start().starts_with('_') { -degrees } else { degrees };
-                            }
-                            Some('<') => {
-                                let amount = group(&c, &mut i, '<', '>');
-                                let pt: f32 = amount.trim_end_matches("pt").trim().parse().unwrap_or(2.0);
-                                // positive moves to the left of the direction, like xy-pic
-                                a.shift = (pt / 10.0).clamp(-5.0, 5.0);
-                            }
-                            Some(d) if d.is_ascii_alphabetic() || *d == '-' || *d == '=' || *d == '.' || *d == '~' => {
-                                // @-> and friends without braces: one style character run
-                                let mut style = String::new();
-                                while i < c.len() && !c[i].is_whitespace() && !matches!(c[i], '[' | '^' | '_' | '|' | '"' | '\\') {
-                                    style.push(c[i]);
-                                    i += 1;
-                                }
-                                xy_style(&style, &mut a);
-                            }
-                            _ => {}
-                        }
-                    }
+                    Some('@') => xy_at(&c, &mut i, &mut a),
                     Some('[') => {
-                        let word = group(&c, &mut i, '[', ']');
-                        match step(word.trim()) {
-                            Some(s) => target = Some(s),
-                            None => self.tolerate(rules::E_REC_1, col, format!("unsupported xymatrix direction: [{word}]"), "arrow left out")?,
+                        if let Some(s) = self.xy_direction(&c, &mut i, col)? {
+                            target = Some(s);
                         }
                     }
                     Some('"') => {
-                        i += 1;
-                        let mut cell = String::new();
-                        while i < c.len() && c[i] != '"' {
-                            cell.push(c[i]);
-                            i += 1;
-                        }
-                        i += 1;
-                        match cell.split_once(',').and_then(|(r, k)| Some((r.trim().parse::<usize>().ok()?, k.trim().parse::<usize>().ok()?))) {
-                            Some((r, k)) if r > 0 && k > 0 => target = Some((r as isize - 1 - from.0 as isize, k as isize - 1 - from.1 as isize)),
-                            _ => self.tolerate(rules::E_REC_1, col, format!("unsupported xymatrix target: \"{cell}\""), "arrow left out")?,
+                        if let Some((r, k)) = self.xy_quoted_cell(&c, &mut i, col)? {
+                            target = Some((r as isize - 1 - from.0 as isize, k as isize - 1 - from.1 as isize));
                         }
                     }
-                    Some(m @ ('^' | '_' | '|')) => {
-                        let side = match m {
-                            '^' => LabelSide::Left,
-                            '_' => LabelSide::Right,
-                            _ => LabelSide::On,
-                        };
-                        i += 1;
-                        // position modifiers: ^< near the start, ^> near the end, ^(0.3) a fraction
-                        let mut at = 0.5f32;
-                        while i < c.len() && matches!(c[i], '<' | '>') {
-                            at = if c[i] == '<' { at.min(0.5) - 0.25 } else { at.max(0.5) + 0.25 };
-                            i += 1;
-                        }
-                        if c.get(i) == Some(&'(') {
-                            at = group(&c, &mut i, '(', ')').trim().parse().unwrap_or(at);
-                        }
-                        let at = at.clamp(0.0, 1.0);
-                        while i < c.len() && c[i].is_whitespace() {
-                            i += 1;
-                        }
-                        let label = match c.get(i) {
-                            Some('{') => group(&c, &mut i, '{', '}'),
-                            Some('\\') => {
-                                let s = i;
-                                i += 1;
-                                while i < c.len() && c[i].is_ascii_alphabetic() {
-                                    i += 1;
-                                }
-                                if i == s + 1 && i < c.len() {
-                                    i += 1;
-                                }
-                                c[s..i].iter().collect()
-                            }
-                            Some(x) => {
-                                i += 1;
-                                x.to_string()
-                            }
-                            None => String::new(),
-                        };
-                        let node = self.sub_reader(&label, Variant::Italic)?;
-                        a.labels.push(ArrowLabel { node, side, position: at });
-                    }
+                    Some(m @ ('^' | '_' | '|')) => a.labels.push(self.xy_label(&c, &mut i, *m)?),
                     _ => break,
                 }
             }
@@ -583,6 +469,155 @@ impl Reader<'_> {
         }
         Ok(Node::ArrowDiagram { cells, arrows: kept })
     }
+
+    /// A quoted tikz-cd label and the keys that follow it. A missing quote reads the rest of the item.
+    fn tikzcd_label(&mut self, rest: &str, item: &str, column: usize) -> R<ArrowLabel> {
+        let Some(end) = quote_end(rest) else {
+            self.tolerate(rules::E_REC_4, column, format!("label without its closing quote: {item}"), "read up to the end")?;
+            let node = self.sub_reader(rest, Variant::Italic)?;
+            return Ok(ArrowLabel { node, side: LabelSide::Left, position: f32::NAN });
+        };
+        let (text, keys) = (&rest[..end], rest[end + 1..].trim());
+        let text = text.strip_prefix('{').and_then(|t| t.strip_suffix('}')).unwrap_or(text);
+        let mut side = LabelSide::Left;
+        let mut at = None;
+        let words: Vec<&str> = keys.trim_start_matches('\'').split_whitespace().collect();
+        for key in &words {
+            match *key {
+                "'" | "swap" => side = LabelSide::Right,
+                "description" => side = LabelSide::On,
+                _ => {}
+            }
+        }
+        for n in (1..=3).rev() {
+            for w in words.windows(n) {
+                at = at.or_else(|| position(&w.join(" ")));
+            }
+        }
+        if keys.starts_with('\'') {
+            side = LabelSide::Right;
+        }
+        let node = self.sub_reader(text, Variant::Italic)?;
+        Ok(ArrowLabel { node, side, position: at.unwrap_or(f32::NAN) })
+    }
+
+    /// `[direction]` of an xymatrix arrow. An unknown direction is left out.
+    fn xy_direction(&mut self, c: &[char], i: &mut usize, column: usize) -> R<Option<(isize, isize)>> {
+        let word = group(c, i, '[', ']');
+        match step(word.trim()) {
+            Some(s) => Ok(Some(s)),
+            None => {
+                self.tolerate(rules::E_REC_1, column, format!("unsupported xymatrix direction: [{word}]"), "arrow left out")?;
+                Ok(None)
+            }
+        }
+    }
+
+    /// `"row,column"` of an xymatrix arrow, 1-based. An unknown target is left out.
+    fn xy_quoted_cell(&mut self, c: &[char], i: &mut usize, column: usize) -> R<Option<(usize, usize)>> {
+        *i += 1;
+        let mut cell = String::new();
+        while *i < c.len() && c[*i] != '"' {
+            cell.push(c[*i]);
+            *i += 1;
+        }
+        *i += 1;
+        match cell.split_once(',').and_then(|(r, k)| Some((r.trim().parse::<usize>().ok()?, k.trim().parse::<usize>().ok()?))) {
+            Some((r, k)) if r > 0 && k > 0 => Ok(Some((r, k))),
+            _ => {
+                self.tolerate(rules::E_REC_1, column, format!("unsupported xymatrix target: \"{cell}\""), "arrow left out")?;
+                Ok(None)
+            }
+        }
+    }
+
+    /// `^`, `_` or `|` label of an xymatrix arrow, with its position modifiers.
+    fn xy_label(&mut self, c: &[char], i: &mut usize, mark: char) -> R<ArrowLabel> {
+        let side = match mark {
+            '^' => LabelSide::Left,
+            '_' => LabelSide::Right,
+            _ => LabelSide::On,
+        };
+        *i += 1;
+        // position modifiers: ^< near the start, ^> near the end, ^(0.3) a fraction
+        let mut at = 0.5f32;
+        while *i < c.len() && matches!(c[*i], '<' | '>') {
+            at = if c[*i] == '<' { at.min(0.5) - 0.25 } else { at.max(0.5) + 0.25 };
+            *i += 1;
+        }
+        if c.get(*i) == Some(&'(') {
+            at = group(c, i, '(', ')').trim().parse().unwrap_or(at);
+        }
+        let at = at.clamp(0.0, 1.0);
+        while *i < c.len() && c[*i].is_whitespace() {
+            *i += 1;
+        }
+        let label = match c.get(*i) {
+            Some('{') => group(c, i, '{', '}'),
+            Some('\\') => {
+                let s = *i;
+                *i += 1;
+                while *i < c.len() && c[*i].is_ascii_alphabetic() {
+                    *i += 1;
+                }
+                if *i == s + 1 && *i < c.len() {
+                    *i += 1;
+                }
+                c[s..*i].iter().collect()
+            }
+            Some(x) => {
+                *i += 1;
+                x.to_string()
+            }
+            None => String::new(),
+        };
+        let node = self.sub_reader(&label, Variant::Italic)?;
+        Ok(ArrowLabel { node, side, position: at })
+    }
+}
+
+/// `@` styles of an xymatrix arrow: a braced style, a curve, a shift, or a run of style characters.
+fn xy_at(c: &[char], i: &mut usize, arrow: &mut DiagramArrow) {
+    *i += 1;
+    match c.get(*i) {
+        Some('{') => {
+            let style = group(c, i, '{', '}');
+            xy_style(&style, arrow);
+        }
+        Some('/') => {
+            *i += 1;
+            let mut curve = String::new();
+            while *i < c.len() && c[*i] != '/' {
+                curve.push(c[*i]);
+                *i += 1;
+            }
+            *i += 1;
+            let size = curve.trim_start_matches(['^', '_']).trim();
+            let degrees = if size.is_empty() { 30 } else { 40 };
+            arrow.bend = if curve.trim_start().starts_with('_') { -degrees } else { degrees };
+        }
+        Some('<') => {
+            let amount = group(c, i, '<', '>');
+            let pt: f32 = amount.trim_end_matches("pt").trim().parse().unwrap_or(2.0);
+            // positive moves to the left of the direction, like xy-pic
+            arrow.shift = (pt / 10.0).clamp(-5.0, 5.0);
+        }
+        Some(d) if d.is_ascii_alphabetic() || *d == '-' || *d == '=' || *d == '.' || *d == '~' => {
+            // @-> and friends without braces: one style character run
+            let mut style = String::new();
+            while *i < c.len() && !c[*i].is_whitespace() && !matches!(c[*i], '[' | '^' | '_' | '|' | '"' | '\\') {
+                style.push(c[*i]);
+                *i += 1;
+            }
+            xy_style(&style, arrow);
+        }
+        _ => {}
+    }
+}
+
+/// `row-column` of a tikz-cd `to` or `from`, 1-based, when the value has that form.
+fn row_column(value: Option<&str>) -> Option<(usize, usize)> {
+    value.and_then(|v| v.split_once('-')).and_then(|(r, c)| Some((r.trim().parse::<usize>().ok()?, c.trim().parse::<usize>().ok()?)))
 }
 
 fn blank_arrow(from: (usize, usize)) -> DiagramArrow {
