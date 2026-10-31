@@ -2640,4 +2640,5 @@ pub fn define_keys(e: &mut Engine, pieces: &[&'static super::piece::Piece]) {
     }
     e.tex.warnings.clear();
     e.st.key_path = "/".into();
+    super::nodes::define_sets(e);
 }

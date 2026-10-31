@@ -18,6 +18,7 @@ tikra_calendar = { path = "../calendar" }
 tikra_libraries = { path = "../libraries" }
 tikra_canvas = { path = "../canvas" }
 tikra_engine = { path = "../engine" }
+tikra_graphs = { path = "../graphs" }
 tikra_label = { path = "../label" }
 tikra_tex = { path = "../tex" }
 serde_json = "1"

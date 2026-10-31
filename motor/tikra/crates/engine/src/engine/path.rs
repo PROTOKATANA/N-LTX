@@ -748,7 +748,6 @@ fn operations(e: &mut Engine, b: &mut Builder, depth: Option<usize>) -> Result<(
                             e.pic(super::pics::PicSpec { options, name, at, content, place })?;
                         }
                     }
-                    "graph" => e.graph()?,
                     "child" => {
                         if b.segs.is_empty() {
                             // a path that only makes nodes: they are drawn before the children (the

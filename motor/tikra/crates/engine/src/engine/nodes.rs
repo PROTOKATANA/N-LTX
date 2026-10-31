@@ -6,6 +6,7 @@
 //! anchor lands on its position. The transformations of the picture apply to that position only,
 //! unless `transform shape`; those of the node's own options apply to the whole node.
 
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::canvas::{transform_segments, Fill, Item, Paint, Stroke};
@@ -77,6 +78,35 @@ impl NodeInfo {
 
     pub fn anchor_local(&self, name: &str) -> Option<Point> {
         self.geometry.anchor(name)
+    }
+}
+
+/// The sets of nodes (`new set`, `set=`) and the count of anonymous names (`tikz@f@N`).
+#[derive(Debug, Clone, Default)]
+pub struct NodeSets {
+    /// the nodes that joined each set
+    pub sets: HashMap<String, Vec<String>>,
+    /// anonymous nodes named so far: a node of a set with no name, and `/` or `""` in a graph
+    pub anonymous: usize,
+}
+
+impl NodeSets {
+    /// The name of a node in a set that has none (`\tikz@fig@mustbenamed`).
+    pub fn set_member_name(&mut self, listed: &str) -> Option<String> {
+        if listed.is_empty() {
+            return None;
+        }
+        self.anonymous += 1;
+        Some(format!("tikz@f@{}", self.anonymous))
+    }
+
+    /// A node just named joins the sets named in `listed` (comma-separated).
+    pub fn join_sets(&mut self, listed: &str, name: &str) {
+        for s in listed.split(',').filter(|s| !s.is_empty()) {
+            if let Some(members) = self.sets.get_mut(s) {
+                members.push(name.to_string());
+            }
+        }
     }
 }
 
@@ -655,7 +685,8 @@ impl Engine {
             "rectangle".to_string()
         };
         self.process_keys(tikra_tokens(&format!("every {shape_name} node/.try")), Some("/tikz"))?;
-        let name = spec.name.clone().or_else(|| self.st.node.name.clone()).or_else(|| self.set_member_name());
+        let listed = sets_macro(self);
+        let name = spec.name.clone().or_else(|| self.st.node.name.clone()).or_else(|| self.node_sets.set_member_name(&listed));
         // what the system layer's animations give the node at the snapshot time
         if let Some(options) = name.as_ref().and_then(|n| self.sys_animations.remove(n)) {
             self.process_keys(options, Some("/tikz"))?;
@@ -949,7 +980,8 @@ impl Engine {
             // inside a pic, names get its prefix
             let n = format!("{}{n}", self.st.name_prefix);
             self.tex.define_string("tikzlastnode", &n, true);
-            self.join_sets(&n);
+            let listed = sets_macro(self);
+            self.node_sets.join_sets(&listed, &n);
             self.nodes.insert(n.clone(), info.clone());
             n
         } else {
@@ -1618,4 +1650,40 @@ impl Engine {
         out.push_str(rest);
         out
     }
+}
+
+/// The sets named by the options of the node being made (`set=a,set=b` appends to this macro).
+fn sets_macro(e: &mut Engine) -> String {
+    if !e.tex.is_defined("tikra@lg@sets") {
+        return String::new();
+    }
+    e.tex.expand_to_string(vec![Token::cs("tikra@lg@sets")]).unwrap_or_default()
+}
+
+fn set_value(e: &mut Engine, v: &Option<Vec<Token>>) -> Result<String, Error> {
+    Ok(match v {
+        Some(v) => e.tex.expand_to_string(v.clone())?.trim().to_string(),
+        None => String::new(),
+    })
+}
+
+/// `set=name` in a node's options: the node joins the set once it has its name.
+fn k_set(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
+    let name = set_value(e, &v)?;
+    if !e.node_sets.sets.contains_key(&name) {
+        e.warn(format!("undefined set '{name}'"));
+        return Ok(());
+    }
+    let mut sets = sets_macro(e);
+    sets.push_str(&name);
+    sets.push(',');
+    e.tex.define_string("tikra@lg@sets", &sets, false);
+    Ok(())
+}
+
+/// `/tikz/set`: any node can carry it, so it lives with the nodes, not with the graphs piece.
+pub(crate) fn define_sets(e: &mut Engine) {
+    let id = super::NATIVE_KEY_BASE + e.key_fns.len() as u16;
+    e.key_fns.push(k_set);
+    e.tex.define(&keys::macro_name("/tikz/set/.@cmd"), tex::Meaning::Native(id));
 }

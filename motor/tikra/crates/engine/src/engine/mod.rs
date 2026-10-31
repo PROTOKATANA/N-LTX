@@ -12,7 +12,6 @@ pub mod datavis;
 pub mod decorations;
 pub mod fadings;
 pub mod functional;
-pub mod graphs;
 pub mod intersections;
 pub mod libraries;
 pub mod lsystem;
@@ -103,7 +102,6 @@ pub enum Cmd {
     /// `\pgfmathdeclarerandomlist{name}{{a}{b}…}`
     DeclareRandomList,
     Pic,
-    Graph,
     Tikz,
     Begin,
     End,
@@ -235,7 +233,6 @@ const COMMANDS: &[(&str, Cmd)] = &[
     ("tikra@setseed", Cmd::SetSeed),
     ("pgfmathdeclarerandomlist", Cmd::DeclareRandomList),
     ("pic", Cmd::Pic),
-    ("graph", Cmd::Graph),
     ("tikz", Cmd::Tikz),
     ("begin", Cmd::Begin),
     ("end", Cmd::End),
@@ -425,7 +422,7 @@ pub struct Engine {
     /// text outside nodes was seen and reported
     text_reported: bool,
     /// the native keys, by id − NATIVE_KEY_BASE
-    key_fns: Vec<options::KeyFn>,
+    pub key_fns: Vec<options::KeyFn>,
     /// the keys of libraries from outside ([`crate::extension`]), by id − EXTENSION_KEY_BASE
     extension_fns: Vec<crate::extension::KeyFn>,
     /// the commands of the pieces, by id − PIECE_COMMAND_BASE
@@ -555,8 +552,8 @@ pub struct Engine {
     pub frame: Option<std::rc::Rc<pgfplots::Frame>>,
     /// the `groupplot` environment being read
     pub plot_group: Option<Box<pgfplots::group::Group>>,
-    /// the graphs being read (`\graph`)
-    pub graphs: graphs::State,
+    /// node sets (`new set`, `set=`): a node with `set=` joins the set once it has a name
+    pub node_sets: nodes::NodeSets,
     /// the open spy scopes, innermost last
     pub spy_scopes: Vec<spy::SpyScope>,
     /// what the figure shows, noted as it is drawn, for its description in words
@@ -706,7 +703,7 @@ impl Clone for Engine {
             axis: self.axis.clone(),
             frame: self.frame.clone(),
             plot_group: self.plot_group.clone(),
-            graphs: self.graphs.clone(),
+            node_sets: self.node_sets.clone(),
             spy_scopes: self.spy_scopes.clone(),
             facts: self.facts.clone(),
         }
@@ -851,7 +848,7 @@ impl Engine {
             axis: None,
             frame: None,
             plot_group: None,
-            graphs: graphs::State::default(),
+            node_sets: nodes::NodeSets::default(),
             spy_scopes: Vec::new(),
             facts: Default::default(),
         };
@@ -875,7 +872,6 @@ impl Engine {
         options::define_keys(&mut e, pieces);
         datavis::define(&mut e);
         pgfplots::define(&mut e);
-        graphs::define(&mut e);
         e
     }
 
@@ -1561,11 +1557,6 @@ impl Engine {
                 self.tex.define_string(&format!("pgfmath@randomlist@{name}"), &items.len().to_string(), true);
                 Ok(())
             }
-            Cmd::Graph => {
-                self.tex.push_tokens(tikra_tokens("graph "));
-                let r = path::statement(self, "");
-                self.recover(r, t)
-            }
             Cmd::Unsupported => {
                 let name = tex::show_token(t);
                 let rest = if self.picture_depth > 0 { self.skip_statement()? } else { String::new() };
@@ -2159,7 +2150,7 @@ impl Engine {
 
     /// An error in a statement: reported, and the rest of the statement skipped, as TeX goes on after an
     /// error. Limits (endless loops, a figure too large) stop the figure.
-    fn recover(&mut self, r: Result<(), Error>, t: &Token) -> Result<(), Error> {
+    pub fn recover(&mut self, r: Result<(), Error>, t: &Token) -> Result<(), Error> {
         match r {
             Ok(()) => Ok(()),
             Err(e) if is_limit(&e) => Err(e),
@@ -2370,7 +2361,7 @@ impl Engine {
     }
 
     /// `\begin{scope}[options]` and `\scoped`: a group, a pgf scope, the options, `execute at begin scope`.
-    fn open_tikz_scope(&mut self, o: Option<Vec<Token>>, fatal: bool) -> Result<(), Error> {
+    pub fn open_tikz_scope(&mut self, o: Option<Vec<Token>>, fatal: bool) -> Result<(), Error> {
         self.begin_group();
         self.begin_scope();
         self.run_tokens(tikra_tokens("\\tikz@scope@options"))?;
@@ -2390,7 +2381,7 @@ impl Engine {
         self.run_tokens(begin)
     }
 
-    fn close_tikz_scope(&mut self) -> Result<(), Error> {
+    pub fn close_tikz_scope(&mut self) -> Result<(), Error> {
         let end = self.scope_ends.pop().unwrap_or_default();
         let r = self.run_tokens(end);
         self.end_scope();
@@ -3074,7 +3065,7 @@ fn font_size(name: &str) -> f64 {
 }
 
 /// `1/a` → [`1`, `a`]: an item split at its top-level slashes.
-fn split_slash(item: &[Token]) -> Vec<Vec<Token>> {
+pub fn split_slash(item: &[Token]) -> Vec<Vec<Token>> {
     let mut parts = vec![Vec::new()];
     let mut depth = 0usize;
     for t in item {

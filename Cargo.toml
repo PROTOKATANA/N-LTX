@@ -13,6 +13,7 @@ members = [
     "motor/tikra/crates/libraries",
     "motor/tikra/crates/canvas",
     "motor/tikra/crates/engine",
+    "motor/tikra/crates/graphs",
     "motor/tikra/crates/label",
     "motor/tikra/crates/tex",
     "motor/mathra/crates/core",
