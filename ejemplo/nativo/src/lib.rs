@@ -5,9 +5,11 @@
 //! (x1, y1, x2, y2, x, y), 3 = cerrar.
 
 use std::panic::catch_unwind;
+use std::sync::OnceLock;
 use std::{ptr, slice};
 
-use adaptador::{FiguraTikra, FormulaMathra};
+use adaptador::{FiguraTikra, FormulaMathra, IncrustadosMotor};
+use documento::{Documento, Formato};
 use primitivas::{
     Capa, Color, Composicion, Compositor, Degradado, Escena, GlifoId, Matriz, Parada, Pintura, Primitiva, Punto,
     Relleno, Remate, Segmento, Trazo, Union,
@@ -16,6 +18,9 @@ use serde_json::{Value, json};
 
 /// Bp por em de las fórmulas.
 const TAM_FORMULA: f64 = 14.0;
+
+/// Ancho del documento del ejemplo, en bp.
+const ANCHO_DOCUMENTO: f64 = 520.0;
 
 const NEGRO: Color = Color { r: 0.0, g: 0.0, b: 0.0 };
 
@@ -43,13 +48,13 @@ pub unsafe extern "C" fn nltx_liberar(bufer: *mut u8, largo: usize) {
 pub unsafe extern "C" fn nltx_componer(
     fuente: *const u8,
     largo: usize,
-    figura: i32,
+    modo: i32,
     largo_salida: *mut usize,
 ) -> *mut u8 {
     // SAFETY: el contrato de arriba: Dart mantiene vivo el búfer durante la llamada.
     let texto = String::from_utf8_lossy(unsafe { slice::from_raw_parts(fuente, largo) });
     // un pánico no puede cruzar la frontera C, y aquí se escribe a mano
-    let valor = catch_unwind(|| componer(&texto, figura != 0))
+    let valor = catch_unwind(|| componer(&texto, modo))
         .unwrap_or_else(|_| json!({ "error": "el compositor falló con esta entrada" }));
     let salida = valor.to_string().into_bytes().into_boxed_slice();
     // SAFETY: el contrato de arriba.
@@ -57,17 +62,34 @@ pub unsafe extern "C" fn nltx_componer(
     Box::into_raw(salida).cast()
 }
 
-pub fn componer(fuente: &str, figura: bool) -> Value {
-    let resultado = if figura {
-        FiguraTikra::default().componer(fuente)
-    } else {
-        FormulaMathra {
+/// Modos de composición: lo mismo que `Modo` en Dart.
+pub const FORMULA: i32 = 0;
+pub const FIGURA: i32 = 1;
+pub const DOCUMENTO: i32 = 2;
+
+fn documento() -> &'static Documento {
+    static DOCUMENTO_UNICO: OnceLock<Documento> = OnceLock::new();
+    DOCUMENTO_UNICO.get_or_init(|| {
+        let formato = Formato {
+            ancho: ANCHO_DOCUMENTO,
+            tam: TAM_FORMULA,
+            color: NEGRO,
+        };
+        Documento::nuevo(formato, Box::new(IncrustadosMotor { color: NEGRO }))
+    })
+}
+
+pub fn componer(fuente: &str, modo: i32) -> Value {
+    let resultado = match modo {
+        FIGURA => FiguraTikra::default().componer(fuente),
+        DOCUMENTO => documento().componer(fuente),
+        _ => FormulaMathra {
             bloque: true,
             tam: TAM_FORMULA,
             estricto: false,
             color: NEGRO,
         }
-        .componer(fuente)
+        .componer(fuente),
     };
     match resultado {
         Ok(composicion) => escena(composicion),
@@ -245,7 +267,7 @@ mod tests {
 
     #[test]
     fn una_formula_trae_primitivas_y_contornos() {
-        let v = componer(r"\frac{a}{b}", false);
+        let v = componer(r"\frac{a}{b}", FORMULA);
         assert!(v["error"].is_null(), "{v}");
         assert!(!v["primitivas"].as_array().unwrap().is_empty());
         assert!(!v["contornos"].as_object().unwrap().is_empty());
@@ -253,14 +275,14 @@ mod tests {
 
     #[test]
     fn un_error_llega_como_tal() {
-        assert!(componer("solo texto", true)["error"].is_string());
+        assert!(componer("solo texto", FIGURA)["error"].is_string());
     }
 
     #[test]
     fn lo_que_no_se_pinta_se_avisa() {
         let v = componer(
             r"\usetikzlibrary{patterns}\begin{tikzpicture}\fill[pattern=dots] (0,0) rectangle (1,1);\end{tikzpicture}",
-            true,
+            FIGURA,
         );
         let avisos: Vec<&str> = v["avisos"]
             .as_array()
@@ -269,6 +291,13 @@ mod tests {
             .map(|a| a.as_str().unwrap())
             .collect();
         assert!(avisos.iter().any(|a| a.contains("patrones")), "{avisos:?}");
+    }
+
+    #[test]
+    fn un_documento_mezcla_texto_y_formulas() {
+        let v = componer(r"Sea $x^2$ y \ce{H2O}.", DOCUMENTO);
+        assert!(v["error"].is_null(), "{v}");
+        assert_eq!(v["avisos"].as_array().unwrap().len(), 0, "{v}");
     }
 
     #[test]

@@ -8,6 +8,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 adaptador = { path = "../../adaptador" }
+documento = { path = "../../documento" }
 primitivas = { path = "../../primitivas" }
 serde_json = "1.0"
 

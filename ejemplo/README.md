@@ -1,7 +1,7 @@
 # Ejemplo de N-LTX en Flutter
 
-Galería de fórmulas, química, física y TikZ, con un editor para escribir LaTeX y ver el resultado al
-momento. Linux.
+Documento completo y galería de fórmulas, química, física y TikZ, con un editor para escribir LaTeX y
+ver el resultado al momento. Linux.
 
 ```bash
 cargo build --release -p ejemplo_nativo   # desde la raíz del repositorio

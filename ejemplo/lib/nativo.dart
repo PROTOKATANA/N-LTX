@@ -21,6 +21,9 @@ typedef _Componer = Pointer<Uint8> Function(
   Pointer<IntPtr>,
 );
 
+/// Lo mismo que los modos de `nativo/src/lib.rs`.
+enum Modo { formula, figura, documento }
+
 /// La biblioteca Rust del ejemplo, en `lib/` junto al ejecutable.
 class Nativo {
   Nativo._(this._reservar, this._liberar, this._componer);
@@ -39,7 +42,7 @@ class Nativo {
   final _Liberar _liberar;
   final _Componer _componer;
 
-  Escena componer(String fuente, {required bool figura}) {
+  Escena componer(String fuente, {required Modo modo}) {
     final bytes = utf8.encode(fuente);
     final largo = bytes.isEmpty ? 1 : bytes.length;
     final entrada = _reservar(largo);
@@ -48,7 +51,7 @@ class Nativo {
     final salida = _componer(
       entrada,
       bytes.length,
-      figura ? 1 : 0,
+      modo.index,
       celda.cast<IntPtr>(),
     );
     final largoSalida = celda.cast<IntPtr>().value;
