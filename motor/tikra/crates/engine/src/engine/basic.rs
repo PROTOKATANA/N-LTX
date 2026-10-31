@@ -712,7 +712,7 @@ impl Engine {
         for a in actions.split(',').map(str::trim) {
             match a {
                 // after \pgfsetfillpattern, a fill is the pattern
-                "fill" if self.st.fill_pattern => self.st.mode.pattern = true,
+                "fill" if self.st.paint.fill_pattern => self.st.mode.pattern = true,
                 "fill" => self.st.mode.fill = true,
                 "stroke" | "draw" => self.st.mode.draw = true,
                 "clip" => self.st.mode.clip = true,
@@ -963,23 +963,23 @@ impl Engine {
                     v.push(self.length_of(p)?);
                 }
                 let phase = self.length_of(phase).unwrap_or(0.0);
-                self.st.dash = if v.is_empty() { None } else { Some((v, phase)) };
+                self.st.pen.dash = if v.is_empty() { None } else { Some((v, phase)) };
             }
             B::StrokeColor | B::FillColor | B::SetColor => {
                 let c = self.argument_string()?;
                 match self.color(&c) {
                     Some(c) => match cmd {
-                        B::StrokeColor => self.st.draw_color = Some(c),
+                        B::StrokeColor => self.st.paint.draw_color = Some(c),
                         B::FillColor => {
-                            self.st.fill_color = Some(c);
-                            self.st.fill_pattern = false;
+                            self.st.paint.fill_color = Some(c);
+                            self.st.paint.fill_pattern = false;
                         }
                         _ => {
-                            self.st.fill_pattern = false;
-                            self.st.color = c;
-                            self.st.draw_color = None;
-                            self.st.fill_color = None;
-                            self.st.text_color = None;
+                            self.st.paint.fill_pattern = false;
+                            self.st.paint.color = c;
+                            self.st.paint.draw_color = None;
+                            self.st.paint.fill_color = None;
+                            self.st.paint.text_color = None;
                         }
                     },
                     None => self.warn(format!("unknown color '{c}'")),
@@ -989,49 +989,49 @@ impl Engine {
                 let v = self.argument()?;
                 let o = self.number_of(v)?;
                 if cmd == B::StrokeOpacity {
-                    self.st.draw_opacity = o;
+                    self.st.paint.draw_opacity = o;
                 } else {
-                    self.st.fill_opacity = o;
+                    self.st.paint.fill_opacity = o;
                 }
             }
-            B::ButtCap => self.st.cap = crate::canvas::Cap::Butt,
-            B::RoundCap => self.st.cap = crate::canvas::Cap::Round,
-            B::RectCap => self.st.cap = crate::canvas::Cap::Square,
-            B::MiterJoin => self.st.join = crate::canvas::Join::Miter,
-            B::RoundJoin => self.st.join = crate::canvas::Join::Round,
-            B::BevelJoin => self.st.join = crate::canvas::Join::Bevel,
+            B::ButtCap => self.st.pen.cap = crate::canvas::Cap::Butt,
+            B::RoundCap => self.st.pen.cap = crate::canvas::Cap::Round,
+            B::RectCap => self.st.pen.cap = crate::canvas::Cap::Square,
+            B::MiterJoin => self.st.pen.join = crate::canvas::Join::Miter,
+            B::RoundJoin => self.st.pen.join = crate::canvas::Join::Round,
+            B::BevelJoin => self.st.pen.join = crate::canvas::Join::Bevel,
             B::MiterLimit => {
                 let v = self.argument()?;
-                self.st.miter_limit = self.number_of(v)?;
+                self.st.pen.miter_limit = self.number_of(v)?;
             }
-            B::EoRule => self.st.even_odd = true,
-            B::NonzeroRule => self.st.even_odd = false,
+            B::EoRule => self.st.paint.even_odd = true,
+            B::NonzeroRule => self.st.paint.even_odd = false,
             B::Arrows | B::ArrowsStart | B::ArrowsEnd => {
                 let s = self.argument_string()?;
                 match cmd {
                     B::Arrows => {
-                        if let Some((a, b)) = super::arrows::parse_arrows(&s, &self.st.tips) {
-                            self.st.start_arrow = a;
-                            self.st.end_arrow = b;
+                        if let Some((a, b)) = super::arrows::parse_arrows(&s, &self.st.pen.tips) {
+                            self.st.pen.start_arrow = a;
+                            self.st.pen.end_arrow = b;
                         }
                     }
-                    B::ArrowsStart => self.st.start_arrow = Some(s).filter(|x| !x.is_empty()),
-                    _ => self.st.end_arrow = Some(s).filter(|x| !x.is_empty()),
+                    B::ArrowsStart => self.st.pen.start_arrow = Some(s).filter(|x| !x.is_empty()),
+                    _ => self.st.pen.end_arrow = Some(s).filter(|x| !x.is_empty()),
                 }
             }
             B::ShortenStart | B::ShortenEnd => {
                 let v = self.argument()?;
                 let d = self.length_of(v)?;
                 if cmd == B::ShortenStart {
-                    self.st.shorten_start = d;
+                    self.st.pen.shorten_start = d;
                 } else {
-                    self.st.shorten_end = d;
+                    self.st.pen.shorten_end = d;
                 }
             }
             B::CornersArced => {
                 let p = self.point_arg()?;
                 // the corner's arc starts p.x before it and ends p.y after it
-                (self.st.rounded, self.st.rounded_out) = (p.x, p.y);
+                (self.st.pen.rounded, self.st.pen.rounded_out) = (p.x, p.y);
             }
             B::Shift => {
                 let p = self.point_arg()?;
@@ -1157,7 +1157,7 @@ impl Engine {
                         "base east" => A::BaseEast,
                         _ => A::Center,
                     };
-                    let font = Some(self.st.font.clone());
+                    let font = Some(self.st.text.font.clone());
                     c.texts.push(ShapeText { tex: tex::tokens_to_string(&text), at: place, color: None, anchor: Some(anchor), font, turn: rotate, upright: false });
                     return Ok(());
                 }
@@ -1226,21 +1226,21 @@ impl Engine {
             B::PlotHandler => {
                 let name = COMMANDS[(id - BASE) as usize].0;
                 let handler = PLOT_HANDLERS.iter().find(|(c, _)| *c == name).map_or("sharp plot", |(_, h)| h);
-                self.st.basic_plot = (handler.to_string(), Vec::new());
+                self.st.plot.basic_plot = (handler.to_string(), Vec::new());
             }
             B::PlotHandlerMark => {
                 let code = self.argument()?;
-                self.st.basic_plot = ("mark".into(), code);
+                self.st.plot.basic_plot = ("mark".into(), code);
             }
             B::PlotHandlerMarkListed => {
                 // `{code}{1,3}`: a mark on the listed points only (counted from 1)
                 let code = self.argument()?;
                 let list = self.argument_string()?;
-                self.st.basic_plot = (format!("mark listed:{list}"), code);
+                self.st.plot.basic_plot = (format!("mark listed:{list}"), code);
             }
             B::PlotTension => {
                 let v = self.argument()?;
-                self.st.tension = self.number_of(v)?;
+                self.st.plot.tension = self.number_of(v)?;
             }
             B::StreamStart => self.plot_stream.clear(),
             B::StreamPoint => {
@@ -1250,10 +1250,10 @@ impl Engine {
             B::StreamEnd => self.plot_stream_end()?,
             B::PlotHandlerRecord => {
                 let m = self.argument()?;
-                self.st.basic_plot = ("record".into(), m);
+                self.st.plot.basic_plot = ("record".into(), m);
             }
-            B::FirstLineTo => self.st.plot_first_lineto = true,
-            B::FirstMoveTo => self.st.plot_first_lineto = false,
+            B::FirstLineTo => self.st.plot.plot_first_lineto = true,
+            B::FirstMoveTo => self.st.plot.plot_first_lineto = false,
             B::PlotFunction => {
                 // \pgfplotfunction{\x}{list}{point}: a stream of the point for each item
                 let var = self.argument()?;
@@ -1277,7 +1277,7 @@ impl Engine {
             }
             B::PlotMarkSize => {
                 let v = self.argument()?;
-                self.st.mark_size = self.length_of(v)?;
+                self.st.plot.mark_size = self.length_of(v)?;
             }
             B::DeclarePlotMark => {
                 let name = self.argument_string()?;
@@ -1401,7 +1401,7 @@ impl Engine {
             B::UsePlotHandler => {
                 let name = self.argument_string()?;
                 let args = self.argument()?;
-                self.st.basic_plot = (format!("custom:{name}"), args);
+                self.st.plot.basic_plot = (format!("custom:{name}"), args);
             }
             B::SysAnimate => {
                 let attribute = self.argument_string()?;
@@ -1430,12 +1430,12 @@ impl Engine {
             }
             B::InnerLineWidth => {
                 let v = self.argument()?;
-                self.st.inner_line.0 = self.length_of(v)?;
+                self.st.pen.inner_line.0 = self.length_of(v)?;
             }
             B::InnerStrokeColor => {
                 let c = self.argument_string()?;
                 match self.color(&c) {
-                    Some(c) => self.st.inner_line.1 = Some(c),
+                    Some(c) => self.st.pen.inner_line.1 = Some(c),
                     None => self.warn(format!("unknown color '{c}'")),
                 }
             }
@@ -1664,7 +1664,7 @@ impl Engine {
     /// each gets the mark handler's code, shifted there.
     fn plot_stream_end(&mut self) -> Result<(), Error> {
         let points = std::mem::take(&mut self.plot_stream);
-        let (handler, code) = self.st.basic_plot.clone();
+        let (handler, code) = self.st.plot.basic_plot.clone();
         match handler.as_str() {
             "discard" => {}
             "record" => {
@@ -1684,7 +1684,7 @@ impl Engine {
                 // a declared handler: its code at each point, `##1` the point, `#k` its arguments
                 let code = self.plot_handlers.get(&h["custom:".len()..]).cloned().unwrap_or_default();
                 let inv = self.st.transform.inverse();
-                let params = super::options::split_arguments(&self.st.basic_plot.1, 9);
+                let params = super::options::split_arguments(&self.st.plot.basic_plot.1, 9);
                 for p in points {
                     let q = inv.apply(p);
                     let mut text = code.replace("##1", &format!("\\pgfqpoint{{{}pt}}{{{}pt}}", q.x / PT, q.y / PT));
@@ -1711,12 +1711,12 @@ impl Engine {
                 }
             }
             h => {
-                let saved = std::mem::replace(&mut self.st.plot_handler, h.to_string());
+                let saved = std::mem::replace(&mut self.st.plot.plot_handler, h.to_string());
                 let r = super::path::plot_segments(self, &points);
-                self.st.plot_handler = saved;
+                self.st.plot.plot_handler = saved;
                 let mut segs = r?;
                 // \pgfsetlinetofirstplotpoint: the plot goes on from the path's last point
-                if self.st.plot_first_lineto && self.pgf_path.last.is_some() {
+                if self.st.plot.plot_first_lineto && self.pgf_path.last.is_some() {
                     if let Some(Segment::MoveTo(p)) = segs.first().copied() {
                         segs[0] = Segment::LineTo(p);
                     }

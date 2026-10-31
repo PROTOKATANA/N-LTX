@@ -249,8 +249,8 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, style: &[Toke
     let faceted = mapped_named(e, &faceted_name).unwrap_or(draw);
     let kind = keys::value(e, "/pgfplots/patch type");
     let zbuffer = keys::value(e, "/pgfplots/z buffer");
-    let width = st.line_width;
-    let opacity = (st.draw_opacity, st.fill_opacity);
+    let width = st.pen.line_width;
+    let opacity = (st.paint.draw_opacity, st.paint.fill_opacity);
     let explicit = keys::value(e, "/pgfplots/mesh/color input").starts_with("explicit");
     if p.patch && p.lattice.is_none() && !explicit {
         let look = Look { draw, fill, faceted, shader, stroke: st.clone(), surf };
@@ -432,7 +432,7 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, style: &[Toke
                     if !e.canvas_frozen {
                         e.canvas.include_path(&segs);
                     }
-                    let stroke = Stroke { color: c, width: 0.3 * crate::PT, dash: None, cap: st.cap, join: st.join, miter_limit: st.miter_limit, opacity: opacity.0 };
+                    let stroke = Stroke { color: c, width: 0.3 * crate::PT, dash: None, cap: st.pen.cap, join: st.pen.join, miter_limit: st.pen.miter_limit, opacity: opacity.0 };
                     e.canvas.push(Item::Path { segments: segs, fill: Some(Fill { paint: Paint::Solid(c), opacity: opacity.1, even_odd: false }), stroke: Some(stroke) });
                 }
             }
@@ -473,10 +473,10 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, style: &[Toke
                     let stroke = Stroke {
                         color: faceted.at(mapped),
                         width,
-                        dash: st.dash.clone().filter(|d| !d.0.is_empty()),
-                        cap: st.cap,
-                        join: st.join,
-                        miter_limit: st.miter_limit,
+                        dash: st.pen.dash.clone().filter(|d| !d.0.is_empty()),
+                        cap: st.pen.cap,
+                        join: st.pen.join,
+                        miter_limit: st.pen.miter_limit,
                         opacity: opacity.0,
                     };
                     e.canvas.push(Item::End);
@@ -562,7 +562,7 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, style: &[Toke
                     if !e.canvas_frozen {
                         e.canvas.include_path(&segs);
                     }
-                    let stroke = Stroke { color: c, width: 0.5 * crate::PT, dash: None, cap: st.cap, join: st.join, miter_limit: st.miter_limit, opacity: opacity.0 };
+                    let stroke = Stroke { color: c, width: 0.5 * crate::PT, dash: None, cap: st.pen.cap, join: st.pen.join, miter_limit: st.pen.miter_limit, opacity: opacity.0 };
                     e.canvas.push(Item::Path { segments: segs, fill: Some(Fill { paint: Paint::Solid(c), opacity: opacity.1, even_odd: false }), stroke: Some(stroke) });
                 }
                 continue;
@@ -576,8 +576,15 @@ pub fn draw(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, style: &[Toke
         if !e.canvas_frozen {
             e.canvas.include_path(&segs);
         }
-        let stroke =
-            |c: Color| Stroke { color: c, width, dash: st.dash.clone().filter(|d| !d.0.is_empty()), cap: st.cap, join: st.join, miter_limit: st.miter_limit, opacity: opacity.0 };
+        let stroke = |c: Color| Stroke {
+            color: c,
+            width,
+            dash: st.pen.dash.clone().filter(|d| !d.0.is_empty()),
+            cap: st.pen.cap,
+            join: st.pen.join,
+            miter_limit: st.pen.miter_limit,
+            opacity: opacity.0,
+        };
         let (fill_c, stroke_c) = if closes && (surf || p.patch) {
             match shader.as_str() {
                 // pgfplots shades each patch; flat patches with a hairline of their color have
@@ -736,11 +743,11 @@ fn draw_patches(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, kind: &st
     let stroke_of = |c: Color, width: f64| Stroke {
         color: c,
         width,
-        dash: st.dash.clone().filter(|d| !d.0.is_empty()),
-        cap: st.cap,
-        join: st.join,
-        miter_limit: st.miter_limit,
-        opacity: st.draw_opacity,
+        dash: st.pen.dash.clone().filter(|d| !d.0.is_empty()),
+        cap: st.pen.cap,
+        join: st.pen.join,
+        miter_limit: st.pen.miter_limit,
+        opacity: st.paint.draw_opacity,
     };
     let path = |edges: &[Edge], close: bool| -> Vec<Segment> {
         let mut segs = Vec::new();
@@ -772,7 +779,7 @@ fn draw_patches(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, kind: &st
             e.canvas.include_path(&outline);
         }
         if curve || !look.surf {
-            e.canvas.push(Item::Path { segments: outline, fill: None, stroke: Some(stroke_of(look.draw.at(mapped), st.line_width)) });
+            e.canvas.push(Item::Path { segments: outline, fill: None, stroke: Some(stroke_of(look.draw.at(mapped), st.pen.line_width)) });
             continue;
         }
         let interp = look.shader.contains("interp");
@@ -787,7 +794,7 @@ fn draw_patches(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, kind: &st
                     let c: Vec<Point> = part.pts.iter().map(|l| f.at(*l)).collect();
                     let paint = gouraud(&[(c[0], part.metas[0]), (c[1], part.metas[1]), (c[2], part.metas[2])], cm, f.meta, &look.fill);
                     let segs = vec![Segment::MoveTo(c[0]), Segment::LineTo(c[1]), Segment::LineTo(c[2]), Segment::Close];
-                    e.canvas.push(Item::Path { segments: segs, fill: Some(Fill { paint, opacity: st.fill_opacity, even_odd: false }), stroke: None });
+                    e.canvas.push(Item::Path { segments: segs, fill: Some(Fill { paint, opacity: st.paint.fill_opacity, even_odd: false }), stroke: None });
                     continue;
                 }
                 let size = {
@@ -806,13 +813,25 @@ fn draw_patches(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, kind: &st
                     let mut segs = vec![Segment::MoveTo(f.at(q[0]))];
                     segs.extend(q[1..].iter().map(|l| Segment::LineTo(f.at(*l))));
                     segs.push(Segment::Close);
-                    let stroke = Stroke { color: c, width: 0.5 * crate::PT, dash: None, cap: st.cap, join: st.join, miter_limit: st.miter_limit, opacity: st.draw_opacity };
-                    e.canvas.push(Item::Path { segments: segs, fill: Some(Fill { paint: Paint::Solid(c), opacity: st.fill_opacity, even_odd: false }), stroke: Some(stroke) });
+                    let stroke = Stroke {
+                        color: c,
+                        width: 0.5 * crate::PT,
+                        dash: None,
+                        cap: st.pen.cap,
+                        join: st.pen.join,
+                        miter_limit: st.pen.miter_limit,
+                        opacity: st.paint.draw_opacity,
+                    };
+                    e.canvas.push(Item::Path {
+                        segments: segs,
+                        fill: Some(Fill { paint: Paint::Solid(c), opacity: st.paint.fill_opacity, even_odd: false }),
+                        stroke: Some(stroke),
+                    });
                 }
             }
             e.canvas.push(Item::End);
             if look.shader == "faceted interp" {
-                e.canvas.push(Item::Path { segments: outline, fill: None, stroke: Some(stroke_of(look.faceted.at(mapped), st.line_width)) });
+                e.canvas.push(Item::Path { segments: outline, fill: None, stroke: Some(stroke_of(look.faceted.at(mapped), st.pen.line_width)) });
             }
             continue;
         }
@@ -825,8 +844,8 @@ fn draw_patches(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame, kind: &st
         };
         e.canvas.push(Item::Path {
             segments: outline,
-            fill: Some(Fill { paint: Paint::Solid(look.fill.at(mapped)), opacity: st.fill_opacity, even_odd: false }),
-            stroke: Some(stroke_of(edge, st.line_width)),
+            fill: Some(Fill { paint: Paint::Solid(look.fill.at(mapped)), opacity: st.paint.fill_opacity, even_odd: false }),
+            stroke: Some(stroke_of(edge, st.pen.line_width)),
         });
     }
     Ok(())

@@ -142,14 +142,14 @@ impl Engine {
     }
 
     fn grow_children(&mut self, parent: &str, children: Vec<Child>) -> Result<(), Error> {
-        self.st.tree_level += 1;
-        let level = self.st.tree_level;
+        self.st.tree.tree_level += 1;
+        let level = self.st.tree.tree_level;
         self.st.pending = Transform::default();
         self.process_keys(tikra_tokens(&format!("level/.try={level},level {level}/.try")), Some("/tikz"))?;
         self.st.apply_pending();
         let n = children.len();
         let Some(info) = self.nodes.get(parent).cloned() else { return Ok(()) };
-        let anchor = self.st.growth_anchor.clone();
+        let anchor = self.st.tree.growth_anchor.clone();
         let origin = info.anchor(&anchor).unwrap_or(info.center());
         let local = self.st.transform.inverse().apply(origin);
         self.st.transform = self.st.transform.compose(&Transform::translation(local.x, local.y));
@@ -165,14 +165,14 @@ impl Engine {
     fn grow_child(&mut self, parent: &str, k: usize, n: usize, child: Child) -> Result<(), Error> {
         self.tex.set_meaning(&Token::cs("tikzparentnode"), macro_from(parent), false);
         self.st.pending = Transform::default();
-        self.st.child_missing = false;
+        self.st.tree.child_missing = false;
         // the variable of `child foreach`, for the options too
         self.run_tokens(child.define)?;
         let mut options = tikra_tokens("every child/.try,");
         options.extend(child.options);
         self.process_keys(options, Some("/tikz"))?;
         self.st.apply_pending();
-        if self.st.child_missing {
+        if self.st.tree.child_missing {
             return Ok(());
         }
         self.st.transform = self.grow(k, n)?;
@@ -206,14 +206,14 @@ impl Engine {
         self.tex.set_meaning(&Token::cs("tikzchildnode"), macro_from(&child_name), false);
         // the edge from the parent, in the parent's coordinate system
         let (edge_options, edge_nodes) = std::mem::replace(&mut self.tree_edge_out, outer).unwrap_or_default();
-        let pa = self.st.parent_anchor.clone();
-        let ca = self.st.child_anchor.clone();
+        let pa = self.st.tree.parent_anchor.clone();
+        let ca = self.st.tree.child_anchor.clone();
         self.tex.define_string("tikzparentanchor", &pa, false);
         self.tex.define_string("tikzchildanchor", &ca, false);
         let mut edge = tikra_tokens("\\path[edge from parent/.try,");
         edge.extend(edge_options);
         edge.extend(tikra_tokens("] "));
-        match self.st.edge_from_parent_path.clone() {
+        match self.st.tree.edge_from_parent_path.clone() {
             // a path of its own (edge from parent path={…}, the trees library's forks); labels after it
             Some(p) => {
                 edge.extend(p);
@@ -240,7 +240,7 @@ impl Engine {
             Point::new(d * c, d * s)
         };
         let shift = |t: &Transform, p: Point| t.compose(&Transform::translation(p.x, p.y));
-        let (g, ld, sd) = (self.st.grow_angle, self.st.level_distance, self.st.sibling_distance);
+        let (g, ld, sd) = (self.st.tree.grow_angle, self.st.tree.level_distance, self.st.tree.sibling_distance);
         let (k, n) = (k as f64, n as f64);
         let growth = self.tex.expand_to_string(vec![Token::cs("tikra@growth")])?;
         let sibling_angle = |e: &mut Engine| -> Result<f64, Error> {
@@ -248,7 +248,7 @@ impl Engine {
             e.number_of(v)
         };
         let t = self.st.transform;
-        if let Some(f) = self.st.growth_function.clone() {
+        if let Some(f) = self.st.tree.growth_function.clone() {
             // a growth function of the options (`children are tokens`): it moves the coordinate system itself
             for (name, v) in [("tikznumberofchildren", n), ("tikznumberofcurrentchild", k)] {
                 if let tex::Meaning::Count(r) = self.tex.meaning_of(name) {
@@ -286,8 +286,8 @@ impl Engine {
             // the default: level distance along the direction, then the place among the siblings
             _ => {
                 let mut t = shift(&t, polar(g, ld));
-                if self.st.special_level != Some(self.st.tree_level) {
-                    let (left, right) = if self.st.grow_swapped { (g + 90.0, g - 90.0) } else { (g - 90.0, g + 90.0) };
+                if self.st.tree.special_level != Some(self.st.tree.tree_level) {
+                    let (left, right) = if self.st.tree.grow_swapped { (g + 90.0, g - 90.0) } else { (g - 90.0, g + 90.0) };
                     t = shift(&shift(&t, polar(left, (n + 1.0) * sd / 2.0)), polar(right, k * sd));
                 }
                 t
@@ -309,7 +309,7 @@ pub fn define(e: &mut Engine) {
 /// The registers follow `level distance` and `sibling distance`.
 pub fn set_distance_registers(e: &mut Engine) {
     let sp = |cm: f64| (cm / crate::PT * 65536.0).round() as i64;
-    let (l, s) = (sp(e.st.level_distance), sp(e.st.sibling_distance));
+    let (l, s) = (sp(e.st.tree.level_distance), sp(e.st.tree.sibling_distance));
     e.tex.set_dimen(LEVEL_DISTANCE, l, false);
     e.tex.set_dimen(SIBLING_DISTANCE, s, false);
 }

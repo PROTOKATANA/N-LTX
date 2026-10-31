@@ -186,9 +186,9 @@ impl Engine {
         // (`\draw[circle connection bar] (a) edge (b)` outlines it)
         let tree = self.tex.expand_to_string(vec![Token::cs("tikra@barconcept")])?.trim() == "1";
         let (fill, stroke) = if tree || !(self.st.mode.fill || self.st.mode.draw) {
-            (Some(Fill { paint, opacity: self.st.fill_opacity, even_odd: false }), None)
+            (Some(Fill { paint, opacity: self.st.paint.fill_opacity, even_odd: false }), None)
         } else {
-            let fill = self.st.mode.fill.then(|| Fill { paint: Paint::Solid(self.st.fill_paint_color()), opacity: self.st.fill_opacity, even_odd: false });
+            let fill = self.st.mode.fill.then(|| Fill { paint: Paint::Solid(self.st.fill_paint_color()), opacity: self.st.paint.fill_opacity, even_odd: false });
             (fill, self.st.mode.draw.then(|| self.stroke()))
         };
         self.canvas.push(Item::Path { segments, fill, stroke });

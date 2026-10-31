@@ -378,12 +378,12 @@ impl Context<'_> {
 
     /// The line width in force, in cm.
     pub fn line_width(&self) -> f64 {
-        self.e.st.line_width
+        self.e.st.pen.line_width
     }
 
     /// Whether the current stroke is dashed.
     pub fn is_dashed(&self) -> bool {
-        self.e.st.dash.as_ref().is_some_and(|d| !d.0.is_empty())
+        self.e.st.pen.dash.as_ref().is_some_and(|d| !d.0.is_empty())
     }
 
     /// Whether `transform shape` is on: nodes turn and scale with the picture.
@@ -394,7 +394,7 @@ impl Context<'_> {
     /// `\pgfarrowsdeclarealias`-like: the tip `name` means the tip specification `means`
     /// (`stealth[length=3pt]`), in the current group.
     pub fn declare_arrow_tip(&mut self, name: &str, means: &str) {
-        std::rc::Rc::make_mut(&mut self.e.st.tips).declare(name, means);
+        std::rc::Rc::make_mut(&mut self.e.st.pen.tips).declare(name, means);
     }
 
     /// A TeX and TikZ group: what changes inside is undone at [`Context::end_group`].

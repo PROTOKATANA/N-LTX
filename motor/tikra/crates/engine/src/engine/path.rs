@@ -112,7 +112,7 @@ pub fn statement(e: &mut Engine, defaults: &str) -> Result<(), Error> {
     // a `scope fading` of a path that drew nothing fades the next one
     let carried = std::mem::take(&mut e.carried_fadings);
     e.path_fadings.push(carried.into_iter().map(|(name, fit, t)| (name, e.canvas.items.len(), fit.is_some(), t, fit)).collect());
-    e.path_fading_settings.push((e.st.fading_transform, e.st.fit_fading));
+    e.path_fading_settings.push((e.st.shade.fading_transform, e.st.shade.fit_fading));
     // `transform canvas` among the path's options (or an animated `:rotate`) is for this path only;
     // a clip it makes stays for the rest of the scope
     let (opened, transforms) = (e.scopes.last().map(|s| s.ends), e.canvas_transforms);
@@ -238,7 +238,7 @@ fn statement_in_group(e: &mut Engine, defaults: &str, outer: &super::GState) -> 
         from_node: None,
         fresh_link: false,
     };
-    let (color, dash, start) = (e.st.stroke_color(), e.st.dash.clone(), e.canvas.items.len());
+    let (color, dash, start) = (e.st.stroke_color(), e.st.pen.dash.clone(), e.canvas.items.len());
     operations(e, &mut b, None)?;
     if b.current.is_some() {
         e.last_xy = b.point();
@@ -247,8 +247,8 @@ fn statement_in_group(e: &mut Engine, defaults: &str, outer: &super::GState) -> 
     place_mid_nodes(e, &mut b, None)?;
     // options in the middle of the path (`[dashed, red]`) are the whole path's: TeX draws its nodes
     // after it, with its final color and dashes where they have their own none
-    if (e.st.stroke_color(), &e.st.dash) != (color, &dash) {
-        let (to_color, to_dash) = (e.st.stroke_color(), e.st.dash.clone());
+    if (e.st.stroke_color(), &e.st.pen.dash) != (color, &dash) {
+        let (to_color, to_dash) = (e.st.stroke_color(), e.st.pen.dash.clone());
         for item in e.canvas.items[start..].iter_mut().chain(b.node_items.iter_mut()) {
             if let crate::canvas::Item::Path { stroke: Some(st), .. } = item {
                 if st.color == color {
@@ -560,15 +560,15 @@ fn operations(e: &mut Engine, b: &mut Builder, depth: Option<usize>) -> Result<(
             }
             Token::Char('[', _) => {
                 let o = e.tex.read_until_char(']', false)?;
-                let before = (e.st.color, e.st.draw_color, e.st.fill_color, e.st.text_paint_color());
+                let before = (e.st.paint.color, e.st.paint.draw_color, e.st.paint.fill_color, e.st.text_paint_color());
                 e.process_keys(o, Some("/tikz"))?;
                 // in a `{…}` group of the path, a color is only the text's: the path, and the nodes'
                 // lines and fills, keep the path's (`{[red] to[V=1] (0,2)}` has its label red)
-                if !b.groups.is_empty() && (e.st.color, e.st.draw_color, e.st.fill_color) != (before.0, before.1, before.2) {
+                if !b.groups.is_empty() && (e.st.paint.color, e.st.paint.draw_color, e.st.paint.fill_color) != (before.0, before.1, before.2) {
                     let text = e.st.text_paint_color();
-                    (e.st.color, e.st.draw_color, e.st.fill_color) = (before.0, before.1, before.2);
+                    (e.st.paint.color, e.st.paint.draw_color, e.st.paint.fill_color) = (before.0, before.1, before.2);
                     if text != before.3 {
-                        e.st.text_color = Some(text);
+                        e.st.paint.text_color = Some(text);
                     }
                 }
                 e.st.apply_pending();
@@ -638,8 +638,8 @@ fn operations(e: &mut Engine, b: &mut Builder, depth: Option<usize>) -> Result<(
                                     labels.push(Token::Char('}', Cat::End));
                                 }
                             }
-                            e.st.tree_edge = Some((o, labels));
-                            e.tree_edge_out = e.st.tree_edge.clone();
+                            e.st.tree.tree_edge = Some((o, labels));
+                            e.tree_edge_out = e.st.tree.tree_edge.clone();
                         } else if w == "edge" {
                             // nodes can follow, then the target
                             let mids = read_mid_nodes(e, depth, b.point())?;
@@ -1571,7 +1571,7 @@ impl Engine {
             return;
         }
         let tip = |a: &Option<String>| a.as_ref().is_some_and(|s| !s.trim().is_empty());
-        let arrow = match (tip(&self.st.start_arrow), tip(&self.st.end_arrow)) {
+        let arrow = match (tip(&self.st.pen.start_arrow), tip(&self.st.pen.end_arrow)) {
             (false, false) => Arrow::None,
             (false, true) => Arrow::Forward,
             (true, false) => Arrow::Backward,
@@ -1956,7 +1956,7 @@ fn grid(e: &mut Engine, b: &mut Builder, depth: Option<usize>) -> Result<(), Err
                 e.process_keys(o, Some("/tikz"))?;
             }
         }
-        Ok(e.st.grid_step)
+        Ok(e.st.plot.grid_step)
     })();
     e.end_group();
     let step = res?;
@@ -2000,9 +2000,9 @@ fn plot(e: &mut Engine, b: &mut Builder, depth: Option<usize>, continues: bool) 
                 e.process_keys(o, Some("/tikz"))?;
             }
         }
-        let (d0, d1) = e.st.domain;
-        let n = e.st.samples.max(2);
-        let var = e.st.variable.clone();
+        let (d0, d1) = e.st.plot.domain;
+        let n = e.st.plot.samples.max(2);
+        let var = e.st.plot.variable.clone();
         let mut points = Vec::new();
         match next(e, depth)? {
             Some(Token::Char('c', Cat::Letter)) => {
@@ -2057,7 +2057,7 @@ fn plot(e: &mut Engine, b: &mut Builder, depth: Option<usize>, continues: bool) 
             Some(t) if t.is_char('(') => {
                 let tokens = read_coordinate_tokens(e)?;
                 let name = Token::cs(&var);
-                let values = e.st.samples_at.clone().unwrap_or_else(|| (0..n).map(|k| d0 + (d1 - d0) * k as f64 / (n - 1) as f64).collect());
+                let values = e.st.plot.samples_at.clone().unwrap_or_else(|| (0..n).map(|k| d0 + (d1 - d0) * k as f64 / (n - 1) as f64).collect());
                 for v in values {
                     e.tex.set_meaning(&name, macro_from(&super::pgf_number(v)), false);
                     let text = e.math_string(tokens.clone())?;
@@ -2076,7 +2076,7 @@ fn plot(e: &mut Engine, b: &mut Builder, depth: Option<usize>, continues: bool) 
         // the marks, drawn after the path, in the plot's own settings
         let marks = e.plot_marks(&points)?;
         let segs = plot_segments(e, &points)?;
-        Ok((points, segs, marks, e.st.only_marks))
+        Ok((points, segs, marks, e.st.plot.only_marks))
     })();
     e.end_group();
     let (points, mut segs, marks, only_marks) = res?;
@@ -2127,8 +2127,8 @@ pub fn plot_segments(e: &mut Engine, points: &[Point]) -> Result<Vec<Segment>, E
     }
     let p = Point::new;
     let mut v = Vec::new();
-    let handler = e.st.plot_handler.clone();
-    let k = 0.2775 * e.st.tension;
+    let handler = e.st.plot.plot_handler.clone();
+    let k = 0.2775 * e.st.plot.tension;
     match handler.as_str() {
         "smooth" if n > 2 => {
             // \pgfplothandlercurveto: each inner point's supports along its neighbours' chord

@@ -143,7 +143,7 @@ fn chosen(k: usize, repeat: usize, phase: usize, indices: &Option<Vec<usize>>) -
 impl Engine {
     /// The marks of a plot at its points (canvas coordinates), drawn after its path.
     pub fn plot_marks(&mut self, points: &[Point]) -> Result<Vec<Item>, Error> {
-        let Some(name) = self.st.plot_mark.clone() else { return Ok(Vec::new()) };
+        let Some(name) = self.st.plot.plot_mark.clone() else { return Ok(Vec::new()) };
         self.begin_group();
         let r = self.plot_marks_in_group(&name, points);
         self.end_group();
@@ -154,7 +154,7 @@ impl Engine {
         self.st.pending = Transform::default();
         self.process_keys(tikra_tokens("every mark/.try"), Some("/tikz"))?;
         let linear = Transform { e: 0.0, f: 0.0, ..self.st.transform }.compose(&self.st.pending);
-        let (repeat, phase, indices) = (self.st.mark_repeat, self.st.mark_phase, self.st.mark_indices.clone());
+        let (repeat, phase, indices) = (self.st.plot.mark_repeat, self.st.plot.mark_phase, self.st.plot.mark_indices.clone());
         let mut items = Vec::new();
         if name == "text" || name == "ball" {
             for (k, p) in points.iter().enumerate() {
@@ -163,13 +163,13 @@ impl Engine {
                 }
                 if name == "ball" {
                     let t = Transform::translation(p.x, p.y).compose(&linear);
-                    let segs = crate::canvas::transform_segments(&circle(self.st.mark_size), &t);
-                    self.st.shading = "ball".into();
+                    let segs = crate::canvas::transform_segments(&circle(self.st.plot.mark_size), &t);
+                    self.st.shade.shading = "ball".into();
                     let paint = Paint::Shading(self.shading_of(&segs));
                     if self.counts_for_size() {
                         self.canvas.include_path(&segs);
                     }
-                    items.push(Item::Path { segments: segs, fill: Some(Fill { paint, opacity: self.st.fill_opacity, even_odd: false }), stroke: None });
+                    items.push(Item::Path { segments: segs, fill: Some(Fill { paint, opacity: self.st.paint.fill_opacity, even_odd: false }), stroke: None });
                 } else {
                     // `text mark`, set as a node
                     let text = crate::keys::value(&self.tex, "/pgf/text mark").unwrap_or_else(|| tikra_tokens("p"));
@@ -197,13 +197,13 @@ impl Engine {
             }
             return Ok(items);
         }
-        let Some(parts) = shape(name, self.st.mark_size) else {
+        let Some(parts) = shape(name, self.st.plot.mark_size) else {
             self.warn(format!("plot mark '{name}' not supported: no marks drawn"));
             return Ok(items);
         };
         let stroke = self.stroke();
-        let fill = Fill { paint: Paint::Solid(self.st.fill_paint_color()), opacity: self.st.fill_opacity, even_odd: false };
-        let mark_color = match self.st.mark_color.as_deref() {
+        let fill = Fill { paint: Paint::Solid(self.st.fill_paint_color()), opacity: self.st.paint.fill_opacity, even_odd: false };
+        let mark_color = match self.st.plot.mark_color.as_deref() {
             Some("none") => None,
             Some(c) => Some(self.color(c).unwrap_or(crate::color::Color::WHITE)),
             None => Some(crate::color::Color::WHITE),

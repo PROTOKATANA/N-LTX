@@ -27,8 +27,8 @@ impl Engine {
         self.st.node = Default::default();
         self.st.mode = Mode::default();
         self.st.pending = Transform::default();
-        self.st.pic_text = None;
-        self.st.quotes_in_pic = true;
+        self.st.pic.pic_text = None;
+        self.st.pic.quotes_in_pic = true;
         let r = self.pic_in_group(spec);
         self.end_group();
         r
@@ -36,8 +36,8 @@ impl Engine {
 
     fn pic_in_group(&mut self, spec: PicSpec) -> Result<(), Error> {
         self.process_keys(spec.options, Some("/tikz"))?;
-        self.st.quotes_in_pic = false;
-        self.st.pic_mode = std::mem::take(&mut self.st.mode);
+        self.st.pic.quotes_in_pic = false;
+        self.st.pic.pic_mode = std::mem::take(&mut self.st.mode);
         // placed like a node
         let mut linear = Transform::default();
         if self.st.node.transform_shape {
@@ -162,7 +162,7 @@ impl Engine {
                 format!("({sx},{sy}) arc [start angle={start}, end angle={end}, radius={r}]"),
             )
         };
-        let mode = self.st.pic_mode.clone();
+        let mode = self.st.pic.pic_mode.clone();
         if mode.fill || mode.pattern || mode.shade {
             self.begin_group();
             self.st.mode = Mode { draw: false, ..mode.clone() };
@@ -177,7 +177,7 @@ impl Engine {
             self.end_group();
             r?;
         }
-        if let Some((text, options)) = self.st.pic_text.take() {
+        if let Some((text, options)) = self.st.pic.pic_text.take() {
             let distance = eccentricity * radius * if right { std::f64::consts::SQRT_2 } else { 1.0 };
             let at = polar(0.5 * start + 0.5 * end, distance);
             let items = self.node(super::nodes::NodeSpec {

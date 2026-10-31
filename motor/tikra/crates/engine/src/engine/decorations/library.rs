@@ -1478,7 +1478,7 @@ impl<'a> Run<'a> {
             other if other != "rectangle" => {
                 // any other shape: its background path at the size, from the node shapes, at its anchor
                 let boxes = [("text".to_string(), crate::engine::shapes::BoxSize::default())];
-                let (line_width, ex) = (self.e.st.line_width, 4.3 * PT);
+                let (line_width, ex) = (self.e.st.pen.line_width, 4.3 * PT);
                 let mut keys = crate::engine::nodes::EngineKeys(self.e);
                 let mut input = crate::engine::shapes::Input {
                     parts: &boxes,
@@ -1726,7 +1726,7 @@ impl<'a> Run<'a> {
         let label = self.char_label(&s, &format, math);
         let place = to_cm(&shifted(t, -0.5 * w, 0.0));
         // as \pgfqboxsynced, the box does not count in the picture's size
-        self.e.canvas.push(Item::Text { label, place, opacity: self.e.st.text_opacity });
+        self.e.canvas.push(Item::Text { label, place, opacity: self.e.st.paint.text_opacity });
     }
 }
 

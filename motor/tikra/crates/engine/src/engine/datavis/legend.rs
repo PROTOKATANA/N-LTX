@@ -172,7 +172,7 @@ impl Engine {
 
     /// The marks at the points (`\tikra@dv@marks`: `solid`, then `every mark`).
     fn draw_marks(&mut self, positions: &[Option<Point>]) -> Result<(), Error> {
-        if self.st.plot_mark.is_none() {
+        if self.st.plot.plot_mark.is_none() {
             return Ok(());
         }
         self.begin_group();

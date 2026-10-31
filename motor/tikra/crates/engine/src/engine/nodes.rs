@@ -265,7 +265,7 @@ impl shapes::Keys for EngineKeys<'_> {
             return BoxSize::default();
         }
         let mut warnings = Vec::new();
-        let l = label::compose_label(text.trim(), &self.0.st.font, None, 'c', self.0.st.text_paint_color(), &mut warnings);
+        let l = label::compose_label(text.trim(), &self.0.st.text.font, None, 'c', self.0.st.text_paint_color(), &mut warnings);
         BoxSize { wd: l.width(), ht: l.height(), dp: l.depth() }
     }
 
@@ -410,12 +410,12 @@ impl Engine {
         self.st.node = NodeSetup { transform_shape: self.st.node.transform_shape, ..NodeSetup::default() };
         self.st.mode = Default::default();
         self.st.pending = Transform::default();
-        self.st.on_chain = None;
-        self.st.pending_joins.clear();
+        self.st.chain.on_chain = None;
+        self.st.chain.pending_joins.clear();
         self.st.after_node_path.clear();
         self.st.aliases.clear();
-        self.st.start_arrow = None;
-        self.st.end_arrow = None;
+        self.st.pen.start_arrow = None;
+        self.st.pen.end_arrow = None;
         // a node's background is decorated, and has actions, by its own options only
         let outer = self.st.clone();
         self.st.decorate = false;
@@ -699,7 +699,7 @@ impl Engine {
             _ => 'c',
         };
         let color = self.st.text_paint_color();
-        let font = self.st.font.clone();
+        let font = self.st.text.font.clone();
         let mut labels: Vec<(String, Option<Label>)> = Vec::new();
         let mut boxes: Vec<(String, BoxSize)> = Vec::new();
         // a text that is a shading (`\pgfuseshading{name}`): its box, drawn where the text goes
@@ -752,7 +752,7 @@ impl Engine {
                 self.begin_group();
                 let r = self.process_keys(tikra_tokens(&format!("every {part} node part/.try")), Some("/tikz"));
                 let (font, color) =
-                    if self.st.font != font || self.st.text_paint_color() != color { (self.st.font.clone(), self.st.text_paint_color()) } else { (font.clone(), color) };
+                    if self.st.text.font != font || self.st.text_paint_color() != color { (self.st.text.font.clone(), self.st.text_paint_color()) } else { (font.clone(), color) };
                 self.end_group();
                 r?;
                 // a text that is all `\textcolor{color}{…}` is in that color
@@ -810,11 +810,11 @@ impl Engine {
         let ysep = self.key_length("/pgf/inner ysep", 0.3333 * 0.3515);
         let min_w = self.key_length("/pgf/minimum width", PT);
         let min_h = self.key_length("/pgf/minimum height", PT);
-        let ox = self.key_length("/pgf/outer xsep", 0.5 * self.st.line_width);
-        let oy = self.key_length("/pgf/outer ysep", 0.5 * self.st.line_width);
+        let ox = self.key_length("/pgf/outer xsep", 0.5 * self.st.pen.line_width);
+        let oy = self.key_length("/pgf/outer ysep", 0.5 * self.st.pen.line_width);
         let aspect = self.key_text("/pgf/aspect").trim().parse::<f64>().ok().filter(|a| *a > 0.0).unwrap_or(1.0);
-        let ex = 0.43 * self.st.font_size * PT;
-        let line_width = self.st.line_width;
+        let ex = 0.43 * self.st.text.font_size * PT;
+        let line_width = self.st.pen.line_width;
         let compute = |e: &mut Engine, pointer: Option<Point>| {
             let mut keys = EngineKeys(e);
             let mut input = shapes::Input {
@@ -994,16 +994,16 @@ impl Engine {
         let background: Vec<Segment> =
             g.paths.iter().filter(|p| p.layer == Layer::Background && matches!(p.usage, Usage::Node)).flat_map(|p| transform_segments(&p.segments, &t)).collect();
         let node_fill = if self.st.mode.shade && !background.is_empty() {
-            Some(Fill { paint: Paint::Shading(self.shading_of(&background)), opacity: self.st.fill_opacity, even_odd: self.st.even_odd })
+            Some(Fill { paint: Paint::Shading(self.shading_of(&background)), opacity: self.st.paint.fill_opacity, even_odd: self.st.paint.even_odd })
         } else if self.st.mode.fill {
-            Some(Fill { paint: Paint::Solid(self.st.fill_paint_color()), opacity: self.st.fill_opacity, even_odd: self.st.even_odd })
+            Some(Fill { paint: Paint::Solid(self.st.fill_paint_color()), opacity: self.st.paint.fill_opacity, even_odd: self.st.paint.even_odd })
         } else if self.st.mode.pattern {
             Some(Fill {
                 paint: {
-                    let (name, color) = (self.st.pattern_name.clone().unwrap_or_default(), self.st.pattern_color.unwrap_or(crate::color::Color::BLACK));
+                    let (name, color) = (self.st.paint.pattern_name.clone().unwrap_or_default(), self.st.paint.pattern_color.unwrap_or(crate::color::Color::BLACK));
                     self.pattern_paint(&name, color).unwrap_or(Paint::Pattern { name, color })
                 },
-                opacity: self.st.fill_opacity,
+                opacity: self.st.paint.fill_opacity,
                 even_odd: false,
             })
         } else {
@@ -1013,13 +1013,17 @@ impl Engine {
         let layer_items = |e: &mut Engine, layers: &[Layer], items: &mut Vec<Item>| -> Result<(), Error> {
             for p in g.paths.iter().filter(|p| layers.contains(&p.layer)) {
                 let mut segs = p.segments.clone();
-                if p.layer == Layer::Background && g.roundable && (e.st.rounded != 0.0 || e.st.rounded_out != 0.0) {
-                    segs = super::output::round_corners(&segs, e.st.rounded, e.st.rounded_out);
+                if p.layer == Layer::Background && g.roundable && (e.st.pen.rounded != 0.0 || e.st.pen.rounded_out != 0.0) {
+                    segs = super::output::round_corners(&segs, e.st.pen.rounded, e.st.pen.rounded_out);
                 }
                 let segs = transform_segments(&segs, &t);
                 if matches!(p.usage, Usage::Node)
                     && p.layer == Layer::Background
-                    && (e.st.decorate || e.st.mode.picture.is_some() || !e.st.preactions.is_empty() || !e.st.postactions.is_empty() || (e.st.double.is_some() && e.st.mode.draw))
+                    && (e.st.decorate
+                        || e.st.mode.picture.is_some()
+                        || !e.st.preactions.is_empty()
+                        || !e.st.postactions.is_empty()
+                        || (e.st.pen.double.is_some() && e.st.mode.draw))
                 {
                     // the background as a path of its own, decorated, with its actions, or double
                     let saved = std::mem::take(&mut e.canvas.items);
@@ -1032,11 +1036,11 @@ impl Engine {
                     Usage::Node => (node_fill.clone(), node_stroke.clone()),
                     Usage::Fill(c) => {
                         let color = e.color(c).unwrap_or(crate::color::Color::WHITE);
-                        (Some(Fill { paint: Paint::Solid(color), opacity: e.st.fill_opacity, even_odd: false }), None)
+                        (Some(Fill { paint: Paint::Solid(color), opacity: e.st.paint.fill_opacity, even_odd: false }), None)
                     }
                     Usage::Stroke => (None, Some(e.stroke())),
                     Usage::TipStroke(cap, join) => (None, Some(crate::canvas::Stroke { cap: *cap, join: *join, ..e.stroke() })),
-                    Usage::LineFill => (Some(Fill { paint: Paint::Solid(e.st.stroke_color()), opacity: e.st.fill_opacity, even_odd: false }), None),
+                    Usage::LineFill => (Some(Fill { paint: Paint::Solid(e.st.stroke_color()), opacity: e.st.paint.fill_opacity, even_odd: false }), None),
                     Usage::Library { paint, color, dash, cap, opacity: own_opacity } => {
                         let own = color.as_deref().and_then(|c| {
                             let found = e.color(c);
@@ -1045,7 +1049,7 @@ impl Engine {
                             }
                             found
                         });
-                        let opacity = own_opacity.unwrap_or(e.st.fill_opacity);
+                        let opacity = own_opacity.unwrap_or(e.st.paint.fill_opacity);
                         let solid = |c: crate::color::Color| Fill { paint: Paint::Solid(c), opacity, even_odd: false };
                         match paint {
                             ShapePaint::Stroke(w) => {
@@ -1112,7 +1116,7 @@ impl Engine {
                 _ => 0.0,
             };
             let place = t.compose(&Transform::translation(origin.x + offset, origin.y));
-            items.push(Item::Text { label: l, place, opacity: self.st.text_opacity });
+            items.push(Item::Text { label: l, place, opacity: self.st.paint.text_opacity });
         }
         for st in &g.texts {
             let (text, own) = self.shape_text(&st.tex);
@@ -1122,7 +1126,7 @@ impl Engine {
             }
             let mut warnings = Vec::new();
             let text = self.inline_colors(text.trim());
-            let font = st.font.clone().unwrap_or_else(|| self.st.font.clone());
+            let font = st.font.clone().unwrap_or_else(|| self.st.text.font.clone());
             let l = label::compose_label(&text, &font, None, 'c', color, &mut warnings);
             for w in warnings {
                 self.warn(w);
@@ -1148,7 +1152,7 @@ impl Engine {
                     self.canvas.include(place.apply(Point::new(x, y)));
                 }
             }
-            items.push(Item::Text { label: l, place, opacity: self.st.text_opacity });
+            items.push(Item::Text { label: l, place, opacity: self.st.paint.text_opacity });
         }
         layer_items(self, &[Layer::BehindForeground, Layer::Foreground, Layer::BeforeForeground], &mut items)?;
         Ok(items)
@@ -1332,12 +1336,12 @@ impl Engine {
     pub fn stroke(&self) -> Stroke {
         Stroke {
             color: self.st.stroke_color(),
-            width: self.st.line_width,
-            dash: self.st.dash.clone().filter(|d| !d.0.is_empty()),
-            cap: self.st.cap,
-            join: self.st.join,
-            miter_limit: self.st.miter_limit,
-            opacity: self.st.draw_opacity,
+            width: self.st.pen.line_width,
+            dash: self.st.pen.dash.clone().filter(|d| !d.0.is_empty()),
+            cap: self.st.pen.cap,
+            join: self.st.pen.join,
+            miter_limit: self.st.pen.miter_limit,
+            opacity: self.st.paint.draw_opacity,
         }
     }
 }

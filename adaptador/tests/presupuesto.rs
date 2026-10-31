@@ -88,5 +88,5 @@ fn un_trazo_no_vuelve_a_copiar() {
     );
 }
 
-const TOPE_MACROS: u64 = 235;
-const TOPE_TRAZO: u64 = 185;
+const TOPE_MACROS: u64 = 220;
+const TOPE_TRAZO: u64 = 170;

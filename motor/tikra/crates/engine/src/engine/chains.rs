@@ -66,15 +66,15 @@ impl Engine {
     pub fn start_chain(&mut self, spec: &str) {
         let (name, direction) = parse(spec);
         let name = if name.is_empty() { "chain".to_string() } else { name };
-        let direction = direction.unwrap_or_else(|| self.st.chain_direction.clone());
+        let direction = direction.unwrap_or_else(|| self.st.chain.chain_direction.clone());
         self.chain_list.insert(name.clone(), Chain { count: 0, direction, start: String::new() });
-        self.st.current_chain = name;
+        self.st.chain.current_chain = name;
     }
 
     /// `start branch=spec`: the chain `current/name`, starting at the current chain's last node.
     pub fn start_branch(&mut self, spec: &str) {
         let (name, direction) = parse(spec);
-        let parent = self.st.current_chain.clone();
+        let parent = self.st.chain.current_chain.clone();
         let Some(p) = self.chain_list.get(&parent) else {
             self.warn(format!("start branch: no chain to branch from ('{parent}')"));
             return;
@@ -83,20 +83,20 @@ impl Engine {
         let direction = direction.unwrap_or_else(|| p.direction.clone());
         let name = format!("{parent}/{name}");
         self.chain_list.insert(name.clone(), Chain { count: 0, direction, start });
-        self.st.current_chain = name;
+        self.st.chain.current_chain = name;
     }
 
     /// `continue branch=spec`: the branch `current/name` made current again.
     pub fn continue_branch(&mut self, spec: &str) {
         let (name, direction) = parse(spec);
-        let name = format!("{}/{name}", self.st.current_chain);
+        let name = format!("{}/{name}", self.st.chain.current_chain);
         self.make_current(name, direction, "continue branch");
     }
 
     /// `continue chain=spec`: an existing chain made current again, its direction maybe changed.
     pub fn continue_chain(&mut self, spec: &str) {
         let (name, direction) = parse(spec);
-        let name = if name.is_empty() { self.st.current_chain.clone() } else { name };
+        let name = if name.is_empty() { self.st.chain.current_chain.clone() } else { name };
         self.make_current(name, direction, "continue chain");
     }
 
@@ -107,7 +107,7 @@ impl Engine {
                 if let Some(d) = direction {
                     c.direction = d;
                 }
-                self.st.current_chain = name;
+                self.st.chain.current_chain = name;
             }
             None => self.warn(format!("{key}: unknown chain '{name}'")),
         }
@@ -116,7 +116,7 @@ impl Engine {
     /// `chain default direction=going below`.
     pub fn chain_default_direction(&mut self, spec: &str) {
         if let (_, Some(d)) = parse(spec) {
-            self.st.chain_direction = d;
+            self.st.chain.chain_direction = d;
         }
     }
 
@@ -124,7 +124,7 @@ impl Engine {
     /// options are read, as `\tikz@lib@chain@last@found` does).
     pub fn on_chain(&mut self, spec: &str) -> Result<(), Error> {
         let (name, direction) = parse(spec);
-        let name = if name.is_empty() { self.st.current_chain.clone() } else { name };
+        let name = if name.is_empty() { self.st.chain.current_chain.clone() } else { name };
         let Some(chain) = self.chain_list.get(&name).cloned() else {
             self.warn(format!("on chain: unknown chain '{name}'"));
             return Ok(());
@@ -133,7 +133,7 @@ impl Engine {
         self.tex.define_string("tikzchainprevious", &previous, true);
         self.tex.define_string("tikzchaincount", &(chain.count + 1).to_string(), true);
         self.place_on_chain(direction.as_ref().unwrap_or(&chain.direction), &previous)?;
-        self.st.on_chain = Some(OnChain { chain: name, direction, joins: Vec::new() });
+        self.st.chain.on_chain = Some(OnChain { chain: name, direction, joins: Vec::new() });
         Ok(())
     }
 
@@ -163,17 +163,17 @@ impl Engine {
         };
         // `by {skip loop=-11mm,tip}`: the braces only group the options
         let by = crate::keys::strip_braces(&by).to_string();
-        match self.st.on_chain.as_mut() {
+        match self.st.chain.on_chain.as_mut() {
             Some(c) => c.joins.push((with, by)),
-            None => self.st.pending_joins.push((with, by)),
+            None => self.st.chain.pending_joins.push((with, by)),
         }
     }
 
     /// The node's options are read: it becomes the chain's next node. Returns its names on the
     /// chain and the edges of its joins (a path to run after it).
     pub fn chain_node_found(&mut self) -> Result<(Vec<String>, Vec<Token>), Error> {
-        let Some(mut on) = self.st.on_chain.take() else { return Ok((Vec::new(), Vec::new())) };
-        on.joins.splice(0..0, std::mem::take(&mut self.st.pending_joins));
+        let Some(mut on) = self.st.chain.on_chain.take() else { return Ok((Vec::new(), Vec::new())) };
+        on.joins.splice(0..0, std::mem::take(&mut self.st.chain.pending_joins));
         let Some(chain) = self.chain_list.get_mut(&on.chain) else { return Ok((Vec::new(), Vec::new())) };
         let previous = chain.previous(&on.chain);
         chain.count += 1;
@@ -190,9 +190,9 @@ impl Engine {
         self.place_on_chain(&direction, &previous)?;
         (self.st.transform, self.st.pending) = (transform, pending);
         // every on chain can join too
-        self.st.on_chain = Some(OnChain { joins: Vec::new(), ..on.clone() });
+        self.st.chain.on_chain = Some(OnChain { joins: Vec::new(), ..on.clone() });
         self.process_keys(tikra_tokens("every on chain/.try"), Some("/tikz"))?;
-        if let Some(more) = self.st.on_chain.take() {
+        if let Some(more) = self.st.chain.on_chain.take() {
             on.joins.extend(more.joins);
         }
         let mut path = Vec::new();

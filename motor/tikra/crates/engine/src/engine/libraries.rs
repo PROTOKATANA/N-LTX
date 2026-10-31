@@ -40,7 +40,7 @@ keyfn!(k_prefix_after_command, |e, v| {
 // macro transforms the coordinate system from the parent, knowing `\tikznumberofchildren` and
 // `\tikznumberofcurrentchild`
 keyfn!(k_growth_function, |e, v| {
-    e.st.growth_function = v.filter(|v| !crate::keys::trim(v).is_empty());
+    e.st.tree.growth_function = v.filter(|v| !crate::keys::trim(v).is_empty());
     Ok(())
 });
 

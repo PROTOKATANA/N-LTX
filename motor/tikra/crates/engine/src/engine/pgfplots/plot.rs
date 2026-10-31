@@ -596,12 +596,12 @@ fn sample_points(e: &mut Engine, domain_key: &str, samples_key: &str, log: bool)
     let d = keys::value(e, domain_key);
     let d = if d.is_empty() { keys::value(e, "/pgfplots/domain") } else { d };
     let (a, b) = if d.is_empty() {
-        e.st.domain
+        e.st.plot.domain
     } else {
         let (a, b) = d.split_once(':').ok_or_else(|| Error::Figure(format!("domain '{d}' is not a:b")))?;
         (e.number(a)?, e.number(b)?)
     };
-    let n = keys::number(e, samples_key).or_else(|| keys::number(e, "/pgfplots/samples")).map_or(e.st.samples, |s| s.max(1.0) as usize).clamp(1, 10_000);
+    let n = keys::number(e, samples_key).or_else(|| keys::number(e, "/pgfplots/samples")).map_or(e.st.plot.samples, |s| s.max(1.0) as usize).clamp(1, 10_000);
     if n == 1 {
         return Ok(vec![a]);
     }
@@ -672,7 +672,7 @@ fn patch_unit_points(kind: &str) -> Option<Vec<(f64, f64)>> {
 
 /// Samples `(x(var), y(var)[, z(var, y)])`.
 fn sample(e: &mut Engine, parts: &[Vec<Token>], plot: &mut Plot) -> Result<Vec<Coord>, Error> {
-    let var = e.st.variable.clone();
+    let var = e.st.plot.variable.clone();
     let var_y = keys::value(e, "/pgfplots/variable y").trim_start_matches('\\').to_string();
     // the variables read as names in the expressions
     for (name, value) in [(var.as_str(), var.clone()), (var_y.as_str(), var_y.clone())] {
@@ -1734,7 +1734,7 @@ fn balanced(text: &str) -> String {
 /// `quiver`: each point's (u, v, w), from `quiver/u` and its friends (expressions of x, y, z and
 /// the sampling variable), times `scale arrows`.
 fn quiver_vectors(e: &mut Engine, plot: &mut Plot) {
-    let var = e.st.variable.clone();
+    let var = e.st.plot.variable.clone();
     let var_y = keys::value(e, "/pgfplots/variable y").trim_start_matches('\\').to_string();
     let texts: Vec<Option<String>> = ["u", "v", "w"].iter().map(|n| keys::value_tokens(e, &format!("/pgfplots/quiver/{n}")).and_then(|t| e.math_string(t).ok())).collect();
     let scale = keys::number(e, "/pgfplots/quiver/scale arrows").unwrap_or(1.0);

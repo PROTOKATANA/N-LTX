@@ -276,15 +276,15 @@ impl Engine {
         }
         if value.is_none() {
             if let Some(c) = self.color(&name) {
-                self.st.color = c;
-                self.st.draw_color = None;
-                self.st.fill_color = None;
-                self.st.text_color = None;
+                self.st.paint.color = c;
+                self.st.paint.draw_color = None;
+                self.st.paint.fill_color = None;
+                self.st.paint.text_color = None;
                 return Ok(());
             }
-            if let Some((a, b)) = super::arrows::parse_arrows(&name, &self.st.tips) {
-                self.st.start_arrow = a;
-                self.st.end_arrow = b;
+            if let Some((a, b)) = super::arrows::parse_arrows(&name, &self.st.pen.tips) {
+                self.st.pen.start_arrow = a;
+                self.st.pen.end_arrow = b;
                 return Ok(());
             }
             if super::nodes::is_shape(&name) || self.user_shapes.contains_key(&name) {
@@ -320,8 +320,8 @@ impl Engine {
         }
         // `"text" above, red` is one key in a list only up to the comma: the rest are options
         let options = options.split_whitespace().collect::<Vec<_>>().join(" ");
-        if self.st.quotes_in_pic {
-            self.st.pic_text = Some((tikra_tokens(&text), tikra_tokens(&options)));
+        if self.st.pic.quotes_in_pic {
+            self.st.pic.pic_text = Some((tikra_tokens(&text), tikra_tokens(&options)));
         } else if self.st.quotes_on_path {
             let mut o = tikra_tokens("every edge quotes/.try,");
             o.extend(tikra_tokens(&options));
@@ -468,7 +468,7 @@ impl Engine {
                 // `name/.tip=spec`: \pgfdeclarearrow{name=name, means=spec}, the name being the last part of the path
                 let name = base.rsplit('/').next().unwrap_or(base).trim().to_string();
                 let means = tex::tokens_to_string(&v);
-                std::rc::Rc::make_mut(&mut self.st.tips).declare(&name, &means);
+                std::rc::Rc::make_mut(&mut self.st.pen.tips).declare(&name, &means);
             }
             ".default" => self.tex.set_meaning(&Token::cs(&macro_name(&format!("{base}/.@def"))), macro_tokens(v), false),
             ".initial" => self.tex.set_meaning(&Token::cs(&macro_name(base)), macro_tokens(v), false),
@@ -673,7 +673,7 @@ fn dash_from(e: &mut Engine, spec: &str) -> Result<Option<Vec<f64>>, Error> {
                 let w = words[i + 1];
                 let len = if w.contains("pgflinewidth") {
                     let f: f64 = w.replace("\\pgflinewidth", "").trim_end_matches('*').parse().unwrap_or(1.0);
-                    f * e.st.line_width
+                    f * e.st.pen.line_width
                 } else {
                     e.length(w)?
                 };
@@ -702,7 +702,7 @@ keyfn!(k_draw, |e, v| {
         c => {
             e.st.mode.draw = true;
             match e.color(c) {
-                Some(c) => e.st.draw_color = Some(c),
+                Some(c) => e.st.paint.draw_color = Some(c),
                 None => e.warn(format!("unknown color '{c}'")),
             }
         }
@@ -718,7 +718,7 @@ keyfn!(k_fill, |e, v| {
         c => {
             e.st.mode.fill = true;
             match e.color(c) {
-                Some(c) => e.st.fill_color = Some(c),
+                Some(c) => e.st.paint.fill_color = Some(c),
                 None => e.warn(format!("unknown color '{c}'")),
             }
         }
@@ -730,10 +730,10 @@ keyfn!(k_color, |e, v| {
     let s = text(e, &v)?;
     match e.color(&s) {
         Some(c) => {
-            e.st.color = c;
-            e.st.draw_color = None;
-            e.st.fill_color = None;
-            e.st.text_color = None;
+            e.st.paint.color = c;
+            e.st.paint.draw_color = None;
+            e.st.paint.fill_color = None;
+            e.st.paint.text_color = None;
         }
         None => e.warn(format!("unknown color '{s}'")),
     }
@@ -743,7 +743,7 @@ keyfn!(k_color, |e, v| {
 keyfn!(k_text, |e, v| {
     let s = text(e, &v)?;
     match e.color(&s) {
-        Some(c) => e.st.text_color = Some(c),
+        Some(c) => e.st.paint.text_color = Some(c),
         None => e.warn(format!("unknown color '{s}'")),
     }
     Ok(())
@@ -767,19 +767,19 @@ keyfn!(k_shade, |e, _v| {
 keyfn!(k_pattern, |e, v| {
     let s = text(e, &v)?;
     e.st.mode.pattern = true;
-    e.st.pattern_name = Some(if s.is_empty() { "north east lines".into() } else { s });
+    e.st.paint.pattern_name = Some(if s.is_empty() { "north east lines".into() } else { s });
     Ok(())
 });
 
 keyfn!(k_pattern_color, |e, v| {
     let s = text(e, &v)?;
-    e.st.pattern_color = e.color(&s);
+    e.st.paint.pattern_color = e.color(&s);
     Ok(())
 });
 
 keyfn!(k_line_width, |e, v| {
     if let Some(w) = length(e, &v)? {
-        e.st.line_width = w;
+        e.st.pen.line_width = w;
         // \pgflinewidth follows
         let sp = (w / PT * 65536.0).round() as i64;
         if let Meaning::Dimen(r) = e.tex.meaning_of("pgflinewidth") {
@@ -792,17 +792,17 @@ keyfn!(k_line_width, |e, v| {
 keyfn!(k_dash_pattern, |e, v| {
     let s = text(e, &v)?;
     let d = dash_from(e, &s)?;
-    let phase = e.st.dash.as_ref().map_or(0.0, |d| d.1);
-    e.st.dash = d.map(|d| (d, phase));
+    let phase = e.st.pen.dash.as_ref().map_or(0.0, |d| d.1);
+    e.st.pen.dash = d.map(|d| (d, phase));
     Ok(())
 });
 
 keyfn!(k_dash_phase, |e, v| {
     let p = length(e, &v)?.unwrap_or(0.0);
-    if let Some(d) = &mut e.st.dash {
+    if let Some(d) = &mut e.st.pen.dash {
         d.1 = p;
     } else {
-        e.st.dash = Some((Vec::new(), p));
+        e.st.pen.dash = Some((Vec::new(), p));
     }
     Ok(())
 });
@@ -811,24 +811,24 @@ keyfn!(k_dash, |e, v| {
     // dash=on 2pt off 1pt phase 1pt
     let s = text(e, &v)?;
     if s == "solid" {
-        e.st.dash = None;
+        e.st.pen.dash = None;
         return Ok(());
     }
     let (pattern, phase) = match s.split_once("phase") {
         Some((a, b)) => (a.to_string(), e.length(b.trim())?),
         None => (s.clone(), 0.0),
     };
-    e.st.dash = dash_from(e, &pattern)?.map(|d| (d, phase));
+    e.st.pen.dash = dash_from(e, &pattern)?.map(|d| (d, phase));
     Ok(())
 });
 
 keyfn!(k_solid, |e, _v| {
-    e.st.dash = None;
+    e.st.pen.dash = None;
     Ok(())
 });
 
 keyfn!(k_line_cap, |e, v| {
-    e.st.cap = match text(e, &v)?.as_str() {
+    e.st.pen.cap = match text(e, &v)?.as_str() {
         "round" => Cap::Round,
         "rect" => Cap::Square,
         _ => Cap::Butt,
@@ -837,7 +837,7 @@ keyfn!(k_line_cap, |e, v| {
 });
 
 keyfn!(k_line_join, |e, v| {
-    e.st.join = match text(e, &v)?.as_str() {
+    e.st.pen.join = match text(e, &v)?.as_str() {
         "round" => Join::Round,
         "bevel" => Join::Bevel,
         _ => Join::Miter,
@@ -847,62 +847,62 @@ keyfn!(k_line_join, |e, v| {
 
 keyfn!(k_miter_limit, |e, v| {
     if let Some(m) = number(e, &v)? {
-        e.st.miter_limit = m;
+        e.st.pen.miter_limit = m;
     }
     Ok(())
 });
 
 keyfn!(k_opacity, |e, v| {
     let o = number(e, &v)?.unwrap_or(1.0);
-    e.st.draw_opacity = o;
-    e.st.fill_opacity = o;
-    e.st.text_opacity = o;
+    e.st.paint.draw_opacity = o;
+    e.st.paint.fill_opacity = o;
+    e.st.paint.text_opacity = o;
     Ok(())
 });
 
 keyfn!(k_draw_opacity, |e, v| {
-    e.st.draw_opacity = number(e, &v)?.unwrap_or(1.0);
+    e.st.paint.draw_opacity = number(e, &v)?.unwrap_or(1.0);
     Ok(())
 });
 
 keyfn!(k_fill_opacity, |e, v| {
-    e.st.fill_opacity = number(e, &v)?.unwrap_or(1.0);
+    e.st.paint.fill_opacity = number(e, &v)?.unwrap_or(1.0);
     Ok(())
 });
 
 keyfn!(k_text_opacity, |e, v| {
-    e.st.text_opacity = number(e, &v)?.unwrap_or(1.0);
+    e.st.paint.text_opacity = number(e, &v)?.unwrap_or(1.0);
     Ok(())
 });
 
 keyfn!(k_even_odd, |e, _v| {
-    e.st.even_odd = true;
+    e.st.paint.even_odd = true;
     Ok(())
 });
 
 keyfn!(k_nonzero, |e, _v| {
-    e.st.even_odd = false;
+    e.st.paint.even_odd = false;
     Ok(())
 });
 
 keyfn!(k_rounded, |e, v| {
-    e.st.rounded = length(e, &v)?.unwrap_or(4.0 * PT);
-    e.st.rounded_out = e.st.rounded;
+    e.st.pen.rounded = length(e, &v)?.unwrap_or(4.0 * PT);
+    e.st.pen.rounded_out = e.st.pen.rounded;
     Ok(())
 });
 
 keyfn!(k_sharp, |e, _v| {
-    e.st.rounded = 0.0;
-    e.st.rounded_out = 0.0;
+    e.st.pen.rounded = 0.0;
+    e.st.pen.rounded_out = 0.0;
     Ok(())
 });
 
 keyfn!(k_arrows, |e, v| {
     let s = text(e, &v)?;
-    match super::arrows::parse_arrows(&s, &e.st.tips) {
+    match super::arrows::parse_arrows(&s, &e.st.pen.tips) {
         Some((a, b)) => {
-            e.st.start_arrow = a;
-            e.st.end_arrow = b;
+            e.st.pen.start_arrow = a;
+            e.st.pen.end_arrow = b;
         }
         None => e.warn(format!("arrow specification '{s}' not supported: ignored")),
     }
@@ -916,52 +916,52 @@ keyfn!(k_default_arrow, |e, v| {
     }
     // TikZ's `>`: `\pgfdeclarearrow{name=<->, means=…}`
     let s = text(e, &v)?;
-    std::rc::Rc::make_mut(&mut e.st.tips).declare("<->", &s);
+    std::rc::Rc::make_mut(&mut e.st.pen.tips).declare("<->", &s);
     Ok(())
 });
 
 keyfn!(k_tips, |e, v| {
     let s = text(e, &v)?;
     match super::arrows::TipsMode::from_name(&s) {
-        Some(m) => e.st.tips_mode = m,
+        Some(m) => e.st.pen.tips_mode = m,
         None => e.warn(format!("tips={s} not supported: ignored")),
     }
     Ok(())
 });
 
 keyfn!(k_shorten_end, |e, v| {
-    e.st.shorten_end = length(e, &v)?.unwrap_or(0.0);
+    e.st.pen.shorten_end = length(e, &v)?.unwrap_or(0.0);
     Ok(())
 });
 
 keyfn!(k_shorten_start, |e, v| {
-    e.st.shorten_start = length(e, &v)?.unwrap_or(0.0);
+    e.st.pen.shorten_start = length(e, &v)?.unwrap_or(0.0);
     Ok(())
 });
 
 keyfn!(k_double, |e, v| {
     let s = text(e, &v)?;
     if s == "none" {
-        e.st.double = None;
+        e.st.pen.double = None;
         return Ok(());
     }
-    e.st.double = Some(if s.is_empty() { crate::color::Color::WHITE } else { e.color(&s).unwrap_or(crate::color::Color::WHITE) });
+    e.st.pen.double = Some(if s.is_empty() { crate::color::Color::WHITE } else { e.color(&s).unwrap_or(crate::color::Color::WHITE) });
     Ok(())
 });
 
 keyfn!(k_double_distance, |e, v| {
-    e.st.double_distance = length(e, &v)?.unwrap_or(0.6 * PT);
-    if e.st.double.is_none() {
-        e.st.double = Some(crate::color::Color::WHITE);
+    e.st.pen.double_distance = length(e, &v)?.unwrap_or(0.6 * PT);
+    if e.st.pen.double.is_none() {
+        e.st.pen.double = Some(crate::color::Color::WHITE);
     }
     Ok(())
 });
 
 // the distance between the two lines' centers: the gap is that less one line width
 keyfn!(k_double_distance_centers, |e, v| {
-    e.st.double_distance = (length(e, &v)?.unwrap_or(0.6 * PT) - e.st.line_width).max(0.0);
-    if e.st.double.is_none() {
-        e.st.double = Some(crate::color::Color::WHITE);
+    e.st.pen.double_distance = (length(e, &v)?.unwrap_or(0.6 * PT) - e.st.pen.line_width).max(0.0);
+    if e.st.pen.double.is_none() {
+        e.st.pen.double = Some(crate::color::Color::WHITE);
     }
     Ok(())
 });
@@ -1162,16 +1162,16 @@ keyfn!(k_font, |e, v| {
     // `font=` replaces the font of the nodes (`\tikz@textfont`), and the fonts selected around
     // the picture stay: what came before the last `font=` is kept, the rest replaced
     const MARK: &str = "\\tikz@textfont ";
-    let around = e.st.font.find(MARK).map_or(e.st.font.as_str(), |i| &e.st.font[..i]).to_string();
-    e.st.font = format!("{around}{MARK}{s}");
-    e.st.font_size = 10.0 * crate::label::font_size(&e.st.font);
+    let around = e.st.text.font.find(MARK).map_or(e.st.text.font.as_str(), |i| &e.st.text.font[..i]).to_string();
+    e.st.text.font = format!("{around}{MARK}{s}");
+    e.st.text.font_size = 10.0 * crate::label::font_size(&e.st.text.font);
     Ok(())
 });
 
 // `node font`: also the font of the node's dimensions (`minimum height=3em`)
 keyfn!(k_node_font, |e, v| {
     k_font(e, v)?;
-    e.st.ambient_size = e.st.font_size;
+    e.st.text.ambient_size = e.st.text.font_size;
     Ok(())
 });
 
@@ -1770,33 +1770,33 @@ keyfn!(k_step, |e, v| {
         let p = e.coordinate(s.trim_start_matches('(').trim_end_matches(')'))?.p;
         let inv = e.st.transform.inverse();
         let d = inv.apply(p);
-        e.st.grid_step = (d.x.abs(), d.y.abs());
+        e.st.plot.grid_step = (d.x.abs(), d.y.abs());
     } else {
-        e.st.grid_step = (grid_step(e, &v, 0)?, grid_step(e, &v, 1)?);
+        e.st.plot.grid_step = (grid_step(e, &v, 0)?, grid_step(e, &v, 1)?);
     }
     Ok(())
 });
 keyfn!(k_xstep, |e, v| {
-    e.st.grid_step.0 = grid_step(e, &v, 0)?;
+    e.st.plot.grid_step.0 = grid_step(e, &v, 0)?;
     Ok(())
 });
 keyfn!(k_ystep, |e, v| {
-    e.st.grid_step.1 = grid_step(e, &v, 1)?;
+    e.st.plot.grid_step.1 = grid_step(e, &v, 1)?;
     Ok(())
 });
 
 keyfn!(k_domain, |e, v| {
     let s = text(e, &v)?;
     if let Some((a, b)) = s.split_once(':') {
-        e.st.domain = (e.number(a)?, e.number(b)?);
+        e.st.plot.domain = (e.number(a)?, e.number(b)?);
     }
     // `domain` and `samples` replace a `samples at` given before them, as in TeX
-    e.st.samples_at = None;
+    e.st.plot.samples_at = None;
     Ok(())
 });
 keyfn!(k_samples, |e, v| {
-    e.st.samples = number(e, &v)?.map_or(25, |s| s.max(2.0) as usize).min(2000);
-    e.st.samples_at = None;
+    e.st.plot.samples = number(e, &v)?.map_or(25, |s| s.max(2.0) as usize).min(2000);
+    e.st.plot.samples_at = None;
     Ok(())
 });
 // `samples at={…}`: a `\foreach` list of the values, `...` ranges included
@@ -1807,42 +1807,42 @@ keyfn!(k_samples_at, |e, v| {
         let s = e.tex.expand_to_string(item)?;
         out.push(e.number(&s)?);
     }
-    e.st.samples_at = Some(out);
+    e.st.plot.samples_at = Some(out);
     Ok(())
 });
 keyfn!(k_variable, |e, v| {
     let s = text(e, &v)?;
-    e.st.variable = s.trim().trim_start_matches('\\').to_string();
+    e.st.plot.variable = s.trim().trim_start_matches('\\').to_string();
     Ok(())
 });
 // the plot handlers named by their key (pgfplots' keys set the others)
 fn plot_handler(e: &mut Engine, name: &str) -> Result<(), Error> {
-    e.st.plot_handler = name.into();
+    e.st.plot.plot_handler = name.into();
     Ok(())
 }
 keyfn!(k_smooth_cycle, |e, _v| plot_handler(e, "smooth cycle"));
 keyfn!(k_sharp_cycle, |e, _v| plot_handler(e, "sharp cycle"));
 keyfn!(k_tension, |e, v| {
-    e.st.tension = number(e, &v)?.unwrap_or(0.55);
+    e.st.plot.tension = number(e, &v)?.unwrap_or(0.55);
     Ok(())
 });
 keyfn!(k_mark, |e, v| {
     let s = text(e, &v)?;
-    e.st.plot_mark = if s == "none" || s.is_empty() { None } else { Some(s) };
+    e.st.plot.plot_mark = if s == "none" || s.is_empty() { None } else { Some(s) };
     Ok(())
 });
 keyfn!(k_mark_size, |e, v| {
     if let Some(d) = length(e, &v)? {
-        e.st.mark_size = d;
+        e.st.plot.mark_size = d;
     }
     Ok(())
 });
 keyfn!(k_mark_repeat, |e, v| {
-    e.st.mark_repeat = number(e, &v)?.unwrap_or(1.0).max(1.0) as usize;
+    e.st.plot.mark_repeat = number(e, &v)?.unwrap_or(1.0).max(1.0) as usize;
     Ok(())
 });
 keyfn!(k_mark_phase, |e, v| {
-    e.st.mark_phase = number(e, &v)?.unwrap_or(1.0).max(0.0) as usize;
+    e.st.plot.mark_phase = number(e, &v)?.unwrap_or(1.0).max(0.0) as usize;
     Ok(())
 });
 keyfn!(k_mark_indices, |e, v| {
@@ -1853,16 +1853,16 @@ keyfn!(k_mark_indices, |e, v| {
             out.push(n as usize);
         }
     }
-    e.st.mark_indices = if out.is_empty() { None } else { Some(out) };
+    e.st.plot.mark_indices = if out.is_empty() { None } else { Some(out) };
     Ok(())
 });
 keyfn!(k_mark_color, |e, v| {
     let s = text(e, &v)?;
-    e.st.mark_color = if s.is_empty() { None } else { Some(s) };
+    e.st.plot.mark_color = if s.is_empty() { None } else { Some(s) };
     Ok(())
 });
 keyfn!(k_only_marks, |e, _v| {
-    e.st.only_marks = true;
+    e.st.plot.only_marks = true;
     Ok(())
 });
 
@@ -1941,24 +1941,24 @@ keyfn!(k_name_path, |e, v| {
 keyfn!(k_name_intersections, |e, v| super::intersections::name_intersections(e, v));
 
 keyfn!(k_at_begin_scope, |e, v| {
-    e.st.at_begin_scope.extend(v.unwrap_or_default());
+    e.st.hooks.at_begin_scope.extend(v.unwrap_or_default());
     Ok(())
 });
 keyfn!(k_at_end_scope, |e, v| {
-    e.st.at_end_scope.extend(v.unwrap_or_default());
+    e.st.hooks.at_end_scope.extend(v.unwrap_or_default());
     Ok(())
 });
 keyfn!(k_at_begin_picture, |e, v| {
-    e.st.at_begin_picture.extend(v.unwrap_or_default());
+    e.st.hooks.at_begin_picture.extend(v.unwrap_or_default());
     Ok(())
 });
 keyfn!(k_at_end_picture, |e, v| {
-    e.st.at_end_picture.extend(v.unwrap_or_default());
+    e.st.hooks.at_end_picture.extend(v.unwrap_or_default());
     Ok(())
 });
 
 keyfn!(k_pic_actions, |e, _v| {
-    let p = e.st.pic_mode.clone();
+    let p = e.st.pic.pic_mode.clone();
     let m = &mut e.st.mode;
     m.draw |= p.draw;
     m.fill |= p.fill;
@@ -1969,12 +1969,12 @@ keyfn!(k_pic_actions, |e, _v| {
 });
 
 keyfn!(k_level_distance, |e, v| {
-    e.st.level_distance = length(e, &v)?.unwrap_or(1.5);
+    e.st.tree.level_distance = length(e, &v)?.unwrap_or(1.5);
     super::trees::set_distance_registers(e);
     Ok(())
 });
 keyfn!(k_sibling_distance, |e, v| {
-    e.st.sibling_distance = length(e, &v)?.unwrap_or(1.5);
+    e.st.tree.sibling_distance = length(e, &v)?.unwrap_or(1.5);
     super::trees::set_distance_registers(e);
     Ok(())
 });
@@ -1982,7 +1982,7 @@ keyfn!(k_sibling_distance, |e, v| {
 /// `grow=down`, `grow=30`, `grow'=…`: the direction of the tree; set in a child, it is that child's.
 fn set_grow(e: &mut Engine, v: &Option<Vec<Token>>, swapped: bool) -> Result<(), Error> {
     let s = text(e, v)?;
-    e.st.grow_angle = match s.as_str() {
+    e.st.tree.grow_angle = match s.as_str() {
         "down" | "south" => -90.0,
         "up" | "north" => 90.0,
         "left" | "west" => 180.0,
@@ -1993,9 +1993,9 @@ fn set_grow(e: &mut Engine, v: &Option<Vec<Token>>, swapped: bool) -> Result<(),
         "south west" => -135.0,
         other => e.number(other)?,
     };
-    e.st.grow_swapped = swapped;
-    e.st.growth_function = None;
-    e.st.special_level = Some(e.st.tree_level);
+    e.st.tree.grow_swapped = swapped;
+    e.st.tree.growth_function = None;
+    e.st.tree.special_level = Some(e.st.tree.tree_level);
     // the growth function is the direction's again (not `grow cyclic`'s)
     e.tex.define_string("tikra@growth", "", false);
     Ok(())
@@ -2003,25 +2003,25 @@ fn set_grow(e: &mut Engine, v: &Option<Vec<Token>>, swapped: bool) -> Result<(),
 keyfn!(k_grow, |e, v| set_grow(e, &v, false));
 keyfn!(k_grow_swapped, |e, v| set_grow(e, &v, true));
 keyfn!(k_missing, |e, v| {
-    e.st.child_missing = text(e, &v)? != "false";
+    e.st.tree.child_missing = text(e, &v)? != "false";
     Ok(())
 });
 keyfn!(k_growth_parent_anchor, |e, v| {
-    e.st.growth_anchor = text(e, &v)?;
+    e.st.tree.growth_anchor = text(e, &v)?;
     Ok(())
 });
 keyfn!(k_parent_anchor, |e, v| {
     let s = text(e, &v)?;
-    e.st.parent_anchor = if s == "border" || s.is_empty() { String::new() } else { format!(".{s}") };
+    e.st.tree.parent_anchor = if s == "border" || s.is_empty() { String::new() } else { format!(".{s}") };
     Ok(())
 });
 keyfn!(k_child_anchor, |e, v| {
     let s = text(e, &v)?;
-    e.st.child_anchor = if s == "border" || s.is_empty() { String::new() } else { format!(".{s}") };
+    e.st.tree.child_anchor = if s == "border" || s.is_empty() { String::new() } else { format!(".{s}") };
     Ok(())
 });
 keyfn!(k_edge_from_parent_path, |e, v| {
-    e.st.edge_from_parent_path = v;
+    e.st.tree.edge_from_parent_path = v;
     Ok(())
 });
 
@@ -2060,7 +2060,7 @@ fn mix(a: crate::color::Color, b: crate::color::Color) -> crate::color::Color {
     crate::color::Color::rgb((a.r + b.r) / 2.0, (a.g + b.g) / 2.0, (a.b + b.b) / 2.0)
 }
 keyfn!(k_shading, |e, v| {
-    e.st.shading = text(e, &v)?;
+    e.st.shade.shading = text(e, &v)?;
     e.st.mode.shade = true;
     Ok(())
 });
@@ -2074,7 +2074,7 @@ fn corner_color(e: &mut Engine, corner: &str, v: Option<Vec<Token>>) -> Result<(
         }
         None => e.warn(format!("{corner}: unknown color '{s}'")),
     }
-    e.st.shading = "bilinear interpolation".into();
+    e.st.shade.shading = "bilinear interpolation".into();
     e.st.mode.shade = true;
     Ok(())
 }
@@ -2083,7 +2083,7 @@ keyfn!(k_upper_right, |e, v| corner_color(e, "upper right", v));
 keyfn!(k_lower_left, |e, v| corner_color(e, "lower left", v));
 keyfn!(k_lower_right, |e, v| corner_color(e, "lower right", v));
 keyfn!(k_shading_angle, |e, v| {
-    e.st.shade_angle = number(e, &v)?.unwrap_or(0.0);
+    e.st.shade.shade_angle = number(e, &v)?.unwrap_or(0.0);
     e.st.mode.shade = true;
     Ok(())
 });
@@ -2091,13 +2091,13 @@ keyfn!(k_shading_angle, |e, v| {
 fn axis_color(e: &mut Engine, v: &Option<Vec<Token>>, top: bool, angle: f64) -> Result<(), Error> {
     let c = shade_color(e, v)?;
     if top {
-        e.st.axis_top = c;
+        e.st.shade.axis_top = c;
     } else {
-        e.st.axis_bottom = c;
+        e.st.shade.axis_bottom = c;
     }
-    e.st.axis_middle = mix(e.st.axis_top, e.st.axis_bottom);
-    e.st.shading = "axis".into();
-    e.st.shade_angle = angle;
+    e.st.shade.axis_middle = mix(e.st.shade.axis_top, e.st.shade.axis_bottom);
+    e.st.shade.shading = "axis".into();
+    e.st.shade.shade_angle = angle;
     e.st.mode.shade = true;
     Ok(())
 }
@@ -2106,26 +2106,26 @@ keyfn!(k_bottom_color, |e, v| axis_color(e, &v, false, 0.0));
 keyfn!(k_left_color, |e, v| axis_color(e, &v, true, 90.0));
 keyfn!(k_right_color, |e, v| axis_color(e, &v, false, 90.0));
 keyfn!(k_middle_color, |e, v| {
-    e.st.axis_middle = shade_color(e, &v)?;
-    e.st.shading = "axis".into();
+    e.st.shade.axis_middle = shade_color(e, &v)?;
+    e.st.shade.shading = "axis".into();
     e.st.mode.shade = true;
     Ok(())
 });
 keyfn!(k_ball_color, |e, v| {
-    e.st.ball = shade_color(e, &v)?;
-    e.st.shading = "ball".into();
+    e.st.shade.ball = shade_color(e, &v)?;
+    e.st.shade.shading = "ball".into();
     e.st.mode.shade = true;
     Ok(())
 });
 keyfn!(k_inner_color, |e, v| {
-    e.st.radial_inner = shade_color(e, &v)?;
-    e.st.shading = "radial".into();
+    e.st.shade.radial_inner = shade_color(e, &v)?;
+    e.st.shade.shading = "radial".into();
     e.st.mode.shade = true;
     Ok(())
 });
 keyfn!(k_outer_color, |e, v| {
-    e.st.radial_outer = shade_color(e, &v)?;
-    e.st.shading = "radial".into();
+    e.st.shade.radial_outer = shade_color(e, &v)?;
+    e.st.shade.shading = "radial".into();
     e.st.mode.shade = true;
     Ok(())
 });
@@ -2138,7 +2138,7 @@ keyfn!(k_path_fading, |e, v| {
         e.st.mode.fade = false;
     } else {
         if !s.is_empty() {
-            e.st.path_fading = Some(s);
+            e.st.shade.path_fading = Some(s);
         }
         e.st.mode.fade = true;
     }
@@ -2146,7 +2146,7 @@ keyfn!(k_path_fading, |e, v| {
 });
 keyfn!(k_fading_angle, |e, v| {
     let s = text(e, &v)?;
-    e.st.fading_transform = Transform::rotation(e.number(&s)?);
+    e.st.shade.fading_transform = Transform::rotation(e.number(&s)?);
     note_fading_settings(e);
     Ok(())
 });
@@ -2154,7 +2154,7 @@ keyfn!(k_fading_angle, |e, v| {
 keyfn!(k_fading_transform, |e, v| {
     let saved = std::mem::take(&mut e.st.pending);
     let r = e.process_keys(v.unwrap_or_default(), Some("/tikz"));
-    e.st.fading_transform = std::mem::replace(&mut e.st.pending, saved);
+    e.st.shade.fading_transform = std::mem::replace(&mut e.st.pending, saved);
     note_fading_settings(e);
     r
 });
@@ -2162,7 +2162,7 @@ keyfn!(k_fading_transform, |e, v| {
 /// The fading settings just set, for the `scope fading`s of the path being read.
 fn note_fading_settings(e: &mut Engine) {
     if let Some(s) = e.path_fading_settings.last_mut() {
-        *s = (e.st.fading_transform, e.st.fit_fading);
+        *s = (e.st.shade.fading_transform, e.st.shade.fit_fading);
     }
 }
 keyfn!(k_local_bounding_box, |e, v| {
@@ -2187,7 +2187,7 @@ keyfn!(k_active_in_nodes, |e, _v| {
     Ok(())
 });
 keyfn!(k_fit_fading, |e, v| {
-    e.st.fit_fading = text(e, &v)? != "false";
+    e.st.shade.fit_fading = text(e, &v)? != "false";
     note_fading_settings(e);
     Ok(())
 });
@@ -2196,7 +2196,7 @@ keyfn!(k_scope_fading, |e, v| {
     let s = text(e, &v)?;
     // in a path's options: what the path draws, the fading fitted to it when it is done
     let t = e.st.transform.compose(&e.st.pending);
-    let (start, fit) = (e.canvas.items.len(), e.st.fit_fading);
+    let (start, fit) = (e.canvas.items.len(), e.st.shade.fit_fading);
     if let Some(list) = e.path_fadings.last_mut() {
         list.push((s, start, fit, t, None));
         return Ok(());
@@ -2205,7 +2205,7 @@ keyfn!(k_scope_fading, |e, v| {
     Ok(())
 });
 keyfn!(k_transparency_group, |e, _v| {
-    e.st.transparency_group = true;
+    e.st.paint.transparency_group = true;
     Ok(())
 });
 // `blend mode=screen`: the paths drawn from here on blend with what is under them
@@ -2217,7 +2217,7 @@ keyfn!(k_blend_mode, |e, v| {
 // `blend group=screen`: a transparency group whose paths blend so
 keyfn!(k_blend_group, |e, v| {
     let s = text(e, &v)?;
-    e.st.transparency_group = true;
+    e.st.paint.transparency_group = true;
     e.set_blend_mode(&s);
     Ok(())
 });

@@ -164,10 +164,10 @@ impl Engine {
             }
             if matches!(name, "axis" | "radial" | "ball") {
                 // TikZ's own shadings, in the colors set last (`top color=…`), at their 100 bp size
-                let saved = std::mem::replace(&mut self.st.shading, name.to_string());
+                let saved = std::mem::replace(&mut self.st.shade.shading, name.to_string());
                 let fit = [Segment::MoveTo(t.apply(Point::new(-25.0 * BP, -25.0 * BP))), Segment::LineTo(t.apply(Point::new(25.0 * BP, 25.0 * BP)))];
                 let paint = self.shading_of(&fit);
-                self.st.shading = saved;
+                self.st.shade.shading = saved;
                 let corners = [Point::new(-50.0, -50.0), Point::new(50.0, -50.0), Point::new(50.0, 50.0), Point::new(-50.0, 50.0)].map(|p| t.apply(p.scale(BP)));
                 let mut segs = vec![Segment::MoveTo(corners[0])];
                 segs.extend(corners[1..].iter().map(|p| Segment::LineTo(*p)));
@@ -175,7 +175,7 @@ impl Engine {
                 if self.counts_for_size() {
                     self.canvas.include_path(&segs);
                 }
-                let fill = Fill { paint: Paint::Shading(paint), opacity: self.st.fill_opacity, even_odd: false };
+                let fill = Fill { paint: Paint::Shading(paint), opacity: self.st.paint.fill_opacity, even_odd: false };
                 self.canvas.push(Item::Path { segments: segs, fill: Some(fill), stroke: None });
                 return Ok(());
             }
@@ -196,7 +196,7 @@ impl Engine {
         if self.counts_for_size() {
             self.canvas.include_path(&segs);
         }
-        let fill = Fill { paint: Paint::Shading(sh.paint(t)), opacity: self.st.fill_opacity, even_odd: false };
+        let fill = Fill { paint: Paint::Shading(sh.paint(t)), opacity: self.st.paint.fill_opacity, even_odd: false };
         self.canvas.push(Item::Path { segments: segs, fill: Some(fill), stroke: None });
         Ok(())
     }
@@ -220,7 +220,7 @@ impl Engine {
             self.warn(format!("shading '{}' not declared: ignored", name.trim()));
             return Ok(());
         };
-        self.canvas.push(Item::Path { segments: segs, fill: Some(Fill { paint: Paint::Shading(paint), opacity: self.st.fill_opacity, even_odd: false }), stroke: None });
+        self.canvas.push(Item::Path { segments: segs, fill: Some(Fill { paint: Paint::Shading(paint), opacity: self.st.paint.fill_opacity, even_odd: false }), stroke: None });
         Ok(())
     }
 

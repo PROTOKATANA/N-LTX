@@ -76,9 +76,9 @@ pub fn legend(e: &mut Engine, axis: &Axis, f: &Frame) -> Result<(), Error> {
         let col_sep = keys::length(e, "/tikz/column sep").unwrap_or(0.0);
         let row_sep = keys::length(e, "/tikz/row sep").unwrap_or(0.0);
         let frame_mode = e.st.mode.clone();
-        let fill = frame_mode.fill.then(|| super::draw::solid(e.st.fill_paint_color(), e.st.fill_opacity));
+        let fill = frame_mode.fill.then(|| super::draw::solid(e.st.fill_paint_color(), e.st.paint.fill_opacity));
         let stroke = frame_mode.draw.then(|| e.stroke());
-        let lw = e.st.line_width;
+        let lw = e.st.pen.line_width;
         // the cells, row by row
         let mut cells: Vec<Vec<Cell>> = Vec::new();
         let mut row: Vec<Cell> = Vec::new();
@@ -222,7 +222,7 @@ fn image_cell(e: &mut Engine, spec: &[Token]) -> Result<Cell, Error> {
 fn image(e: &mut Engine, spec: &[Token]) -> Result<(), Error> {
     e.st.mode = Default::default();
     e.st.pending = Transform::default();
-    e.st.fill_color = Some(crate::color::Color::BLACK);
+    e.st.paint.fill_color = Some(crate::color::Color::BLACK);
     let mut style = toks("/tikz/draw,/pgfplots/every axis plot except legend/.code={},");
     style.extend(spec.iter().cloned());
     style.extend(toks(",/pgfplots/every legend image post"));
@@ -277,13 +277,13 @@ fn image(e: &mut Engine, spec: &[Token]) -> Result<(), Error> {
                     segs.extend(rect(Point::new(p.x - w / 2.0, 0.0), Point::new(p.x + w / 2.0, p.y)));
                 }
                 e.use_path(segs, "legend")?;
-            } else if !e.st.only_marks {
+            } else if !e.st.plot.only_marks {
                 let segs = vec![Segment::MoveTo(pts[0]), Segment::LineTo(pts[1]), Segment::LineTo(pts[2])];
                 e.use_path(segs, "legend")?;
             }
-            if let Some(mark) = e.st.plot_mark.clone() {
+            if let Some(mark) = e.st.plot.plot_mark.clone() {
                 // the plot's mark size, not one of `every mark` (as for the plot's marks)
-                let size = e.st.mark_size;
+                let size = e.st.plot.mark_size;
                 e.st.mode = Default::default();
                 e.st.pending = Transform::default();
                 e.process_keys(toks("every mark"), Some("/tikz"))?;

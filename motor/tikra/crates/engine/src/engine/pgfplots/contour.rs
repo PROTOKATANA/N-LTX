@@ -206,7 +206,7 @@ pub fn draw_filled(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame) -> Res
         return Ok(());
     }
     let meta = |k: usize| p.coords.get(k).map_or(f64::NAN, |c| c.meta);
-    let opacity = e.st.fill_opacity;
+    let opacity = e.st.paint.fill_opacity;
     // per band, all its pieces in one path
     let mut pieces: Vec<Vec<Segment>> = vec![Vec::new(); bands.len()];
     let reversed = if f.three_d {
@@ -254,7 +254,7 @@ pub fn draw_filled(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame) -> Res
             e.canvas.include_path(&segs);
         }
         // a hairline of the band's color hides the seams between the pieces
-        let stroke = crate::canvas::Stroke { color, width: 0.3 * crate::PT, dash: None, cap: e.st.cap, join: e.st.join, miter_limit: e.st.miter_limit, opacity };
+        let stroke = crate::canvas::Stroke { color, width: 0.3 * crate::PT, dash: None, cap: e.st.pen.cap, join: e.st.pen.join, miter_limit: e.st.pen.miter_limit, opacity };
         let fill = crate::canvas::Fill { paint: crate::canvas::Paint::Solid(color), opacity, even_odd: false };
         e.canvas.push(crate::canvas::Item::Path { segments: segs, fill: Some(fill), stroke: Some(stroke) });
     }

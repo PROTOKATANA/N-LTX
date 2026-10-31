@@ -126,7 +126,7 @@ fn draw_plot_in_group(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], base: &[f64], 
     e.process_keys(style.clone(), Some("/pgfplots"))?;
     e.st.apply_pending();
     // `only marks` or `scatter` without a mark: `mark=*` (`\pgfplots@markers@check@for@default@plot@mark`)
-    if (e.st.only_marks || p.scatter) && e.st.plot_mark.as_deref().is_none_or(|m| m.trim().is_empty() || m.trim() == "none") {
+    if (e.st.plot.only_marks || p.scatter) && e.st.plot.plot_mark.as_deref().is_none_or(|m| m.trim().is_empty() || m.trim() == "none") {
         e.process_keys(toks("/tikz/mark=*"), Some("/tikz"))?;
         style.extend(toks(",/tikz/mark=*"));
     }
@@ -156,7 +156,7 @@ fn draw_plot_in_group(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], base: &[f64], 
         }
         e.use_path(segs, "addplot")?;
         let (node_text, nodes) = near_nodes(e, p, pts, &[], f, "", 0.0)?;
-        if e.st.plot_mark.is_none() && nodes.is_empty() {
+        if e.st.plot.plot_mark.is_none() && nodes.is_empty() {
             return Ok(None);
         }
         let cp = canvas_points(f, pts);
@@ -167,7 +167,7 @@ fn draw_plot_in_group(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], base: &[f64], 
         super::mesh::draw(e, p, pts, f, &style)?;
         // marks and nodes near coords on the mesh's points
         let (node_text, nodes) = near_nodes(e, p, pts, &[], f, "", 0.0)?;
-        if e.st.plot_mark.is_none() && nodes.is_empty() {
+        if e.st.plot.plot_mark.is_none() && nodes.is_empty() {
             return Ok(None);
         }
         let cp = canvas_points(f, pts);
@@ -367,10 +367,10 @@ fn draw_plot_in_group(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], base: &[f64], 
             }
         }
         _ => {
-            let tension = e.st.tension;
+            let tension = e.st.plot.tension;
             for run in runs(&line_cp) {
                 segs.push(Segment::MoveTo(run[0]));
-                if e.st.plot_handler == "smooth" {
+                if e.st.plot.plot_handler == "smooth" {
                     smooth(&run, tension, &mut segs);
                 } else {
                     for q in &run[1..] {
@@ -462,8 +462,8 @@ fn draw_plot_in_group(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], base: &[f64], 
     if let Some(name) = &name_path {
         e.named_paths.insert(name.clone(), segs.clone());
     }
-    let only_marks = e.st.only_marks;
-    let mark = e.st.plot_mark.clone();
+    let only_marks = e.st.plot.only_marks;
+    let mark = e.st.plot.plot_mark.clone();
     if !only_marks && !segs.is_empty() {
         let draw = e.st.mode.draw;
         // a mark-only path does not need the line
@@ -576,7 +576,7 @@ fn post_nodes(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], cp: &[Option<Point>], 
         let z = |l: [f64; 3]| if f.three_d { l } else { [l[0], l[1], f.min[2]] };
         // a scatter plot has no segments: a node goes to the point nearest its `pos`
         let snapped: Vec<[f64; 3]> =
-            if e.st.only_marks { pts.iter().copied().filter(|l| l.iter().take(if f.three_d { 3 } else { 2 }).all(|v| v.is_finite())).collect() } else { Vec::new() };
+            if e.st.plot.only_marks { pts.iter().copied().filter(|l| l.iter().take(if f.three_d { 3 } else { 2 }).all(|v| v.is_finite())).collect() } else { Vec::new() };
         for (item, t, a, b, frac) in placed {
             super::attime::set_time(t);
             let (a, b, frac) = match snapped.len() {
@@ -1003,7 +1003,7 @@ fn error_bars(e: &mut Engine, p: &Plot, pts: &[[f64; 3]], f: &Frame) -> Result<(
     let r = (|| {
         e.st.mode = Default::default();
         e.st.mode.draw = true;
-        e.st.dash = None;
+        e.st.pen.dash = None;
         e.process_keys(toks("/pgfplots/every error bar"), Some("/pgfplots"))?;
         e.use_path(segs, "error bars")
     })();
@@ -1025,7 +1025,7 @@ pub fn draw_marks(e: &mut Engine, m: &Marks, f: &Frame) -> Result<(), Error> {
             e.process_keys(m.style.clone(), Some("/pgfplots"))?;
             e.st.apply_pending();
             e.st.pending = Transform::default();
-            plot_size.set(e.st.mark_size);
+            plot_size.set(e.st.plot.mark_size);
             e.process_keys(toks("every mark"), Some("/tikz"))?;
             if m.scatter {
                 if let Some(v) = keys::value_tokens(e, "/pgfplots/scatter/use mapped color") {
@@ -1036,19 +1036,19 @@ pub fn draw_marks(e: &mut Engine, m: &Marks, f: &Frame) -> Result<(), Error> {
         };
         let colors = if m.scatter { Some(super::mesh::mapped_colors(e, setup)?) } else { None };
         setup(e)?;
-        let Some(name) = e.st.plot_mark.clone() else { return Ok(()) };
+        let Some(name) = e.st.plot.plot_mark.clone() else { return Ok(()) };
         let local = e.st.pending;
         let size = plot_size.get();
         let cube = f.three_d && (name == "cube" || name == "cube*");
         // the native keys keep these in the state
-        let repeat = e.st.mark_repeat.max(1);
-        let phase = e.st.mark_phase.max(1);
+        let repeat = e.st.plot.mark_repeat.max(1);
+        let phase = e.st.plot.mark_phase.max(1);
         let indices: Vec<usize> = match keys::value_tokens(e, "/tikz/mark indices") {
             Some(v) => {
                 let list = e.tex.expand_fully(v)?;
                 super::super::foreach_items(&list).into_iter().filter_map(|i| tex::tokens_to_string(&i).trim().parse().ok()).collect()
             }
-            None => e.st.mark_indices.clone().unwrap_or_default(),
+            None => e.st.plot.mark_indices.clone().unwrap_or_default(),
         };
         let chosen = m.points.iter().copied().enumerate().filter(|(i, _)| {
             let k = i + 1;
@@ -1082,13 +1082,13 @@ pub fn draw_marks(e: &mut Engine, m: &Marks, f: &Frame) -> Result<(), Error> {
                         e.process_keys(toks("/pgfplots/scatter/@pre marker code"), None)?;
                         if e.tex.expand_to_string(vec![Token::cs("tikra@scatter@usemapped")])?.trim() == "1" {
                             let mapped = super::mesh::map(f, meta);
-                            e.st.draw_color = Some(draw.at(mapped));
-                            e.st.fill_color = Some(fill.at(mapped));
+                            e.st.paint.draw_color = Some(draw.at(mapped));
+                            e.st.paint.fill_color = Some(fill.at(mapped));
                         }
-                        let name = e.st.plot_mark.clone().unwrap_or_else(|| name.clone());
+                        let name = e.st.plot.plot_mark.clone().unwrap_or_else(|| name.clone());
                         let local = e.st.pending;
                         e.st.pending = Transform::default();
-                        draw_mark_set(e, &name, e.st.mark_size, &local, std::iter::once(p))?;
+                        draw_mark_set(e, &name, e.st.plot.mark_size, &local, std::iter::once(p))?;
                         e.process_keys(toks("/pgfplots/scatter/@post marker code"), None)
                     })();
                     e.end_group();
@@ -1099,8 +1099,8 @@ pub fn draw_marks(e: &mut Engine, m: &Marks, f: &Frame) -> Result<(), Error> {
             Some((draw, fill, _)) => {
                 for (_, (p, meta)) in chosen {
                     let mapped = super::mesh::map(f, meta);
-                    e.st.draw_color = Some(draw.at(mapped));
-                    e.st.fill_color = Some(fill.at(mapped));
+                    e.st.paint.draw_color = Some(draw.at(mapped));
+                    e.st.paint.fill_color = Some(fill.at(mapped));
                     if name == "ball" {
                         // `ball color=mapped color`: the shading's color, point by point
                         e.colors.insert("mapped color".into(), mapped);
@@ -1110,14 +1110,14 @@ pub fn draw_marks(e: &mut Engine, m: &Marks, f: &Frame) -> Result<(), Error> {
                         e.colors.insert("mapped color".into(), crate::color::Color::BLACK);
                     }
                     if cube {
-                        draw_cubes(e, &name, e.st.mark_size, f, std::iter::once(p))?;
+                        draw_cubes(e, &name, e.st.plot.mark_size, f, std::iter::once(p))?;
                     } else {
                         draw_mark_set(e, &name, size, &local, std::iter::once(p))?;
                     }
                 }
                 Ok(())
             }
-            None if cube => draw_cubes(e, &name, e.st.mark_size, f, chosen.map(|(_, (p, _))| p)),
+            None if cube => draw_cubes(e, &name, e.st.plot.mark_size, f, chosen.map(|(_, (p, _))| p)),
             None => draw_mark_set(e, &name, size, &local, chosen.map(|(_, (p, _))| p)),
         };
         drawn?;
@@ -1129,14 +1129,14 @@ pub fn draw_marks(e: &mut Engine, m: &Marks, f: &Frame) -> Result<(), Error> {
             let r = (|| -> Result<(), Error> {
                 if let Some((draw, fill, _)) = colors.as_ref().filter(|_| !classes) {
                     let mapped = super::mesh::map(f, meta);
-                    e.st.draw_color = Some(draw.at(mapped));
-                    e.st.fill_color = Some(fill.at(mapped));
+                    e.st.paint.draw_color = Some(draw.at(mapped));
+                    e.st.paint.fill_color = Some(fill.at(mapped));
                 }
                 e.st.pending = local;
                 e.process_keys(style, Some("/tikz"))?;
                 let local = e.st.pending;
                 e.st.pending = Transform::default();
-                let name = e.st.plot_mark.clone().unwrap_or_else(|| name.clone());
+                let name = e.st.plot.plot_mark.clone().unwrap_or_else(|| name.clone());
                 // a shift in the style moves the mark
                 draw_mark_set(e, &name, size, &local, std::iter::once(p.plus(Point::new(local.e, local.f))))
             })();
@@ -1161,7 +1161,7 @@ fn draw_cubes(e: &mut Engine, name: &str, size: f64, f: &Frame, points: impl Ite
         }
     });
     let stroke = e.stroke();
-    let fill = Fill { paint: Paint::Solid(e.st.fill_paint_color()), opacity: e.st.fill_opacity, even_odd: false };
+    let fill = Fill { paint: Paint::Solid(e.st.fill_paint_color()), opacity: e.st.paint.fill_opacity, even_odd: false };
     for p in points {
         let at = |s: [f64; 3]| p.plus(half[0].scale(s[0])).plus(half[1].scale(s[1])).plus(half[2].scale(s[2]));
         let face = |k: usize, side: f64| -> Vec<Segment> {
@@ -1220,7 +1220,7 @@ pub fn draw_mark_set(e: &mut Engine, name: &str, size: f64, local: &Transform, p
         return draw_mark_set(e, "*", size, local, points);
     };
     let stroke = e.stroke();
-    let fill = Fill { paint: Paint::Solid(e.st.fill_paint_color()), opacity: e.st.fill_opacity, even_odd: false };
+    let fill = Fill { paint: Paint::Solid(e.st.fill_paint_color()), opacity: e.st.paint.fill_opacity, even_odd: false };
     let lin = Transform { e: 0.0, f: 0.0, ..*local };
     for p in points {
         let t = Transform::translation(p.x, p.y).compose(&lin);

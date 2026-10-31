@@ -517,12 +517,12 @@ fn calendar_length(e: &mut Engine, name: &str) -> Result<f64, Error> {
 fn font_length(e: &mut Engine, s: &str) -> Result<f64, Error> {
     // `em` and `ex` in the ambient font; the calendar's own `font=` counts too
     let v = e.length(s)?;
-    let sans = e.st.font.contains("\\sffamily");
+    let sans = e.st.text.font.contains("\\sffamily");
     let quad = |pt: f64| tikra_engine::label::quad(pt, sans);
     Ok(if s.contains("em") {
-        v * e.st.font_size * quad(e.st.font_size) / (e.st.ambient_size * quad(e.st.ambient_size))
+        v * e.st.text.font_size * quad(e.st.text.font_size) / (e.st.text.ambient_size * quad(e.st.text.ambient_size))
     } else if s.contains("ex") {
-        v * e.st.font_size / e.st.ambient_size
+        v * e.st.text.font_size / e.st.text.ambient_size
     } else {
         v
     })

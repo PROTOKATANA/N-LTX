@@ -211,7 +211,7 @@ impl Engine {
         }
         let star = kind == "Stars";
         let (mut d, mut angle, mut xs, mut ys) = (if star { 3.0 * 0.1 } else { 3.0 * PT }, 0.0, 0.0, 0.0);
-        let (mut lw, mut r, mut points) = (self.st.line_width, if star { 0.1 } else { 0.5 * PT }, 5.0);
+        let (mut lw, mut r, mut points) = (self.st.pen.line_width, if star { 0.1 } else { 0.5 * PT }, 5.0);
         for item in crate::keys::split_list(&super::tikra_tokens(options)) {
             let v = crate::tex::tokens_to_string(&item.value.unwrap_or_default());
             let v = v.trim().trim_start_matches('{').trim_end_matches('}').to_string();
@@ -267,9 +267,9 @@ impl Engine {
         let name = self.argument_string()?;
         let color = self.argument_string()?;
         let c = self.color(color.trim()).unwrap_or(Color::BLACK);
-        self.st.pattern_name = Some(name.trim().to_string());
-        self.st.pattern_color = Some(c);
-        self.st.fill_pattern = true;
+        self.st.paint.pattern_name = Some(name.trim().to_string());
+        self.st.paint.pattern_color = Some(c);
+        self.st.paint.fill_pattern = true;
         Ok(())
     }
 }

@@ -564,22 +564,22 @@ fn parse_mark(v: &[Token]) -> Option<Mark> {
 /// The graphic settings that TikZ installs when a path is used (`\tikz@options`), not when its
 /// options are read: decorations and preactions happen before, with the scope's.
 fn take_graphics(st: &mut GState, from: &GState) {
-    if st.text_color.is_none() && st.color != from.color {
+    if st.paint.text_color.is_none() && st.paint.color != from.paint.color {
         // `color=` sets the text color at once
-        st.text_color = Some(st.color);
+        st.paint.text_color = Some(st.paint.color);
     }
-    st.color = from.color;
-    st.draw_color = from.draw_color;
-    st.fill_color = from.fill_color;
-    st.pattern_color = from.pattern_color;
-    st.line_width = from.line_width;
-    st.dash = from.dash.clone();
-    st.cap = from.cap;
-    st.join = from.join;
-    st.miter_limit = from.miter_limit;
-    st.draw_opacity = from.draw_opacity;
-    st.fill_opacity = from.fill_opacity;
-    st.even_odd = from.even_odd;
+    st.paint.color = from.paint.color;
+    st.paint.draw_color = from.paint.draw_color;
+    st.paint.fill_color = from.paint.fill_color;
+    st.paint.pattern_color = from.paint.pattern_color;
+    st.pen.line_width = from.pen.line_width;
+    st.pen.dash = from.pen.dash.clone();
+    st.pen.cap = from.pen.cap;
+    st.pen.join = from.pen.join;
+    st.pen.miter_limit = from.pen.miter_limit;
+    st.paint.draw_opacity = from.paint.draw_opacity;
+    st.paint.fill_opacity = from.paint.fill_opacity;
+    st.paint.even_odd = from.paint.even_odd;
 }
 
 impl Engine {
@@ -634,7 +634,7 @@ impl Engine {
             self.begin_group();
             self.begin_scope();
             let r = (|| {
-                self.open_in_scope(crate::canvas::Item::Clip { segments: segs.to_vec(), even_odd: self.st.even_odd });
+                self.open_in_scope(crate::canvas::Item::Clip { segments: segs.to_vec(), even_odd: self.st.paint.even_odd });
                 if let Some(s) = self.scopes.last_mut() {
                     s.clipped = true;
                 }
@@ -723,9 +723,9 @@ impl Engine {
             self.warn(format!("decoration '{name}' not supported: path drawn undecorated"));
             return Ok(segs.to_vec());
         }
-        if self.st.rounded != 0.0 || self.st.rounded_out != 0.0 {
+        if self.st.pen.rounded != 0.0 || self.st.pen.rounded_out != 0.0 {
             // the round corners of the path are made before it is decorated (`\pgfprocessround`)
-            let rounded = super::output::round_corners(segs, self.st.rounded, self.st.rounded_out);
+            let rounded = super::output::round_corners(segs, self.st.pen.rounded, self.st.pen.rounded_out);
             return self.decorate_how(&rounded, existing, How::Tikz(name));
         }
         self.decorate_how(segs, existing, How::Tikz(name))

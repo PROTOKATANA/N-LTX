@@ -1337,7 +1337,7 @@ fn handler(e: &mut Engine, name: &str) {
 keyfn!(k_handler, |e, _v| {
     let name = current_name(e);
     // TikZ's own `plot` draws with the same handler
-    e.st.plot_handler = name.clone();
+    e.st.plot.plot_handler = name.clone();
     let h = match name.as_str() {
         "smooth" | "sharp plot" => "",
         "const plot" | "const plot mark left" => "const",
@@ -1606,7 +1606,7 @@ keyfn!(k_boxplot, |e, v| {
     let r = e.process_keys(v.unwrap_or_default(), Some("/pgfplots/boxplot"));
     e.st.key_path = saved;
     r?;
-    if flag(e, "/pgfplots/boxplot/ensure mark") && e.st.plot_mark.is_none() {
+    if flag(e, "/pgfplots/boxplot/ensure mark") && e.st.plot.plot_mark.is_none() {
         run(e, "/tikz/mark=*")?;
     }
     Ok(())

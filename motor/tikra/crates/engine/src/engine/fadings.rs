@@ -184,7 +184,7 @@ impl Engine {
         c.include_path(&self.pgf_path.segments);
         let (Some(mut lo), Some(mut hi)) = (c.min, c.max) else { return Ok(()) };
         if stroked {
-            let w = self.st.line_width / 2.0;
+            let w = self.st.pen.line_width / 2.0;
             (lo, hi) = (Point::new(lo.x - w, lo.y - w), Point::new(hi.x + w, hi.y + w));
         }
         let extra = self.fading_transform(code)?;
@@ -277,7 +277,7 @@ impl Engine {
         c.include_path(segs);
         let (lo, hi) = (c.min?, c.max?);
         let t = if fit { f.fit(lo, hi) } else { self.st.transform };
-        let t = t.compose(&self.st.fading_transform);
+        let t = t.compose(&self.st.shade.fading_transform);
         Some(f.mask(&t))
     }
 }

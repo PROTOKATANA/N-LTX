@@ -984,7 +984,7 @@ impl Engine {
                     Some(Layout::Word(i)) => self.words[*i].1.push_str(&text),
                     _ => {
                         self.layout.push(Layout::Word(self.words.len()));
-                        self.words.push((self.st.font.clone(), text));
+                        self.words.push((self.st.text.font.clone(), text));
                     }
                 }
             }
@@ -1027,7 +1027,7 @@ impl Engine {
     /// A box of text in the paragraph, a word of its own (a `tabular`).
     pub fn typeset_word(&mut self, text: String) {
         self.layout.push(Layout::Word(self.words.len()));
-        self.words.push((self.st.font.clone(), text));
+        self.words.push((self.st.text.font.clone(), text));
     }
 
     /// Whether a `tabular` around the pictures is open.
@@ -1056,7 +1056,7 @@ impl Engine {
                 Some(Layout::Word(i)) => self.words[*i].1.push(c),
                 _ => {
                     self.layout.push(Layout::Word(self.words.len()));
-                    self.words.push((self.st.font.clone(), c.to_string()));
+                    self.words.push((self.st.text.font.clone(), c.to_string()));
                 }
             }
             return;
@@ -1097,7 +1097,7 @@ impl Engine {
                 Some(Layout::Word(i)) => self.words[*i].1.push_str(&text),
                 _ => {
                     self.layout.push(Layout::Word(self.words.len()));
-                    self.words.push((self.st.font.clone(), text));
+                    self.words.push((self.st.text.font.clone(), text));
                 }
             }
             return Ok(());
@@ -1321,11 +1321,11 @@ impl Engine {
     }
 
     pub fn vars(&self) -> crate::expr::Variables {
-        let sans = self.st.font.contains("\\sffamily");
+        let sans = self.st.text.font.contains("\\sffamily");
         crate::expr::Variables {
             values: HashMap::new(),
             functions: self.functions_now(),
-            font_scale: Some(self.st.ambient_size / 10.0),
+            font_scale: Some(self.st.text.ambient_size / 10.0),
             in_pt: false,
             sans,
             trig_rad: self.st.trig_rad,
@@ -1399,7 +1399,7 @@ impl Engine {
         // `.` is xcolor's current color (`draw=.!60!black`)
         if text.split('!').any(|p| p.trim() == ".") {
             let mut colors = self.colors.clone();
-            colors.insert(".".into(), self.st.color);
+            colors.insert(".".into(), self.st.paint.color);
             return color::parse(text.trim(), &colors);
         }
         color::parse(text.trim(), &self.colors)
@@ -1727,10 +1727,10 @@ impl Engine {
                 let _ = self.optional()?;
                 let e = self.argument_string()?;
                 if let Some(c) = self.color(&e) {
-                    self.st.color = c;
-                    self.st.draw_color = None;
-                    self.st.fill_color = None;
-                    self.st.text_color = None;
+                    self.st.paint.color = c;
+                    self.st.paint.draw_color = None;
+                    self.st.paint.fill_color = None;
+                    self.st.paint.text_color = None;
                 }
                 // a `\color` of the page's text, in no group: it is still on at the paragraph's end,
                 // and `varwidth` takes its whole width (a color's end is not text it can measure)
@@ -2129,9 +2129,9 @@ impl Engine {
             }
             Cmd::FontSize => {
                 if let Token::Cs(n) = t {
-                    self.st.font_size = font_size(n);
-                    self.st.ambient_size = self.st.font_size;
-                    self.st.font.push_str(&format!("\\{n}"));
+                    self.st.text.font_size = font_size(n);
+                    self.st.text.ambient_size = self.st.text.font_size;
+                    self.st.text.font.push_str(&format!("\\{n}"));
                 }
                 Ok(())
             }
@@ -2154,7 +2154,7 @@ impl Engine {
             }
             Cmd::FontSeries => {
                 if let Token::Cs(n) = t {
-                    self.st.font.push_str(&format!("\\{n}"));
+                    self.st.text.font.push_str(&format!("\\{n}"));
                 }
                 Ok(())
             }
@@ -2354,23 +2354,23 @@ impl Engine {
         self.st.apply_pending();
         self.open_transparency_group();
         // a picture is a scope too: `execute at begin scope` first, its end last
-        let mut begin = std::mem::take(&mut self.st.at_begin_scope);
-        begin.append(&mut self.st.at_begin_picture);
-        let mut end = std::mem::take(&mut self.st.at_end_picture);
-        end.append(&mut self.st.at_end_scope);
+        let mut begin = std::mem::take(&mut self.st.hooks.at_begin_scope);
+        begin.append(&mut self.st.hooks.at_begin_picture);
+        let mut end = std::mem::take(&mut self.st.hooks.at_end_picture);
+        end.append(&mut self.st.hooks.at_end_scope);
         self.scope_ends.push(end);
         self.run_tokens(begin)
     }
 
     /// `transparency group` given to a scope or a picture: what it draws is a group of its own.
     fn open_transparency_group(&mut self) {
-        if std::mem::take(&mut self.st.transparency_group) {
+        if std::mem::take(&mut self.st.paint.transparency_group) {
             // the scope's opacity is the group's; inside, everything is opaque
-            let opacity = self.st.fill_opacity.min(self.st.draw_opacity);
+            let opacity = self.st.paint.fill_opacity.min(self.st.paint.draw_opacity);
             self.open_in_scope(Item::Group { opacity });
-            self.st.draw_opacity = 1.0;
-            self.st.fill_opacity = 1.0;
-            self.st.text_opacity = 1.0;
+            self.st.paint.draw_opacity = 1.0;
+            self.st.paint.fill_opacity = 1.0;
+            self.st.paint.text_opacity = 1.0;
         }
     }
 
@@ -2389,8 +2389,8 @@ impl Engine {
         }
         self.st.apply_pending();
         self.open_transparency_group();
-        let begin = std::mem::take(&mut self.st.at_begin_scope);
-        let end = std::mem::take(&mut self.st.at_end_scope);
+        let begin = std::mem::take(&mut self.st.hooks.at_begin_scope);
+        let end = std::mem::take(&mut self.st.hooks.at_end_scope);
         self.scope_ends.push(end);
         self.run_tokens(begin)
     }
