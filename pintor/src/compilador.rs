@@ -9,10 +9,11 @@
 
 use primitivas::{
     Caja, Capa, Color, Degradado, Escena, GlifoId, Matriz, Pintura, Primitiva, Punto, Relleno, Remate, Segmento, Trazo,
+    Union,
 };
 
 use crate::atlas::Atlas;
-use crate::geometria::Afin;
+use crate::geometria::{Afin, razon_de_inglete, ruta};
 use crate::glifos::{Colocado, Glifos};
 use crate::lista::{Acabado, FRANJA, Lista, Rango, comando_vacio};
 use crate::puente_lienzo::ffi::{Comando, Orden};
@@ -96,10 +97,25 @@ fn rgba(c: Color, opacidad: f64) -> u32 {
     canal(c.r) | canal(c.g) << 8 | canal(c.b) << 16 | canal(opacidad) << 24
 }
 
-/// La franja solo sirve con remate plano: un remate redondo o cuadrado crecería con ella, y la
-/// distancia al centro no describe el borde de un remate.
-fn con_franja(t: &Trazo) -> bool {
-    t.remate == Remate::Plano
+/// Basta con no confundir una curva con un codo: no depende de la escala.
+const TOLERANCIA_CODOS: f32 = 0.01;
+
+/// Lo agudo que puede ser un codo con bisel o unión redonda sin perder tinta, como razón de inglete.
+const CODO_SEGURO: f32 = 3.0;
+
+/// La franja calcula la cobertura interpolando la distancia al centro entre los dos lados del trazo.
+/// No sirve con un remate redondo o cuadrado, que crecería con ella. Tampoco en un codo agudo con
+/// bisel o unión redonda: en su extremo solo hay vértices del lado de fuera y el trazo no llegaría a
+/// su final. Con inglete el centro queda a medio camino de la punta, y sirve mientras no se bisele.
+fn con_franja(segmentos: &[Segmento], t: &Trazo) -> bool {
+    if t.remate != Remate::Plano {
+        return false;
+    }
+    let Some(r) = ruta(segmentos, Afin::IDENTIDAD) else {
+        return false;
+    };
+    let razon = razon_de_inglete(&r, TOLERANCIA_CODOS);
+    razon <= CODO_SEGURO || (t.union == Union::Inglete && f64::from(razon) <= t.limite_inglete)
 }
 
 /// Lo que hay que deshacer al llegar a su `Primitiva::Cerrar`.
@@ -320,10 +336,11 @@ impl Compilador<'_, '_> {
             self.comando(Orden::Dibujar, r, self.nivel);
         }
         if let Some(t) = trazo
-            && let Some(r) = self.pintar_trazo(segmentos, t, con_franja(t))
+            && let franja = con_franja(segmentos, t)
+            && let Some(r) = self.pintar_trazo(segmentos, t, franja)
         {
             // la malla de un trazo se solapa en las uniones: con transparencia se notaría
-            let tenue = !con_franja(t) && self.alfa_fino(t) < 1.0;
+            let tenue = !franja && self.alfa_fino(t) < 1.0;
             if t.opacidad < 1.0 || tenue {
                 self.comando(Orden::Unica, r, self.nivel);
                 self.comando(Orden::Soltar, r, self.nivel + 1);
@@ -672,6 +689,48 @@ mod tests {
             assert_eq!(l.vertices[0].rgba >> 24, 64, "un píxel de ancho y más tenue");
             assert_eq!(ordenes(&l), [Orden::Unica, Orden::Soltar]);
         }
+    }
+
+    /// Un codo de `grados` de ángulo interior.
+    fn codo(grados: f64, union: Union) -> Lista {
+        let a = grados.to_radians();
+        compilada(vec![Primitiva::Trazado {
+            segmentos: vec![
+                Segmento::Mover(p(100.0, 0.0)),
+                Segmento::Linea(p(0.0, 0.0)),
+                Segmento::Linea(p(100.0 * a.cos(), 100.0 * a.sin())),
+            ],
+            relleno: None,
+            trazo: Some(Trazo {
+                union,
+                limite_inglete: 10.0,
+                ..Trazo::simple(NEGRO, 3.0)
+            }),
+        }])
+    }
+
+    #[test]
+    fn un_codo_abierto_lleva_franja_con_cualquier_union() {
+        for union in [Union::Inglete, Union::Redonda, Union::Biselada] {
+            assert_eq!(codo(90.0, union).vertices[0].tinta, tintas::TRAZO, "{union:?}");
+        }
+    }
+
+    #[test]
+    fn un_codo_agudo_con_bisel_o_redondo_no_lleva_franja_o_se_quedaria_corto() {
+        for union in [Union::Redonda, Union::Biselada] {
+            assert_eq!(codo(15.0, union).vertices[0].tinta, tintas::SOLIDA, "{union:?}");
+        }
+    }
+
+    #[test]
+    fn un_inglete_agudo_lleva_franja_mientras_no_pase_a_bisel() {
+        assert_eq!(codo(15.0, Union::Inglete).vertices[0].tinta, tintas::TRAZO, "razón 7,7");
+        assert_eq!(
+            codo(8.5, Union::Inglete).vertices[0].tinta,
+            tintas::SOLIDA,
+            "razón 13,5"
+        );
     }
 
     #[test]

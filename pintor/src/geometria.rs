@@ -1,6 +1,6 @@
 //! De `Segmento` a los trazados de lyon, con las transformaciones y los discontinuos.
 
-use lyon::math::{Point, point};
+use lyon::math::{Point, Vector, point};
 use lyon::path::iterator::PathIterator;
 use lyon::path::path::Builder;
 use lyon::path::{Path, PathEvent};
@@ -147,6 +147,56 @@ fn seguir(b: &mut Builder, abierta: &mut bool, inicio: Point) {
     }
 }
 
+/// La razón de inglete del codo más agudo: 1/sen(ángulo interior / 2), como en PDF y SVG. Un trazado
+/// sin codos da 1 y uno que da media vuelta, infinito.
+pub fn razon_de_inglete(ruta: &Path, tolerancia: f32) -> f32 {
+    let mut mayor = 1.0f32;
+    let mut primera = None;
+    let mut anterior: Option<Vector> = None;
+    let mut codo = |d: Vector, a: Option<Vector>| {
+        if let Some(a) = a {
+            let coseno_medio = ((1.0 + a.dot(d)) / 2.0).max(0.0).sqrt();
+            mayor = mayor.max(if coseno_medio > 0.0 {
+                1.0 / coseno_medio
+            } else {
+                f32::INFINITY
+            });
+        }
+    };
+    for e in ruta.iter().flattened(tolerancia) {
+        match e {
+            PathEvent::Begin { .. } => (primera, anterior) = (None, None),
+            PathEvent::Line { from, to } => {
+                if let Some(d) = direccion(from, to) {
+                    codo(d, anterior);
+                    primera = primera.or(Some(d));
+                    anterior = Some(d);
+                }
+            }
+            PathEvent::End {
+                last,
+                first,
+                close: true,
+            } => {
+                if let Some(d) = direccion(last, first) {
+                    codo(d, anterior);
+                    anterior = Some(d);
+                }
+                if let Some(p) = primera {
+                    codo(p, anterior);
+                }
+            }
+            _ => {}
+        }
+    }
+    mayor
+}
+
+fn direccion(desde: Point, hasta: Point) -> Option<Vector> {
+    let eje = hasta - desde;
+    (eje.square_length() > 0.0).then(|| eje.normalize())
+}
+
 /// Corta `ruta` en tramos. Cada subtrazado empieza el dibujo desde la fase, igual que en PDF.
 pub fn discontinua(ruta: &Path, d: &Discontinuo, tolerancia: f32) -> Path {
     let tramos: Vec<f32> = d.tramos.iter().map(|t| t.max(0.0) as f32).collect();
@@ -277,6 +327,39 @@ mod tests {
 
     fn subtrazados(r: &Path) -> usize {
         r.iter().filter(|e| matches!(e, PathEvent::Begin { .. })).count()
+    }
+
+    fn razon(puntos: &[(f64, f64)], cerrar: bool) -> f32 {
+        let mut s: Vec<Segmento> = puntos.iter().map(|&(x, y)| Segmento::Linea(P(x, y))).collect();
+        s[0] = Segmento::Mover(P(puntos[0].0, puntos[0].1));
+        if cerrar {
+            s.push(Segmento::Cerrar);
+        }
+        razon_de_inglete(&ruta(&s, Afin::IDENTIDAD).unwrap(), 0.01)
+    }
+
+    #[test]
+    fn la_razon_de_inglete_sale_del_codo_mas_agudo() {
+        assert_eq!(razon(&[(0.0, 0.0), (5.0, 0.0), (9.0, 0.0)], false), 1.0, "recto");
+        assert!((razon(&[(0.0, 0.0), (5.0, 0.0), (5.0, 5.0)], false) - 2f32.sqrt()).abs() < 1e-4);
+        assert_eq!(
+            razon(&[(0.0, 0.0), (5.0, 0.0), (1.0, 0.0)], false),
+            f32::INFINITY,
+            "media vuelta"
+        );
+    }
+
+    #[test]
+    fn un_trazado_cerrado_cuenta_el_codo_del_cierre() {
+        // el triángulo solo es agudo en el vértice donde empieza y acaba
+        let t = [(0.0, 0.0), (10.0, 1.0), (10.0, -1.0)];
+        assert!(razon(&t, false) < 2.0);
+        assert!(razon(&t, true) > 8.0);
+    }
+
+    #[test]
+    fn un_tramo_de_largo_cero_no_es_un_codo() {
+        assert_eq!(razon(&[(0.0, 0.0), (5.0, 0.0), (5.0, 0.0), (9.0, 0.0)], false), 1.0);
     }
 
     #[test]

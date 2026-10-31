@@ -20,6 +20,9 @@ src/puente_masiva.rs  la frontera cxx de la prueba masiva
 linux/                los renderizadores en C++, sus recursos y sus familias de texturas
 ```
 
+El límite de inglete significa lo mismo que en PDF y SVG, comparado con 1/sen(ángulo/2). lyon lo compara
+con el doble de su propio límite: `teselado` le pasa la mitad.
+
 ## Quién hace qué
 
 Rust lleva el ritmo. El **taller**, en su propio hilo, compila lo publicado y compone las animaciones a
@@ -38,8 +41,9 @@ de su contenido: solo muestra la textura y dice qué parte se ve.
 - **Rellenos:** triángulos de lyon, suavizados con MSAA 8×, o lo que dé la GPU.
 - **Trazos:** la malla sobresale un píxel por cada lado y el shader calcula cuánto cubre el trazo cada
   píxel, con la distancia al centro. Es exacto a cualquier ancho y no depende de las muestras: con MSAA
-  solo, las líneas finas salen a dientes. Un remate redondo o cuadrado no admite la franja, y va sin
-  ella; lo mismo el trazo translúcido con relleno, porque la franja dejaría un hueco entre los dos.
+  solo, las líneas finas salen a dientes. Van sin franja, con su malla exacta y MSAA, tres casos: un
+  remate redondo o cuadrado, que crecería con ella; un codo agudo con bisel o unión redonda, que se
+  quedaría corto; y el trazo translúcido con relleno, porque dejaría un hueco entre los dos.
 - **Glifos:** máscaras de área exacta en un atlas, siempre con cuatro posiciones por píxel: colocarlos
   al píxel entero cambia la forma de los trazos finos. Los que pasan de 256 píxeles, o los que ya no
   caben en el atlas, se pintan como trazados, con lo que vuelven a depender del MSAA.
