@@ -16,26 +16,16 @@
 //! The edges of a polygon come clockwise from the one after its top vertex (or its top edge), so
 //! the edge it hangs from is among them, as in TikZ.
 
-use crate::scene::{Point, Transform};
-use crate::tex::{Meaning, Token};
-use crate::{Error, PT};
+use tikra_engine::engine::piece::{CommandFn, Piece};
+use tikra_engine::engine::{tikra_tokens, Engine};
+use tikra_engine::scene::{Point, Transform};
+use tikra_engine::tex::Token;
+use tikra_engine::{Error, PT};
 
-use super::{tikra_tokens, Engine};
+/// The folding nets.
+pub static PIECE: Piece = Piece { name: "folding", commands: COMMANDS, definitions, ..Piece::EMPTY };
 
-/// Ids of the folding library's commands (`Meaning::Native`), after the calendar's.
-pub const BASE: u16 = 880;
-
-const COMMANDS: &[&str] = &["tikra@folding"];
-
-pub fn define(e: &mut Engine) {
-    for (i, name) in COMMANDS.iter().enumerate() {
-        e.tex.define(name, Meaning::Native(BASE + i as u16));
-    }
-}
-
-pub fn is_folding(id: u16) -> bool {
-    (BASE..BASE + COMMANDS.len() as u16).contains(&id)
-}
+const COMMANDS: &[(&str, CommandFn)] = &[("tikra@folding", draw_net)];
 
 /// The nets: the name of TikZ's `\tikzfolding…` command, its pic (`… folding`), and the net.
 const NETS: &[(&str, Option<&str>, &str)] = &[
@@ -129,7 +119,7 @@ const NETS: &[(&str, Option<&str>, &str)] = &[
 ];
 
 /// The keys (`folding line length`, `face N`, `numbered faces`), the pics and the commands.
-pub fn definitions() -> String {
+fn definitions() -> String {
     let mut s = String::from(
         r"\def\tikra@fold@length{2cm}
 \tikzset{folding line length/.code={\def\tikra@fold@length{#1}}, every ear/.style={}, every cut/.style={}, every fold/.style={help lines}}
@@ -274,74 +264,95 @@ fn edge_frames(v: &[Point], length: f64) -> Vec<Transform> {
         .collect()
 }
 
-impl Engine {
-    pub fn folding_command(&mut self, _id: u16) -> Result<(), Error> {
-        let name = self.argument_string()?;
-        let Some((_, _, net)) = NETS.iter().find(|(n, _, _)| *n == name) else {
-            return Err(Error::Figure(format!("no folding named '{name}'")));
-        };
-        let net = parse(net).ok_or_else(|| Error::Figure(format!("internal: the net of {name} is malformed")))?;
-        let length = self.tex.expand_to_string(vec![Token::cs("tikra@fold@length")])?;
-        let length = self.length(&length)?;
-        self.fold_polygon(&net, length)
-    }
+fn draw_net(e: &mut Engine, _: &Token) -> Result<(), Error> {
+    let name = e.argument_string()?;
+    let Some((_, _, net)) = NETS.iter().find(|(n, _, _)| *n == name) else {
+        return Err(Error::Figure(format!("no folding named '{name}'")));
+    };
+    let net = parse(net).ok_or_else(|| Error::Figure(format!("internal: the net of {name} is malformed")))?;
+    let length = e.tex.expand_to_string(vec![Token::cs("tikra@fold@length")])?;
+    let length = e.length(&length)?;
+    fold_polygon(e, &net, length)
+}
 
-    fn fold_polygon(&mut self, p: &Polygon, length: f64) -> Result<(), Error> {
-        let (v, center, slant) = vertices(p.kind);
-        if let Some(face) = &p.face {
-            let frame = Transform::translation(center.x * length, center.y * length).compose(&Transform { c: slant, ..Transform::default() });
-            self.fold_scope(frame, face, length)?;
+fn fold_polygon(e: &mut Engine, p: &Polygon, length: f64) -> Result<(), Error> {
+    let (v, center, slant) = vertices(p.kind);
+    if let Some(face) = &p.face {
+        let frame = Transform::translation(center.x * length, center.y * length).compose(&Transform { c: slant, ..Transform::default() });
+        fold_scope(e, frame, face, length)?;
+    }
+    for (frame, item) in edge_frames(&v, length).into_iter().zip(&p.edges) {
+        fold_scope(e, frame, item, length)?;
+    }
+    Ok(())
+}
+
+/// An item in its frame, in a scope.
+fn fold_scope(e: &mut Engine, frame: Transform, item: &Item, length: f64) -> Result<(), Error> {
+    e.begin_group();
+    e.begin_scope();
+    e.st.transform = e.st.transform.compose(&frame);
+    let r = fold_item(e, item, length);
+    e.end_scope();
+    e.end_group();
+    r
+}
+
+/// The edge the item is drawn on: from the origin to `length`, and the fold along it.
+struct Edge {
+    length_pt: f64,
+    origin: String,
+    end: String,
+    fold: String,
+}
+
+fn edge(length: f64) -> Edge {
+    let length_pt = length / PT;
+    let point = |x: f64, y: f64| format!("({x}pt,{y}pt)");
+    let origin = point(0.0, 0.0);
+    let end = point(length_pt, 0.0);
+    let fold = format!(r"\draw[every fold]{origin} -- {end};");
+    Edge { length_pt, origin, end, fold }
+}
+
+/// An ear on `edge`: its tip, the cut around it and the fold along the edge.
+fn ear_code(item: &Item, edge: &Edge) -> String {
+    let l = edge.length_pt;
+    let point = |x: f64, y: f64| format!("({x}pt,{y}pt)");
+    // the ear's tip, and the order of its sides
+    let (tip, from_end) = match item {
+        Item::EarLeft(a) => {
+            let (s, c) = a.to_radians().sin_cos();
+            (point(0.66 * l * c, 0.66 * l * s), false)
         }
-        for (frame, item) in edge_frames(&v, length).into_iter().zip(&p.edges) {
-            self.fold_scope(frame, item, length)?;
+        Item::EarRight(a) => {
+            let (s, c) = a.to_radians().sin_cos();
+            (point(l - 0.66 * l * c, 0.66 * l * s), true)
         }
-        Ok(())
-    }
+        _ => (point(0.5 * l, 0.2 * l), false),
+    };
+    let (o, end, fold) = (&edge.origin, &edge.end, &edge.fold);
+    let cut = if from_end { format!("{end} -- {tip} -- {o}") } else { format!("{o} -- {tip} -- {end}") };
+    let area = if from_end { format!("{o} -- {end} -- {tip}") } else { format!("{o} -- {tip} -- {end}") };
+    format!(r"\path[every ear]{area} -- {o} -- cycle;{fold}\draw[every cut]{cut};")
+}
 
-    /// An item in its frame, in a scope.
-    fn fold_scope(&mut self, frame: Transform, item: &Item, length: f64) -> Result<(), Error> {
-        self.begin_group();
-        self.begin_scope();
-        self.st.transform = self.st.transform.compose(&frame);
-        let r = self.fold_item(item, length);
-        self.end_scope();
-        self.end_group();
-        r
-    }
-
-    fn fold_item(&mut self, item: &Item, length: f64) -> Result<(), Error> {
-        let l = length / PT;
-        let pt = |x: f64, y: f64| format!("({}pt,{}pt)", x, y);
-        let (o, end) = (pt(0.0, 0.0), pt(l, 0.0));
-        let fold = format!(r"\draw[every fold]{o} -- {end};");
-        let code = match item {
-            Item::Face(n, turn) => {
-                self.st.transform = self.st.transform.compose(&Transform::rotation(*turn));
-                return self.run_tokens(vec![Token::cs(&format!("tikra@fold@face@{n}"))]);
-            }
-            Item::Fold => fold,
-            Item::Cut => format!(r"\draw[every cut]{o} -- {end};"),
-            Item::Ear | Item::EarLeft(_) | Item::EarRight(_) => {
-                // the ear's tip, and the order of its sides
-                let (tip, from_end) = match item {
-                    Item::EarLeft(a) => {
-                        let (s, c) = a.to_radians().sin_cos();
-                        (pt(0.66 * l * c, 0.66 * l * s), false)
-                    }
-                    Item::EarRight(a) => {
-                        let (s, c) = a.to_radians().sin_cos();
-                        (pt(l - 0.66 * l * c, 0.66 * l * s), true)
-                    }
-                    _ => (pt(0.5 * l, 0.2 * l), false),
-                };
-                let cut = if from_end { format!("{end} -- {tip} -- {o}") } else { format!("{o} -- {tip} -- {end}") };
-                let area = if from_end { format!("{o} -- {end} -- {tip}") } else { format!("{o} -- {tip} -- {end}") };
-                format!(r"\path[every ear]{area} -- {o} -- cycle;{fold}\draw[every cut]{cut};")
-            }
-            Item::Polygon(p) => return self.fold_polygon(p, length),
-        };
-        self.run_tokens(tikra_tokens(&code))
-    }
+fn fold_item(e: &mut Engine, item: &Item, length: f64) -> Result<(), Error> {
+    let edge = edge(length);
+    let code = match item {
+        Item::Face(n, turn) => {
+            e.st.transform = e.st.transform.compose(&Transform::rotation(*turn));
+            return e.run_tokens(vec![Token::cs(&format!("tikra@fold@face@{n}"))]);
+        }
+        Item::Fold => edge.fold,
+        Item::Cut => {
+            let Edge { origin: o, end, .. } = &edge;
+            format!(r"\draw[every cut]{o} -- {end};")
+        }
+        Item::Ear | Item::EarLeft(_) | Item::EarRight(_) => ear_code(item, &edge),
+        Item::Polygon(p) => return fold_polygon(e, p, length),
+    };
+    e.run_tokens(tikra_tokens(&code))
 }
 
 #[cfg(test)]

@@ -2624,8 +2624,6 @@ pub fn define_keys(e: &mut Engine, pieces: &[&'static super::piece::Piece]) {
     for text in &definitions {
         lexer.push_text(text);
     }
-    lexer.push_text(&super::folding::definitions());
-    lexer.push_text(super::mindmap::DEFINITIONS);
     lexer.push_text(super::trees::DEFINITIONS);
     lexer.push_text(super::turtle::DEFINITIONS);
     lexer.push_text(super::lsystem::DEFINITIONS);

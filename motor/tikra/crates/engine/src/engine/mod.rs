@@ -11,7 +11,6 @@ pub mod coords;
 pub mod datavis;
 pub mod decorations;
 pub mod fadings;
-pub mod folding;
 pub mod functional;
 pub mod graphs;
 pub mod intersections;
@@ -872,8 +871,6 @@ impl Engine {
         for piece in pieces {
             e.plug(piece);
         }
-        folding::define(&mut e);
-        mindmap::define(&mut e);
         lsystem::define(&mut e);
         options::define_keys(&mut e, pieces);
         datavis::define(&mut e);
@@ -1427,12 +1424,6 @@ impl Engine {
         }
         if id == Cmd::DataVis as u16 {
             return self.datavis_command(t);
-        }
-        if folding::is_folding(id) {
-            return self.folding_command(id);
-        }
-        if mindmap::is_mindmap(id) {
-            return self.mindmap_command(id);
         }
         if lsystem::is_lsystem(id) {
             return self.lsystem_command(id);
