@@ -7,11 +7,12 @@
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
+use std::path::{Path, PathBuf};
 
 use adaptador::{FiguraTikra, piezas_del_motor};
 use animacion::Reproductor;
 use documento::{Documento, Formato};
-use primitivas::Color;
+use primitivas::{Color, Compositor};
 
 const K1: &str = include_str!("../../../assets/k1.tex");
 const NEGRO: Color = Color { r: 0.0, g: 0.0, b: 0.0 };
@@ -80,6 +81,35 @@ fn fotogramas(huella: &mut DefaultHasher) {
     );
 }
 
+/// Los `.tex` de una carpeta y sus subcarpetas, ordenados.
+fn figuras(carpeta: &Path, encontradas: &mut Vec<PathBuf>) {
+    let mut rutas: Vec<_> = std::fs::read_dir(carpeta).unwrap().map(|e| e.unwrap().path()).collect();
+    rutas.sort();
+    for ruta in rutas {
+        if ruta.is_dir() {
+            figuras(&ruta, encontradas);
+        } else if ruta.extension().is_some_and(|x| x == "tex") {
+            encontradas.push(ruta);
+        }
+    }
+}
+
+/// Las figuras de los motores, seguidas en un mismo hilo: cubre lo que K1 no usa, y lo que sobreviva
+/// por error de una figura a otra se nota. Cazó `mark options` perdido al sacar pgfplots del motor,
+/// que no hizo fallar ninguna prueba.
+fn corpus(huella: &mut DefaultHasher) {
+    let motores = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../motor");
+    let mut rutas = Vec::new();
+    figuras(&Path::new(motores).join("tikra/corpus"), &mut rutas);
+    figuras(&Path::new(motores).join("voltik/corpus"), &mut rutas);
+    let figura = FiguraTikra::default();
+    for ruta in &rutas {
+        let c = figura.componer(&std::fs::read_to_string(ruta).unwrap());
+        sumar(huella, &c.map(|c| (c.escena, c.avisos)));
+    }
+    println!("HUELLA corpus    {:016x} ({} archivos)", huella.finish(), rutas.len());
+}
+
 #[test]
 #[ignore]
 fn huella_de_la_salida() {
@@ -87,6 +117,7 @@ fn huella_de_la_salida() {
         let mut huella = DefaultHasher::new();
         composiciones(&mut huella);
         fotogramas(&mut huella);
+        corpus(&mut huella);
     });
     hilo.unwrap().join().unwrap();
 }
