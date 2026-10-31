@@ -27,12 +27,12 @@ pub fn value(e: &mut Engine, text: &str) -> Option<f64> {
         Some((d, rest)) if rest.contains(':') => (d, Some(rest.trim())),
         _ => (t, None),
     };
-    let julian = crate::engine::calendar::parse_date(date, None)?;
+    let julian = crate::tex_dates::parse_date(date, None)?;
     let zero = match e.tex.expand_to_string(vec![Token::cs(ZERO)]).ok().and_then(|s| s.trim().parse::<i64>().ok()) {
         Some(z) => z,
         None => {
             let z = match crate::keys::value(&e.tex, "/pgfplots/date ZERO").map(|v| crate::tex::tokens_to_string(&v)) {
-                Some(s) if !s.trim().is_empty() => crate::engine::calendar::parse_date(s.trim(), None).unwrap_or(julian),
+                Some(s) if !s.trim().is_empty() => crate::tex_dates::parse_date(s.trim(), None).unwrap_or(julian),
                 _ => julian,
             };
             e.tex.set_meaning(&Token::cs(ZERO), macro_from(&z.to_string()), true);
@@ -75,7 +75,7 @@ pub fn define_tick(e: &mut Engine, t: f64) {
         }
     }
     let zero = e.tex.expand_to_string(vec![Token::cs(ZERO)]).ok().and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(0);
-    let (year, month, day) = crate::engine::calendar::date(days + zero);
+    let (year, month, day) = crate::tex_dates::date(days + zero);
     let (month, day) = (format!("{month:02}"), format!("{day:02}"));
     let set = |e: &mut Engine, name: &str, v: &str| e.tex.set_meaning(&Token::cs(name), macro_from(v), false);
     set(e, "year", &year.to_string());

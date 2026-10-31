@@ -1,0 +1,18 @@
+[package]
+name = "tikra_engine"
+version = "1.8.1"
+publish = false
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+mathra = { path = "../../../mathra/crates/core", features = ["latin-modern"] }
+serde_json = "1"
+tikra_canvas = { path = "../canvas" }
+tikra_label = { path = "../label" }
+tikra_tex = { path = "../tex" }
+ttf-parser = "0.25"
+
+# los ejemplos de `extension` usan la fachada, que es lo que ve quien escribe una biblioteca
+[dev-dependencies]
+tikra = { path = "../core" }

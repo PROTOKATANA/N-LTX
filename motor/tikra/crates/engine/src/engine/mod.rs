@@ -5,7 +5,6 @@
 pub mod animations;
 pub mod arrows;
 pub mod basic;
-pub mod calendar;
 pub mod chains;
 pub mod circuits;
 pub mod coords;
@@ -29,6 +28,7 @@ pub mod path;
 pub mod patterns;
 pub mod pgfplots;
 pub mod pics;
+pub mod piece;
 pub mod saveboxes;
 pub mod shadings;
 pub mod shapes;
@@ -429,6 +429,10 @@ pub struct Engine {
     key_fns: Vec<options::KeyFn>,
     /// the keys of libraries from outside ([`crate::extension`]), by id − EXTENSION_KEY_BASE
     extension_fns: Vec<crate::extension::KeyFn>,
+    /// the commands of the pieces, by id − PIECE_COMMAND_BASE
+    command_fns: Vec<piece::CommandFn>,
+    /// what the pieces keep during a figure
+    slots: piece::Slots,
     /// `use as bounding box` was used: the bounding box no longer grows
     pub canvas_frozen: bool,
     /// nested runs of token lists (styles, loop bodies)
@@ -606,16 +610,15 @@ pub const MAX_KEYS: usize = 50_000;
 pub const KEYS_PER_LIST: usize = 16;
 
 /// Ids at and above this are native keys (`\pgfk@…/.@cmd`), below are commands.
-pub const NATIVE_KEY_BASE: u16 = 1000;
+pub const NATIVE_KEY_BASE: u16 = 4000;
 
 /// Ids at and above this are the keys of libraries from outside ([`crate::extension`]).
 pub const EXTENSION_KEY_BASE: u16 = 40000;
 
 thread_local! {
-    /// The engine after defining every command and key: cloned for each figure.
-    static PROTOTYPE: std::cell::RefCell<Option<Engine>> = const { std::cell::RefCell::new(None) };
-    /// The engine with libraries from outside, by their names: cloned for each figure that uses them.
-    static WITH_LIBRARIES: std::cell::RefCell<Vec<(Vec<&'static str>, Engine)>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// The engine after defining every command and key, by the names of its parts: cloned for each
+    /// figure.
+    static PROTOTYPES: std::cell::RefCell<Vec<(Vec<&'static str>, Engine)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 impl Clone for Engine {
@@ -638,6 +641,8 @@ impl Clone for Engine {
             text_reported: self.text_reported,
             key_fns: self.key_fns.clone(),
             extension_fns: self.extension_fns.clone(),
+            command_fns: self.command_fns.clone(),
+            slots: self.slots.clone(),
             canvas_frozen: self.canvas_frozen,
             nesting: self.nesting,
             keys_run: self.keys_run,
@@ -707,36 +712,28 @@ impl Clone for Engine {
 }
 
 impl Engine {
-    /// A fresh engine with TikZ defined (built once per thread, then cloned).
+    /// A fresh engine with TikZ's core defined.
     pub fn new() -> Engine {
-        arrows::clear_declared();
-        PROTOTYPE.with(|p| {
-            let mut p = p.borrow_mut();
-            if p.is_none() {
-                *p = Some(Engine::build());
-            }
-            p.as_ref().expect("built").clone()
-        })
+        Engine::of(piece::Parts::default())
     }
 
-    /// A fresh engine with TikZ and these libraries defined (built once per thread for each set of
-    /// libraries, then cloned).
-    pub fn with_libraries(libraries: &[&'static crate::extension::Library]) -> Engine {
-        if libraries.is_empty() {
-            return Engine::new();
-        }
-        let names: Vec<&'static str> = libraries.iter().map(|l| l.name).collect();
-        let found = WITH_LIBRARIES.with(|w| w.borrow().iter().find(|(n, _)| *n == names).map(|(_, e)| e.clone()));
-        if let Some(e) = found {
-            arrows::clear_declared();
+    /// A fresh engine with `parts` too (built once per thread for each set of parts, then cloned).
+    pub fn of(parts: piece::Parts<'_>) -> Engine {
+        arrows::clear_declared();
+        let known = PROTOTYPES.with(|p| {
+            let prototypes = p.borrow();
+            let same = |names: &Vec<&'static str>| names.iter().copied().eq(parts.names());
+            prototypes.iter().find(|(names, _)| same(names)).map(|(_, e)| e.clone())
+        });
+        if let Some(e) = known {
             return e;
         }
-        let mut e = Engine::new();
-        for library in libraries {
+        let mut e = Engine::build(parts.pieces);
+        for library in parts.libraries {
             e.register(library);
         }
         e.tex.warnings.clear();
-        WITH_LIBRARIES.with(|w| w.borrow_mut().push((names, e.clone())));
+        PROTOTYPES.with(|p| p.borrow_mut().push((parts.names().collect(), e.clone())));
         e
     }
 
@@ -769,7 +766,7 @@ impl Engine {
         }
     }
 
-    fn build() -> Engine {
+    fn build(pieces: &[&'static piece::Piece]) -> Engine {
         let mut e = Engine {
             tex: Tex::new(),
             st: state::Shared::default(),
@@ -788,6 +785,8 @@ impl Engine {
             text_reported: false,
             key_fns: Vec::new(),
             extension_fns: Vec::new(),
+            command_fns: Vec::new(),
+            slots: piece::Slots::default(),
             canvas_frozen: false,
             nesting: 0,
             keys_run: 0,
@@ -866,11 +865,13 @@ impl Engine {
         e.tex.define_text(r"\let\bgroup={\let\egroup=}\def\pgfkeysnovalue{\pgfkeys@novalue}\def\pgfkeys@novalue{}\def\pgfkeysvalueof#1{\csname pgfk@#1\endcsname}\def\pgfkeysgetvalue#1#2{\expandafter\let\expandafter#2\csname pgfk@#1\endcsname}\def\pgfkeyssetvalue#1#2{\expandafter\def\csname pgfk@#1\endcsname{#2}}\def\pgfkeysifdefined#1{\ifcsname pgfk@#1\endcsname\expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi}\def\pgfmathresult{}\def\tikzlastnode{}");
         basic::define(&mut e);
         nonlinear::define(&mut e);
-        calendar::define(&mut e);
+        for piece in pieces {
+            e.plug(piece);
+        }
         folding::define(&mut e);
         mindmap::define(&mut e);
         lsystem::define(&mut e);
-        options::define_keys(&mut e);
+        options::define_keys(&mut e, pieces);
         datavis::define(&mut e);
         pgfplots::define(&mut e);
         graphs::define(&mut e);
@@ -925,7 +926,7 @@ impl Engine {
         Ok(())
     }
 
-    fn count_step(&mut self) -> Result<(), Error> {
+    pub fn count_step(&mut self) -> Result<(), Error> {
         self.steps += 1;
         if self.steps > MAX_STEPS {
             return Err(Error::Figure(format!("figure too large: more than {MAX_STEPS} statements")));
@@ -1413,14 +1414,15 @@ impl Engine {
     }
 
     fn command(&mut self, id: u16, t: &Token) -> Result<(), Error> {
+        if id >= piece::PIECE_COMMAND_BASE {
+            let command = self.command_fns[(id - piece::PIECE_COMMAND_BASE) as usize];
+            return command(self, t);
+        }
         if basic::is_basic(id) {
             return self.basic_command(id);
         }
         if id == Cmd::DataVis as u16 {
             return self.datavis_command(t);
-        }
-        if calendar::is_calendar(id) {
-            return self.calendar_command(id);
         }
         if folding::is_folding(id) {
             return self.folding_command(id);
@@ -3541,7 +3543,12 @@ pub fn run_document_noting(code: &str) -> Result<(Canvas, Vec<String>, crate::de
 
 /// [`run_document_noting`] with libraries from outside defined.
 pub fn run_document_with(code: &str, libraries: &[&'static crate::extension::Library]) -> Result<(Canvas, Vec<String>, crate::describe::Facts), Error> {
-    let mut e = Engine::with_libraries(libraries);
+    run_document_in(code, piece::Parts { pieces: &[], libraries })
+}
+
+/// Runs a whole document in an engine built with `parts`.
+pub fn run_document_in(code: &str, parts: piece::Parts<'_>) -> Result<(Canvas, Vec<String>, crate::describe::Facts), Error> {
+    let mut e = Engine::of(parts);
     crate::expr::reset_random();
     // tikra's margin around a figure, unless a standalone border says otherwise
     e.canvas.margin = 2.0 * crate::PT;

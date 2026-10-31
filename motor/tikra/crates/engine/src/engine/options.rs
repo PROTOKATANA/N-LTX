@@ -2597,7 +2597,7 @@ const DEFINITIONS: &str = r"
 ";
 
 /// Defines every native key and TikZ's own styles.
-pub fn define_keys(e: &mut Engine) {
+pub fn define_keys(e: &mut Engine, pieces: &[&'static super::piece::Piece]) {
     e.tex.define("pgflinewidth", Meaning::Dimen(4000));
     e.tex.dimens.insert(4000, (0.4 * 65536.0) as i64);
     super::trees::define(e);
@@ -2620,7 +2620,10 @@ pub fn define_keys(e: &mut Engine) {
     lexer.push_text(super::decorations::DECLARATIONS);
     lexer.push_text(super::decorations::textfx::DEFINITIONS);
     lexer.push_text(super::shapes::DEFINITIONS);
-    lexer.push_text(super::calendar::DEFINITIONS);
+    let definitions: Vec<String> = pieces.iter().map(|p| (p.definitions)()).collect();
+    for text in &definitions {
+        lexer.push_text(text);
+    }
     lexer.push_text(&super::folding::definitions());
     lexer.push_text(super::mindmap::DEFINITIONS);
     lexer.push_text(super::trees::DEFINITIONS);

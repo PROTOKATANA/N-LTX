@@ -1196,10 +1196,19 @@ dependencies = [
  "mathra",
  "resvg",
  "serde_json",
+ "tikra_calendar",
  "tikra_canvas",
+ "tikra_engine",
  "tikra_label",
  "tikra_tex",
  "ttf-parser",
+]
+
+[[package]]
+name = "tikra_calendar"
+version = "1.8.1"
+dependencies = [
+ "tikra_engine",
 ]
 
 [[package]]
@@ -1207,6 +1216,19 @@ name = "tikra_canvas"
 version = "1.8.1"
 dependencies = [
  "mathra",
+]
+
+[[package]]
+name = "tikra_engine"
+version = "1.8.1"
+dependencies = [
+ "mathra",
+ "serde_json",
+ "tikra",
+ "tikra_canvas",
+ "tikra_label",
+ "tikra_tex",
+ "ttf-parser",
 ]
 
 [[package]]

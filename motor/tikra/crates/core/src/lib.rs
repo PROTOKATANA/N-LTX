@@ -8,15 +8,44 @@
 // The engine's parts: public for tikra's own tests, not an API (they change with any release).
 // What is kept stable is `convert`, `png` and `extension`.
 #[doc(hidden)]
-pub mod describe;
-#[doc(hidden)]
 pub mod driver;
-#[doc(hidden)]
-pub mod engine;
-pub mod extension;
 
 use std::fmt;
 
+use tikra_engine::engine::piece::Piece;
+
+#[doc(hidden)]
+pub use tikra_engine::describe;
+pub use tikra_engine::extension;
+
+/// The parts of TikZ that are pieces, with which every figure is read.
+const PIECES: &[&Piece] = &[&tikra_calendar::PIECE];
+
+/// The engine, built with every piece.
+#[doc(hidden)]
+pub mod engine {
+    pub use tikra_engine::engine::*;
+
+    use super::{extension::Library, PIECES};
+    use crate::canvas::Canvas;
+    use crate::describe::Facts;
+    use crate::Error;
+
+    /// Runs a whole document (or figure) and returns the canvas and the warnings.
+    pub fn run_document(code: &str) -> Result<(Canvas, Vec<String>), Error> {
+        run_document_noting(code).map(|(canvas, warnings, _)| (canvas, warnings))
+    }
+
+    /// [`run_document`], and what the figure shows, for its description in words.
+    pub fn run_document_noting(code: &str) -> Result<(Canvas, Vec<String>, Facts), Error> {
+        run_document_with(code, &[])
+    }
+
+    /// [`run_document_noting`] with libraries from outside defined.
+    pub fn run_document_with(code: &str, libraries: &[&'static Library]) -> Result<(Canvas, Vec<String>, Facts), Error> {
+        run_document_in(code, piece::Parts { pieces: PIECES, libraries })
+    }
+}
 #[doc(hidden)]
 pub use tikra_canvas::{canvas, color, scene};
 #[doc(hidden)]
