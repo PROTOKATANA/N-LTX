@@ -106,11 +106,13 @@ impl Teselador {
             Union::Redonda => LineJoin::Round,
             Union::Biselada => LineJoin::Bevel,
         };
-        let opciones = StrokeOptions::tolerance(tolerancia)
+        let mut opciones = StrokeOptions::tolerance(tolerancia)
             .with_line_width(ancho as f32)
             .with_line_cap(remate)
-            .with_line_join(union)
-            .with_miter_limit(t.limite_inglete.max(1.0) as f32);
+            .with_line_join(union);
+        // lyon compara la razón del inglete con el doble de su límite: el de PDF y SVG es la mitad.
+        // Se escribe el campo porque `with_miter_limit` no admite menos de 1
+        opciones.miter_limit = (t.limite_inglete.max(1.0) / 2.0) as f32;
         let mut salida = BuffersBuilder::new(&mut self.malla, |v: StrokeVertex| Bruto {
             x: v.position().x,
             y: v.position().y,
@@ -169,6 +171,45 @@ mod tests {
         assert!((area(t.malla()) - 20.0).abs() < 1e-3);
         assert!(t.malla().0.iter().all(|v| v.lado == 1.0 || v.lado == -1.0));
         assert!(t.malla().0.iter().any(|v| v.lado == 1.0) && t.malla().0.iter().any(|v| v.lado == -1.0));
+    }
+
+    /// Hasta dónde llega la malla desde el vértice de un codo cuyo ángulo interior mide `grados`.
+    fn alcance_del_codo(grados: f64, limite: f64) -> f32 {
+        let mut t = Teselador::default();
+        let trazo = Trazo {
+            limite_inglete: limite,
+            ..Trazo::simple(NEGRO, 1.0)
+        };
+        let pincel = Pincel {
+            trazo: &trazo,
+            ancho: 1.0,
+            factor: 1.0,
+        };
+        let a = grados.to_radians();
+        let s = [
+            Segmento::Mover(p(100.0, 0.0)),
+            Segmento::Linea(p(0.0, 0.0)),
+            Segmento::Linea(p(100.0 * a.cos(), 100.0 * a.sin())),
+        ];
+        assert!(t.trazar(&s, pincel));
+        // lo que queda detrás del codo, en el sentido contrario a los dos tramos
+        t.malla().0.iter().map(|v| -v.x).fold(f32::MIN, f32::max)
+    }
+
+    #[test]
+    fn el_limite_de_inglete_significa_lo_mismo_que_en_pdf_y_svg() {
+        // la razón del inglete es 1/sen(ángulo/2): a 8,5° vale 13,5 y a 15°, 7,7
+        assert!(alcance_del_codo(8.5, 10.0) < 1.0, "supera el límite de 10: se bisela");
+        let punta = alcance_del_codo(15.0, 10.0);
+        assert!((punta - 3.8).abs() < 0.1, "no lo supera: punta entera, {punta}");
+        assert!(alcance_del_codo(15.0, 7.0) < 1.0, "con otro límite ya se bisela");
+    }
+
+    #[test]
+    fn un_limite_de_uno_bisela_siempre() {
+        // a 60° la razón vale 2: la punta, en diagonal, llega a 0,87 y el bisel, a 0,43
+        assert!(alcance_del_codo(60.0, 1.0) < 0.6);
+        assert!(alcance_del_codo(60.0, 2.5) > 0.6);
     }
 
     #[test]
