@@ -3,6 +3,20 @@
 version = 4
 
 [[package]]
+name = "adaptador"
+version = "0.1.0"
+dependencies = [
+ "formula",
+ "mathra",
+ "primitivas",
+ "resvg",
+ "serde_json",
+ "svgtypes",
+ "tikra",
+ "voltik",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

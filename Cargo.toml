@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "formula",
     "primitivas",
+    "adaptador",
     "motor/tikra/crates/core",
     "motor/mathra/crates/core",
     "motor/voltik/crates/core",

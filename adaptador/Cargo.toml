@@ -1,0 +1,19 @@
+[package]
+name = "adaptador"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+primitivas = { path = "../primitivas" }
+mathra = { path = "../motor/mathra/crates/core", features = ["latin-modern"] }
+tikra = { path = "../motor/tikra/crates/core" }
+voltik = { path = "../motor/voltik/crates/core" }
+svgtypes = "0.15"
+
+[dev-dependencies]
+formula = { path = "../formula" }
+resvg = { version = "0.45", default-features = false, features = ["raster-images"] }
+serde_json = "1.0"
+
+[lints]
+workspace = true
