@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use documento::{Documento, Formato, Incrustados};
+use documento::{Apartado, Documento, Formato, Incrustados};
 use primitivas::{Caja, Capa, Composicion, Compositor, ErrorComposicion, Escena, Primitiva};
 
 /// Compositor de mentira: una fórmula es una caja del ancho de su fuente.
@@ -198,6 +198,113 @@ fn una_formula_en_bloque_ancha_se_reduce_para_caber() {
     let ancha = r"\[ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \]";
     assert!(escala(100.0, ancha).unwrap() < 0.5);
     assert_eq!(escala(4000.0, ancha), Some(1.0), "la que cabe no cambia");
+}
+
+fn apartado<'a>(titulo: &'a str, fuente: &'a str) -> Apartado<'a> {
+    Apartado {
+        titulo: Some(titulo),
+        fuente,
+    }
+}
+
+#[test]
+fn una_serie_apila_sus_documentos_con_su_titulo() {
+    let solo = documento(400.0).componer("Hola").unwrap().escena;
+    let serie = documento(400.0)
+        .componer_serie(&[apartado("uno", "Hola"), apartado("dos", "Hola")], 400.0)
+        .unwrap()
+        .escena;
+    assert!(glifos(&serie).len() >= 2 * glifos(&solo).len() + 6, "con los títulos");
+    assert!(serie.caja.alto > 2.0 * solo.caja.alto);
+}
+
+#[test]
+fn en_una_serie_cada_documento_tiene_su_preambulo() {
+    let con = "\\documentclass{article}\\usepackage{a}\\begin{document}\\[ x \\]\\end{document}";
+    let sin = "\\[ y \\]";
+    let e = documento(400.0)
+        .componer_serie(
+            &[
+                Apartado {
+                    titulo: None,
+                    fuente: con,
+                },
+                Apartado {
+                    titulo: None,
+                    fuente: sin,
+                },
+            ],
+            400.0,
+        )
+        .unwrap()
+        .escena;
+    let formulas = e
+        .primitivas
+        .iter()
+        .filter(|p| matches!(p, Primitiva::Abrir(Capa::Transformacion(_))))
+        .count();
+    assert_eq!(formulas, 2, "el segundo \\begin{{document}} no se pierde");
+}
+
+#[test]
+fn en_una_serie_las_macros_de_uno_no_llegan_al_siguiente() {
+    use std::sync::{Arc, Mutex};
+
+    /// Apunta lo que le llega a componer.
+    struct Apuntador(Arc<Mutex<Vec<String>>>);
+
+    impl Incrustados for Apuntador {
+        fn formula(&self, latex: &str, b: bool, t: f64) -> Result<Composicion, ErrorComposicion> {
+            self.0.lock().unwrap().push(latex.to_string());
+            Falsos.formula(latex, b, t)
+        }
+
+        fn figura(&self, fuente: &str) -> Result<Composicion, ErrorComposicion> {
+            Falsos.figura(fuente)
+        }
+
+        fn caja_de_animacion(&self, fuente: &str) -> Result<Caja, ErrorComposicion> {
+            Falsos.caja_de_animacion(fuente)
+        }
+    }
+
+    let vistas = Arc::new(Mutex::new(Vec::new()));
+    let d = Documento::nuevo(Formato::default(), Box::new(Apuntador(vistas.clone())));
+    let primero = "\\newcommand{\\a}{b}\n\\[ \\a \\]";
+    let segundo = "\\[ \\a \\]";
+    d.componer_serie(
+        &[
+            Apartado {
+                titulo: None,
+                fuente: primero,
+            },
+            Apartado {
+                titulo: None,
+                fuente: segundo,
+            },
+        ],
+        400.0,
+    )
+    .unwrap();
+    let vistas = vistas.lock().unwrap();
+    assert!(vistas[0].contains("newcommand"), "{vistas:?}");
+    assert!(!vistas[1].contains("newcommand"), "{vistas:?}");
+}
+
+#[test]
+fn los_avisos_de_una_serie_se_escriben_bajo_su_documento() {
+    let figura_rota = r"\begin{tikzpicture}rota\end{tikzpicture}";
+    let c = documento(400.0)
+        .componer_serie(&[apartado("a", figura_rota), apartado("b", "Hola")], 400.0)
+        .unwrap();
+    assert!(c.avisos.is_empty(), "{:?}", c.avisos);
+    let solo_el_titulo = documento(400.0)
+        .componer_serie(&[apartado("a", ""), apartado("b", "Hola")], 400.0)
+        .unwrap();
+    assert!(
+        glifos(&c.escena).len() > glifos(&solo_el_titulo.escena).len() + 10,
+        "se leen"
+    );
 }
 
 #[test]

@@ -88,7 +88,37 @@ fn base_empaquetada() -> fontdb::Database {
     base
 }
 
+/// Un documento dentro de una serie. `titulo`, si lo hay, se escribe encima de él.
+#[derive(Debug, Clone, Copy)]
+pub struct Apartado<'a> {
+    pub titulo: Option<&'a str>,
+    pub fuente: &'a str,
+}
+
 impl Documento {
+    /// Varios documentos completos, uno detrás de otro y separados por una regla. Ninguno ve el
+    /// preámbulo ni las macros de los demás, y los avisos de cada uno se escriben debajo de él.
+    pub fn componer_serie(&self, apartados: &[Apartado<'_>], ancho: f64) -> Result<Composicion, ErrorComposicion> {
+        let entradas = apartados
+            .iter()
+            .map(|a| maquetador::Entrada {
+                titulo: a.titulo,
+                lectura: lector::leer(a.fuente),
+            })
+            .collect();
+        let mut sistema = self
+            .fuentes
+            .lock()
+            .map_err(|_| ErrorComposicion("el sistema de fuentes quedó envenenado".into()))?;
+        let formato = Formato { ancho, ..self.formato };
+        Ok(maquetador::maquetar_serie(
+            entradas,
+            formato,
+            &*self.incrustados,
+            &mut sistema,
+        ))
+    }
+
     /// Compone a `ancho` bp. Reflujar no exige otro documento: cargar las fuentes es caro.
     pub fn componer_a(&self, fuente: &str, ancho: f64) -> Result<Composicion, ErrorComposicion> {
         let lectura = lector::leer(fuente);

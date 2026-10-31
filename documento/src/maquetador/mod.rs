@@ -26,59 +26,37 @@ const FONDO_CODIGO: Color = Color {
     b: 0.96,
 };
 
+/// Un documento dentro de una serie, ya leído.
+pub(crate) struct Entrada<'t> {
+    pub(crate) titulo: Option<&'t str>,
+    pub(crate) lectura: Lectura,
+}
+
 pub(crate) fn maquetar(
     lectura: Lectura,
     formato: Formato,
     incrustados: &dyn Incrustados,
     sistema: &mut FontSystem,
 ) -> Composicion {
-    let Lectura {
-        bloques,
-        preambulo,
-        macros,
-        avisos,
-    } = lectura;
-    let mut m = Maquetador {
-        formato,
-        incrustados,
-        sistema,
-        preambulo,
-        macros,
-        avisos,
-        primitivas: Vec::new(),
-        contornos: BTreeMap::new(),
-        fuentes: HashMap::new(),
-        zonas: Vec::new(),
-        y: 0.0,
-    };
-    let columna = Columna {
-        x: 0.0,
-        ancho: formato.ancho,
-    };
-    m.bloques(&bloques, columna);
-    let Maquetador {
-        primitivas,
-        contornos,
-        avisos,
-        zonas,
-        y,
-        ..
-    } = m;
-    Composicion {
-        escena: Escena {
-            caja: Caja {
-                x: 0.0,
-                y: 0.0,
-                ancho: formato.ancho,
-                alto: y,
-            },
-            primitivas,
-            contornos,
-            zonas,
-            ..Escena::default()
-        },
-        avisos,
+    let mut m = Maquetador::nuevo(formato, incrustados, sistema);
+    let bloques = m.adoptar(lectura);
+    m.bloques(&bloques, m.columna());
+    m.cerrar()
+}
+
+/// Varios documentos seguidos en una misma escena. Cada uno se lee aparte y no ve el preámbulo de
+/// los demás. Sus avisos se escriben debajo de él: juntos al final no se sabría de cuál son.
+pub(crate) fn maquetar_serie(
+    entradas: Vec<Entrada<'_>>,
+    formato: Formato,
+    incrustados: &dyn Incrustados,
+    sistema: &mut FontSystem,
+) -> Composicion {
+    let mut m = Maquetador::nuevo(formato, incrustados, sistema);
+    for (n, entrada) in entradas.into_iter().enumerate() {
+        m.entrada(entrada, n == 0);
     }
+    m.cerrar()
 }
 
 struct Maquetador<'a> {
@@ -127,6 +105,89 @@ impl Columna {
             y,
             ancho: self.ancho,
             alto,
+        }
+    }
+}
+
+impl<'a> Maquetador<'a> {
+    fn nuevo(formato: Formato, incrustados: &'a dyn Incrustados, sistema: &'a mut FontSystem) -> Self {
+        Maquetador {
+            formato,
+            incrustados,
+            sistema,
+            preambulo: String::new(),
+            macros: String::new(),
+            avisos: Vec::new(),
+            primitivas: Vec::new(),
+            contornos: BTreeMap::new(),
+            fuentes: HashMap::new(),
+            zonas: Vec::new(),
+            y: 0.0,
+        }
+    }
+
+    fn columna(&self) -> Columna {
+        Columna {
+            x: 0.0,
+            ancho: self.formato.ancho,
+        }
+    }
+
+    /// Lo que afecta a todo un documento. Devuelve lo que hay que colocar.
+    fn adoptar(&mut self, lectura: Lectura) -> Vec<Bloque> {
+        let Lectura {
+            bloques,
+            preambulo,
+            macros,
+            avisos,
+        } = lectura;
+        self.preambulo = preambulo;
+        self.macros = macros;
+        self.avisos.extend(avisos);
+        bloques
+    }
+
+    fn entrada(&mut self, entrada: Entrada<'_>, primera: bool) {
+        let columna = self.columna();
+        if !primera {
+            self.bloque(&Bloque::Regla, columna);
+        }
+        let bloques = self.adoptar(entrada.lectura);
+        if let Some(titulo) = entrada.titulo {
+            let tramos = vec![Tramo::Texto(titulo.to_string(), Estilo::default())];
+            self.bloque(&Bloque::Titulo { nivel: 3, tramos }, columna);
+        }
+        self.bloques(&bloques, columna);
+        for aviso in std::mem::take(&mut self.avisos) {
+            let tramos = vec![Tramo::Texto(format!("⚠ {aviso}"), Estilo::default())];
+            self.bloque(&Bloque::Leyenda(tramos), columna);
+        }
+    }
+
+    fn cerrar(self) -> Composicion {
+        let Maquetador {
+            formato,
+            primitivas,
+            contornos,
+            avisos,
+            zonas,
+            y,
+            ..
+        } = self;
+        Composicion {
+            escena: Escena {
+                caja: Caja {
+                    x: 0.0,
+                    y: 0.0,
+                    ancho: formato.ancho,
+                    alto: y,
+                },
+                primitivas,
+                contornos,
+                zonas,
+                ..Escena::default()
+            },
+            avisos,
         }
     }
 }
