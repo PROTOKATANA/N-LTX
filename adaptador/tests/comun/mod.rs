@@ -3,6 +3,8 @@
 
 #![allow(dead_code)]
 
+pub mod dolares;
+
 use std::fmt::Write;
 
 use primitivas::{

@@ -18,8 +18,6 @@ adaptador/    `Compositor` sobre el motor. Desaparecerá cuando el motor emita `
 motor/        fork de `mathra` (fórmulas, química, física), `tikra` (TikZ) y `voltik`
               (CircuiTikZ), con su historia (ver motor/README.md).
 ejemplo/      app Flutter: galería y editor de LaTeX, unida a Rust por `rinf` (ver su README).
-formula/      lector, canonizador, validador y segmentador de fórmulas. No lo usa la cadena de
-              arriba: las fórmulas las lee `mathra`.
 ```
 
 ## Uso

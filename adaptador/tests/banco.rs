@@ -8,7 +8,6 @@ use std::collections::BTreeMap;
 use std::io::BufRead;
 
 use adaptador::{FiguraTikra, FormulaMathra};
-use formula::segmentos::{Segmentador, SegmentadorDolares, Segmento};
 use primitivas::{Capa, Color, Compositor, Primitiva};
 
 /// Los `fuente.tex` de un banco de figuras.
@@ -126,10 +125,7 @@ fn el_corpus_se_maqueta() {
         let Some(texto) = valor["texto"].as_str() else {
             continue;
         };
-        for segmento in SegmentadorDolares.segmentar(texto) {
-            let Segmento::Formula { latex, .. } = segmento else {
-                continue;
-            };
+        for latex in comun::dolares::formulas(texto) {
             match compositor.componer(latex) {
                 Ok(c) if c.avisos.is_empty() => limpias += 1,
                 Ok(c) => {

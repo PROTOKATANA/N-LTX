@@ -15,7 +15,6 @@ syntect = { version = "=5.3.0", default-features = false, features = ["parsing",
 two-face = { version = "=0.5.2", default-features = false, features = ["syntect-fancy"] }
 
 [dev-dependencies]
-formula = { path = "../formula" }
 resvg = { version = "0.45", default-features = false, features = ["raster-images"] }
 serde_json = "1.0"
 

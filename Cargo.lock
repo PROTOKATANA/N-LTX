@@ -8,7 +8,6 @@ version = "0.1.0"
 dependencies = [
  "animacion",
  "documento",
- "formula",
  "mathra",
  "primitivas",
  "resvg",
@@ -449,10 +448,6 @@ dependencies = [
  "tinyvec",
  "ttf-parser",
 ]
-
-[[package]]
-name = "formula"
-version = "0.1.0"
 
 [[package]]
 name = "futures-core"
