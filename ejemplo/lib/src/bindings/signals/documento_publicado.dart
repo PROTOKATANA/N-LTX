@@ -20,6 +20,7 @@ class DocumentoPublicado {
     required this.alto,
     required this.avisos,
     required this.error,
+    required this.muestras,
   });
 
   static DocumentoPublicado deserialize(BinaryDeserializer deserializer) {
@@ -28,6 +29,7 @@ class DocumentoPublicado {
       alto: deserializer.deserializeFloat64(),
       avisos: TraitHelpers.deserializeVectorStr(deserializer),
       error: deserializer.deserializeString(),
+      muestras: deserializer.deserializeUint32(),
     );
     deserializer.decreaseContainerDepth();
     return instance;
@@ -45,16 +47,19 @@ class DocumentoPublicado {
   final double alto;
   final List<String> avisos;
   final String error;
+  final int muestras;
 
   DocumentoPublicado copyWith({
     double? alto,
     List<String>? avisos,
     String? error,
+    int? muestras,
   }) {
     return DocumentoPublicado(
       alto: alto ?? this.alto,
       avisos: avisos ?? this.avisos,
       error: error ?? this.error,
+      muestras: muestras ?? this.muestras,
     );
   }
 
@@ -63,6 +68,7 @@ class DocumentoPublicado {
     serializer.serializeFloat64(alto);
     TraitHelpers.serializeVectorStr(avisos, serializer);
     serializer.serializeString(error);
+    serializer.serializeUint32(muestras);
     serializer.decreaseContainerDepth();
   }
 
@@ -80,11 +86,12 @@ class DocumentoPublicado {
     return other is DocumentoPublicado &&
         alto == other.alto &&
         listEquals(avisos, other.avisos) &&
-        error == other.error;
+        error == other.error &&
+        muestras == other.muestras;
   }
 
   @override
-  int get hashCode => Object.hash(alto, avisos, error);
+  int get hashCode => Object.hash(alto, avisos, error, muestras);
 
   @override
   String toString() {
@@ -95,7 +102,8 @@ class DocumentoPublicado {
           '$runtimeType('
           'alto: $alto, '
           'avisos: $avisos, '
-          'error: $error'
+          'error: $error, '
+          'muestras: $muestras'
           ')';
       return true;
     }());

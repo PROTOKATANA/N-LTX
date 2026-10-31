@@ -19,8 +19,6 @@ export '../serde/serde.dart';
 part 'trait_helpers.dart';
 part 'documento_publicado.dart';
 part 'medidas_pintor.dart';
-part 'muestra_leida.dart';
-part 'pedir_muestra.dart';
 part 'publicar_documento.dart';
 part 'ver_documento.dart';
 part 'signal_handlers.dart';

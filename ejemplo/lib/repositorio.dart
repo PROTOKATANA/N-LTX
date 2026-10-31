@@ -4,27 +4,20 @@ import 'src/bindings/bindings.dart';
 
 /// Lo que devuelve el motor al recibir un documento.
 class Publicado {
-  const Publicado({required this.alto, required this.avisos, this.error});
+  const Publicado({
+    required this.alto,
+    required this.avisos,
+    this.error,
+    this.muestras = 0,
+  });
 
   /// En bp, con el margen.
   final double alto;
   final List<String> avisos;
   final String? error;
-}
 
-/// Un archivo de la carpeta de muestras.
-class ArchivoMuestra {
-  const ArchivoMuestra({
-    required this.indice,
-    required this.total,
-    required this.nombre,
-    required this.fuente,
-  });
-
-  final int indice;
-  final int total;
-  final String nombre;
-  final String fuente;
+  /// Cuántas muestras lleva el documento.
+  final int muestras;
 }
 
 /// Lo que se está midiendo en el pintor.
@@ -63,16 +56,16 @@ class Encuadre {
 
 /// Cómo habla la interfaz con el motor: los widgets no conocen las señales.
 abstract interface class RepositorioMotor {
-  /// Compone `fuente` para una vista de `ancho` bp.
-  void publicar(String fuente, {required double ancho});
+  /// Compone `fuente` para una vista de `ancho` bp, seguido o no de todas las muestras.
+  void publicar(
+    String fuente, {
+    required double ancho,
+    bool conMuestras = false,
+  });
 
   void ver(Encuadre encuadre);
 
-  void pedirMuestra(int indice);
-
   Stream<Publicado> get publicados;
-
-  Stream<ArchivoMuestra> get muestras;
 
   Stream<Medidas> get medidas;
 }
@@ -80,8 +73,15 @@ abstract interface class RepositorioMotor {
 /// El repositorio sobre las señales de rinf.
 class RepositorioRinf implements RepositorioMotor {
   @override
-  void publicar(String fuente, {required double ancho}) =>
-      PublicarDocumento(fuente: fuente, ancho: ancho).sendSignalToRust();
+  void publicar(
+    String fuente, {
+    required double ancho,
+    bool conMuestras = false,
+  }) => PublicarDocumento(
+    fuente: fuente,
+    ancho: ancho,
+    conMuestras: conMuestras,
+  ).sendSignalToRust();
 
   @override
   void ver(Encuadre e) => VerDocumento(
@@ -92,25 +92,12 @@ class RepositorioRinf implements RepositorioMotor {
   ).sendSignalToRust();
 
   @override
-  void pedirMuestra(int indice) =>
-      PedirMuestra(indice: indice).sendSignalToRust();
-
-  @override
-  Stream<ArchivoMuestra> get muestras => MuestraLeida.rustSignalStream.map(
-    (RustSignalPack<MuestraLeida> s) => ArchivoMuestra(
-      indice: s.message.indice,
-      total: s.message.total,
-      nombre: s.message.nombre,
-      fuente: s.message.fuente,
-    ),
-  );
-
-  @override
   Stream<Publicado> get publicados => DocumentoPublicado.rustSignalStream.map(
     (RustSignalPack<DocumentoPublicado> s) => Publicado(
       alto: s.message.alto,
       avisos: s.message.avisos,
       error: s.message.error.isEmpty ? null : s.message.error,
+      muestras: s.message.muestras,
     ),
   );
 

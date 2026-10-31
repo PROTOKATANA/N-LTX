@@ -13,11 +13,15 @@ class VistaDocumento extends StatefulWidget {
     required this.motor,
     required this.fuente,
     required this.zoom,
+    this.conMuestras = false,
   });
 
   final RepositorioMotor motor;
   final String fuente;
   final double zoom;
+
+  /// Tras `fuente` van todas las muestras: las tiene Rust.
+  final bool conMuestras;
 
   @override
   State<VistaDocumento> createState() => _VistaDocumentoState();
@@ -38,6 +42,9 @@ class _VistaDocumentoState extends State<VistaDocumento> {
   Publicado _publicado = const Publicado(alto: 0, avisos: []);
   String _medidas = '';
   bool _hayQuePublicar = true;
+
+  /// La primera vez, muchas figuras tardan: que se note que algo está pasando.
+  bool _componiendo = false;
   final _suscripciones = <StreamSubscription<Object?>>[];
 
   @override
@@ -46,7 +53,12 @@ class _VistaDocumentoState extends State<VistaDocumento> {
     _desplazamiento.addListener(_verVista);
     _suscripciones
       ..add(
-        widget.motor.publicados.listen((p) => setState(() => _publicado = p)),
+        widget.motor.publicados.listen((p) {
+          setState(() {
+            _publicado = p;
+            _componiendo = false;
+          });
+        }),
       )
       ..add(
         widget.motor.medidas.listen((m) {
@@ -77,7 +89,13 @@ class _VistaDocumentoState extends State<VistaDocumento> {
   @override
   void didUpdateWidget(VistaDocumento antes) {
     super.didUpdateWidget(antes);
-    if (antes.fuente != widget.fuente || antes.zoom != widget.zoom) {
+    if (antes.conMuestras != widget.conMuestras) {
+      if (_desplazamiento.hasClients) _desplazamiento.jumpTo(0);
+      setState(() => _componiendo = true);
+    }
+    if (antes.fuente != widget.fuente ||
+        antes.zoom != widget.zoom ||
+        antes.conMuestras != widget.conMuestras) {
       _pedirPublicacion();
     }
   }
@@ -91,7 +109,11 @@ class _VistaDocumentoState extends State<VistaDocumento> {
   void _publicar() {
     if (!mounted || _textura == null || _tam.isEmpty) return;
     _hayQuePublicar = false;
-    widget.motor.publicar(widget.fuente, ancho: _tam.width / widget.zoom);
+    widget.motor.publicar(
+      widget.fuente,
+      ancho: _tam.width / widget.zoom,
+      conMuestras: widget.conMuestras,
+    );
     _verVista();
   }
 
@@ -170,7 +192,13 @@ class _VistaDocumentoState extends State<VistaDocumento> {
               left: 12,
               right: 12,
               bottom: 8,
-              child: IgnorePointer(child: _Pie(_publicado, _medidas)),
+              child: IgnorePointer(
+                child: _Pie(
+                  _publicado,
+                  _componiendo ? 'Componiendo…' : _medidas,
+                  conMuestras: widget.conMuestras,
+                ),
+              ),
             ),
           ],
         );
@@ -180,10 +208,11 @@ class _VistaDocumentoState extends State<VistaDocumento> {
 }
 
 class _Pie extends StatelessWidget {
-  const _Pie(this.publicado, this.medidas);
+  const _Pie(this.publicado, this.medidas, {required this.conMuestras});
 
   final Publicado publicado;
   final String medidas;
+  final bool conMuestras;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -197,7 +226,10 @@ class _Pie extends StatelessWidget {
           '⚠ $aviso',
           style: const TextStyle(fontSize: 11, color: Color(0xFFB06000)),
         ),
-      Text(medidas, style: Theme.of(context).textTheme.bodySmall),
+      Text(
+        conMuestras ? '${publicado.muestras} muestras · $medidas' : medidas,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
     ],
   );
 }

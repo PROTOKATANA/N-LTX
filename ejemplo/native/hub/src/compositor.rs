@@ -2,16 +2,18 @@
 //! bloquearse nunca. Si llegan varios encargos seguidos, solo se hace el último.
 
 use std::collections::HashMap;
-use std::panic::catch_unwind;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::thread::JoinHandle;
 
 use adaptador::{FiguraTikra, IncrustadosMotor};
 use animacion::Reproductor;
-use documento::{Documento, Formato, Memoria};
+use documento::{Apartado, Documento, Formato, Memoria};
 use pintor::{Animador, Taller, ancho_de_texto, carencias, hilos};
-use primitivas::{Color, Composicion, Escena};
+use primitivas::{Color, Composicion, ErrorComposicion, Escena};
+
+use crate::muestras::Muestras;
 
 /// Bp por em del texto y de las fórmulas.
 const TAM_FORMULA: f64 = 14.0;
@@ -24,6 +26,8 @@ pub struct Resultado {
     pub alto: f64,
     pub avisos: Vec<String>,
     pub error: String,
+    /// Cuántas muestras lleva el documento.
+    pub muestras: u32,
 }
 
 /// A quién se le cuenta el resultado.
@@ -42,11 +46,12 @@ impl Destino for Taller {
     }
 }
 
-/// Un documento a un ancho de vista, en bp.
+/// Un documento a un ancho de vista, en bp, seguido o no de todas las muestras.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Encargo {
     pub fuente: String,
     pub ancho: f64,
+    pub con_muestras: bool,
 }
 
 pub struct Compositor {
@@ -55,9 +60,11 @@ pub struct Compositor {
 }
 
 impl Compositor {
-    pub fn abrir<D: Destino, A: Avisos>(destino: Arc<D>, avisos: A) -> Compositor {
+    pub fn abrir<D: Destino, A: Avisos>(destino: Arc<D>, avisos: A, muestras: Muestras) -> Compositor {
         let (tx, rx) = channel();
-        let hilo = hilos::lanzar("nltx-compositor", move || trabajar(&rx, destino.as_ref(), &avisos));
+        let hilo = hilos::lanzar("nltx-compositor", move || {
+            trabajar(&rx, destino.as_ref(), &avisos, &muestras);
+        });
         Compositor {
             encargos: Some(tx),
             hilo,
@@ -82,12 +89,12 @@ impl Drop for Compositor {
     }
 }
 
-fn trabajar(encargos: &Receiver<Encargo>, destino: &dyn Destino, avisos: &dyn Avisos) {
+fn trabajar(encargos: &Receiver<Encargo>, destino: &dyn Destino, avisos: &dyn Avisos, muestras: &Muestras) {
     while let Ok(mut encargo) = encargos.recv() {
         while let Ok(siguiente) = encargos.try_recv() {
             encargo = siguiente;
         }
-        avisos.publicado(componer(&encargo, destino));
+        avisos.publicado(componer(&encargo, muestras, destino));
     }
 }
 
@@ -104,10 +111,21 @@ fn documento() -> &'static Documento {
     })
 }
 
-fn componer(encargo: &Encargo, destino: &dyn Destino) -> Resultado {
+fn compuesto(encargo: &Encargo, muestras: &Muestras) -> Result<Composicion, ErrorComposicion> {
     let ancho = ancho_de_texto(encargo.ancho);
-    let compuesto = catch_unwind(|| documento().componer_a(&encargo.fuente, ancho));
-    match compuesto {
+    if !encargo.con_muestras {
+        return documento().componer_a(&encargo.fuente, ancho);
+    }
+    let propio = Apartado {
+        titulo: None,
+        fuente: &encargo.fuente,
+    };
+    let apartados: Vec<Apartado<'_>> = std::iter::once(propio).chain(muestras.apartados()).collect();
+    documento().componer_serie(&apartados, ancho)
+}
+
+fn componer(encargo: &Encargo, muestras: &Muestras, destino: &dyn Destino) -> Resultado {
+    match catch_unwind(AssertUnwindSafe(|| compuesto(encargo, muestras))) {
         Ok(Ok(Composicion { escena, mut avisos })) => {
             let alto = escena.caja.alto + 2.0 * pintor::MARGEN;
             avisos.extend(carencias(&escena));
@@ -116,6 +134,11 @@ fn componer(encargo: &Encargo, destino: &dyn Destino) -> Resultado {
                 alto,
                 avisos,
                 error: String::new(),
+                muestras: if encargo.con_muestras {
+                    muestras.cuantas() as u32
+                } else {
+                    0
+                },
             }
         }
         Ok(Err(e)) => Resultado {
@@ -176,31 +199,40 @@ mod tests {
         Encargo {
             fuente: fuente.into(),
             ancho,
+            con_muestras: false,
         }
+    }
+
+    fn sin_muestras() -> Muestras {
+        Muestras::default()
     }
 
     #[test]
     fn publicar_da_el_alto_con_su_margen_y_pasa_los_avisos() {
         let falso = Falso::default();
-        let r = componer(&encargo("Hola", 400.0), &falso);
+        let r = componer(&encargo("Hola", 400.0), &sin_muestras(), &falso);
         assert!(r.alto > 2.0 * pintor::MARGEN, "{r:?}");
         assert_eq!(falso.0.lock().unwrap()[0], ancho_de_texto(400.0));
         let fuente =
             r"\usetikzlibrary{patterns}\begin{tikzpicture}\fill[pattern=dots] (0,0) rectangle (1,1);\end{tikzpicture}";
-        let r = componer(&encargo(fuente, 400.0), &falso);
+        let r = componer(&encargo(fuente, 400.0), &sin_muestras(), &falso);
         assert!(r.avisos.iter().any(|a| a.contains("patrones")), "{r:?}");
     }
 
     #[test]
     fn un_ancho_menor_alarga_el_documento() {
         let fuente = "Un párrafo con bastantes palabras para que se parta en varias líneas al estrecharlo.";
-        let alto = |ancho| componer(&encargo(fuente, ancho), &Falso::default()).alto;
+        let alto = |ancho| componer(&encargo(fuente, ancho), &sin_muestras(), &Falso::default()).alto;
         assert!(alto(120.0) > alto(800.0));
     }
 
     #[test]
     fn un_documento_mezcla_texto_y_formulas() {
-        let r = componer(&encargo(r"Sea $x^2$ y \ce{H2O}.", 400.0), &Falso::default());
+        let r = componer(
+            &encargo(r"Sea $x^2$ y \ce{H2O}.", 400.0),
+            &sin_muestras(),
+            &Falso::default(),
+        );
         assert!(r.avisos.is_empty() && r.error.is_empty(), "{r:?}");
     }
 
@@ -226,7 +258,7 @@ mod tests {
     fn el_hilo_avisa_y_al_soltarlo_se_ha_hecho_lo_ultimo() {
         let avisados = Avisados::default();
         let vistos = Arc::clone(&avisados.0);
-        let c = Compositor::abrir(Arc::new(Falso::default()), avisados);
+        let c = Compositor::abrir(Arc::new(Falso::default()), avisados, sin_muestras());
         c.encargar(encargo("uno", 400.0));
         c.encargar(encargo("dos", 400.0));
         drop(c);

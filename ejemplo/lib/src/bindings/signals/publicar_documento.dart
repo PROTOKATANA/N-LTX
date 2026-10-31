@@ -1,16 +1,22 @@
 // ignore_for_file: type=lint, type=warning
 part of 'signals.dart';
 
-/// Dart → Rust: el documento que hay que mostrar en una vista de `ancho` bp.
+/// Dart → Rust: el documento que hay que mostrar en una vista de `ancho` bp, seguido o no de todas
+/// las muestras. Las muestras las tiene Rust: no cruzan Dart.
 @immutable
 class PublicarDocumento {
-  const PublicarDocumento({required this.fuente, required this.ancho});
+  const PublicarDocumento({
+    required this.fuente,
+    required this.ancho,
+    required this.conMuestras,
+  });
 
   static PublicarDocumento deserialize(BinaryDeserializer deserializer) {
     deserializer.increaseContainerDepth();
     final instance = PublicarDocumento(
       fuente: deserializer.deserializeString(),
       ancho: deserializer.deserializeFloat64(),
+      conMuestras: deserializer.deserializeBool(),
     );
     deserializer.decreaseContainerDepth();
     return instance;
@@ -27,11 +33,17 @@ class PublicarDocumento {
 
   final String fuente;
   final double ancho;
+  final bool conMuestras;
 
-  PublicarDocumento copyWith({String? fuente, double? ancho}) {
+  PublicarDocumento copyWith({
+    String? fuente,
+    double? ancho,
+    bool? conMuestras,
+  }) {
     return PublicarDocumento(
       fuente: fuente ?? this.fuente,
       ancho: ancho ?? this.ancho,
+      conMuestras: conMuestras ?? this.conMuestras,
     );
   }
 
@@ -39,6 +51,7 @@ class PublicarDocumento {
     serializer.increaseContainerDepth();
     serializer.serializeString(fuente);
     serializer.serializeFloat64(ancho);
+    serializer.serializeBool(conMuestras);
     serializer.decreaseContainerDepth();
   }
 
@@ -55,11 +68,12 @@ class PublicarDocumento {
 
     return other is PublicarDocumento &&
         fuente == other.fuente &&
-        ancho == other.ancho;
+        ancho == other.ancho &&
+        conMuestras == other.conMuestras;
   }
 
   @override
-  int get hashCode => Object.hash(fuente, ancho);
+  int get hashCode => Object.hash(fuente, ancho, conMuestras);
 
   @override
   String toString() {
@@ -69,7 +83,8 @@ class PublicarDocumento {
       fullString =
           '$runtimeType('
           'fuente: $fuente, '
-          'ancho: $ancho'
+          'ancho: $ancho, '
+          'conMuestras: $conMuestras'
           ')';
       return true;
     }());

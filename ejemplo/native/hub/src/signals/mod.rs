@@ -3,11 +3,13 @@
 use rinf::{DartSignal, RustSignal};
 use serde::{Deserialize, Serialize};
 
-/// Dart → Rust: el documento que hay que mostrar en una vista de `ancho` bp.
+/// Dart → Rust: el documento que hay que mostrar en una vista de `ancho` bp, seguido o no de todas
+/// las muestras. Las muestras las tiene Rust: no cruzan Dart.
 #[derive(Clone, Deserialize, DartSignal)]
 pub struct PublicarDocumento {
     pub fuente: String,
     pub ancho: f64,
+    pub con_muestras: bool,
 }
 
 /// Dart → Rust: qué parte del documento se ve, en píxeles físicos.
@@ -25,6 +27,7 @@ pub struct DocumentoPublicado {
     pub alto: f64,
     pub avisos: Vec<String>,
     pub error: String,
+    pub muestras: u32,
 }
 
 /// Rust → Dart, una vez por segundo.
@@ -36,19 +39,4 @@ pub struct MedidasPintor {
     pub elementos: u64,
     pub fps_masiva: f64,
     pub ms_masiva: f64,
-}
-
-/// Dart → Rust: la muestra que hay que leer.
-#[derive(Clone, Copy, Deserialize, DartSignal)]
-pub struct PedirMuestra {
-    pub indice: u32,
-}
-
-/// Rust → Dart: una muestra de la carpeta, o vacía si no hay ninguna.
-#[derive(Clone, Serialize, RustSignal)]
-pub struct MuestraLeida {
-    pub indice: u32,
-    pub total: u32,
-    pub nombre: String,
-    pub fuente: String,
 }

@@ -1,7 +1,7 @@
 //! El hub de rinf del ejemplo: cablea las piezas de N-LTX, que no saben nada de rinf.
 //! - `senales`: las señales de Dart, traducidas a llamadas.
 //! - `compositor`: compone los documentos en su propio hilo.
-//! - `muestras`: una carpeta de `.tex` para recorrer, si `NLTX_MUESTRAS` dice cuál.
+//! - `muestras`: una carpeta de `.tex` para ver seguidos, si `NLTX_MUESTRAS` dice cuál.
 //! - `avisos`: lo que se cuenta a Dart.
 //!
 //! El pintor en C++ lee del almacén de `pintor` por `cxx`: esta biblioteca exporta esos símbolos y
@@ -31,9 +31,9 @@ write_interface!();
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let taller = Arc::new(Taller::abrir(SUPERFICIE, almacen()));
-    let compositor = Compositor::abrir(Arc::clone(&taller), AvisosRinf);
     let carpeta = std::env::var_os("NLTX_MUESTRAS");
     let muestras = carpeta.map_or_else(Muestras::default, |c| Muestras::de_carpeta(Path::new(&c)));
-    tokio::spawn(senales::escuchar(compositor, taller, muestras));
+    let compositor = Compositor::abrir(Arc::clone(&taller), AvisosRinf, muestras);
+    tokio::spawn(senales::escuchar(compositor, taller));
     dart_shutdown().await;
 }

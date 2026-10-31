@@ -1,21 +1,20 @@
-//! Una carpeta de archivos `.tex` para recorrer en la aplicación: sirve para ver cómo se comporta el
-//! motor con LaTeX de fuera. Las muestras son datos del usuario y no se versionan.
+//! Una carpeta de archivos `.tex` para ver en la aplicación cómo se comporta el motor con LaTeX de
+//! fuera. Las muestras son datos del usuario y no se versionan.
 
 use std::fs;
 use std::path::Path;
 
-/// Una muestra, con su posición.
+use documento::Apartado;
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct Muestra {
-    pub indice: u32,
-    pub total: u32,
-    pub nombre: String,
-    pub fuente: String,
+struct Muestra {
+    titulo: String,
+    fuente: String,
 }
 
-/// Se leen al arrancar: el bucle de señales no debe tocar el disco.
+/// Se leen al arrancar: nadie más debe tocar el disco.
 #[derive(Debug, Default)]
-pub struct Muestras(Vec<(String, String)>);
+pub struct Muestras(Vec<Muestra>);
 
 impl Muestras {
     /// Por orden de nombre. Lo que no se pueda leer se salta, y sin carpeta no hay muestras.
@@ -30,20 +29,23 @@ impl Muestras {
             let nombre = r.file_stem()?.to_string_lossy().into_owned();
             Some((nombre, fs::read_to_string(r).ok()?))
         });
-        Muestras(leidas.collect())
+        let muestras = leidas.enumerate().map(|(i, (nombre, fuente))| Muestra {
+            titulo: format!("{} · {nombre}", i + 1),
+            fuente,
+        });
+        Muestras(muestras.collect())
     }
 
-    /// La muestra `indice`, dando la vuelta al llegar al final. Sin muestras, una vacía.
-    pub fn leer(&self, indice: u32) -> Muestra {
-        let total = self.0.len() as u32;
-        let indice = indice.checked_rem(total).unwrap_or(0);
-        let (nombre, fuente) = self.0.get(indice as usize).cloned().unwrap_or_default();
-        Muestra {
-            indice,
-            total,
-            nombre,
-            fuente,
-        }
+    pub fn cuantas(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Cada muestra como un documento de una serie.
+    pub fn apartados(&self) -> impl Iterator<Item = Apartado<'_>> {
+        self.0.iter().map(|m| Apartado {
+            titulo: Some(&m.titulo),
+            fuente: &m.fuente,
+        })
     }
 }
 
@@ -51,7 +53,7 @@ impl Muestras {
 mod tests {
     use super::*;
 
-    /// Una carpeta propia de cada prueba, dentro de la de compilación.
+    /// Una carpeta propia de cada prueba.
     fn carpeta(nombre: &str) -> std::path::PathBuf {
         let c = std::env::temp_dir().join(format!("nltx-muestras-{}-{nombre}", std::process::id()));
         let _ = fs::remove_dir_all(&c);
@@ -60,36 +62,20 @@ mod tests {
     }
 
     #[test]
-    fn van_por_orden_de_nombre_y_solo_los_tex() {
+    fn van_por_orden_de_nombre_numeradas_y_solo_los_tex() {
         let c = carpeta("orden");
         fs::write(c.join("b.tex"), "dos").unwrap();
         fs::write(c.join("a.tex"), "uno").unwrap();
         fs::write(c.join("nota.txt"), "nada").unwrap();
         let m = Muestras::de_carpeta(&c);
-        assert_eq!(m.leer(0).nombre, "a");
-        assert_eq!(m.leer(1).fuente, "dos");
-        assert_eq!(m.leer(1).total, 2);
-    }
-
-    #[test]
-    fn al_pasar_del_final_da_la_vuelta() {
-        let c = carpeta("vuelta");
-        fs::write(c.join("a.tex"), "uno").unwrap();
-        fs::write(c.join("b.tex"), "dos").unwrap();
-        assert_eq!(Muestras::de_carpeta(&c).leer(3).indice, 1);
+        assert_eq!(m.cuantas(), 2);
+        let a: Vec<_> = m.apartados().map(|a| (a.titulo, a.fuente)).collect();
+        assert_eq!(a, [(Some("1 · a"), "uno"), (Some("2 · b"), "dos")]);
     }
 
     #[test]
     fn sin_carpeta_no_hay_muestras_y_no_rompe() {
         let m = Muestras::de_carpeta(Path::new("/no/existe"));
-        assert_eq!(
-            m.leer(7),
-            Muestra {
-                indice: 0,
-                total: 0,
-                nombre: String::new(),
-                fuente: String::new(),
-            }
-        );
+        assert_eq!(m.cuantas(), 0);
     }
 }
