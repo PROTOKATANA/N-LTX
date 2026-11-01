@@ -10,6 +10,7 @@ members = [
     "motor/tikra/crates/core",
     "motor/tikra/crates/arrows",
     "motor/tikra/crates/calendar",
+    "motor/tikra/crates/decorations",
     "motor/tikra/crates/shapes",
     "motor/tikra/crates/pgfplots",
     "motor/tikra/crates/libraries",

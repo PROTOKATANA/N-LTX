@@ -110,13 +110,6 @@ pub enum Cmd {
     Unboxed,
     SetLayers,
     Frame,
-    /// `\arrow` and `\arrowreversed` of markings
-    Arrow,
-    ArrowReversed,
-    /// the basic layer's decorations: `\pgfdecoration` … `\endpgfdecoration`, `\pgfdecoratecurrentpath`
-    DecorationBegin,
-    DecorationEnd,
-    DecorateCurrentPath,
     /// `\quad` and `\qquad` between pictures
     Quad,
     /// `\tikz@checkunit{value}`
@@ -124,11 +117,6 @@ pub enum Cmd {
 }
 
 pub(super) const COMMANDS: &[(&str, Cmd)] = &[
-    ("tikra@arrow", Cmd::Arrow),
-    ("tikra@arrowreversed", Cmd::ArrowReversed),
-    ("tikra@decoration", Cmd::DecorationBegin),
-    ("tikra@enddecoration", Cmd::DecorationEnd),
-    ("tikra@decoratecurrentpath", Cmd::DecorateCurrentPath),
     ("path", Cmd::Path),
     ("draw", Cmd::Draw),
     ("fill", Cmd::Fill),

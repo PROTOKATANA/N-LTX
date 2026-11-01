@@ -2042,8 +2042,7 @@ pub fn define_keys(e: &mut Engine, pieces: &[&'static super::super::piece::Piece
     e.tex.define("pgflinewidth", Meaning::Dimen(4000));
     e.tex.dimens.insert(4000, (0.4 * 65536.0) as i64);
     super::super::trees::define(e);
-    super::super::decorations::define(e);
-    for (path, f) in NATIVE.iter().chain(super::super::decorations::KEYS).chain(super::super::libraries::KEYS) {
+    for (path, f) in NATIVE.iter().chain(super::super::libraries::KEYS) {
         let id = NATIVE_KEY_BASE + e.plug.key_fns.len() as u16;
         e.plug.key_fns.push(*f);
         e.tex.define(&macro_name(&format!("{path}/.@cmd")), Meaning::Native(id));
@@ -2057,9 +2056,6 @@ pub fn define_keys(e: &mut Engine, pieces: &[&'static super::super::piece::Piece
     let mut lexer = crate::tex::Tex::new_lexer();
     lexer.push_text(DEFINITIONS);
     lexer.push_text(super::super::basic::DEFINITIONS);
-    lexer.push_text(super::super::decorations::DEFINITIONS);
-    lexer.push_text(super::super::decorations::DECLARATIONS);
-    lexer.push_text(super::super::decorations::textfx::DEFINITIONS);
     lexer.push_text(super::super::shapes::DEFINITIONS);
     let definitions: Vec<String> = pieces.iter().map(|p| (p.definitions)()).collect();
     for text in &definitions {

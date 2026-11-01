@@ -198,7 +198,8 @@ mod tests {
     use tikra_engine::engine::piece::Parts;
 
     fn run(code: &str) -> Result<(Canvas, Vec<String>), Error> {
-        let parts = Parts { pieces: &[&PIECE], libraries: &[] };
+        // `segment angle` is a key of the decorations
+        let parts = Parts { pieces: &[&tikra_decorations::PIECE, &PIECE], libraries: &[] };
         tikra_engine::engine::run_document_in(code, parts).map(|(canvas, warnings, _)| (canvas, warnings))
     }
 

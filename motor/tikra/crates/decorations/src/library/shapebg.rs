@@ -135,10 +135,10 @@ impl Run<'_> {
             }
             other if other != "rectangle" => {
                 // any other shape: its background path at the size, from the node shapes, at its anchor
-                let boxes = [("text".to_string(), crate::engine::shapes::BoxSize::default())];
+                let boxes = [("text".to_string(), tikra_engine::engine::shapes::BoxSize::default())];
                 let (line_width, ex) = (self.e.st.pen.line_width, 4.3 * PT);
-                let mut keys = crate::engine::nodes::EngineKeys(self.e);
-                let mut input = crate::engine::shapes::Input {
+                let mut keys = tikra_engine::engine::nodes::EngineKeys(self.e);
+                let mut input = tikra_engine::engine::shapes::Input {
                     parts: &boxes,
                     // pgf's shape of an arbitrary size, then stretched to the decoration's
                     inner_xsep: 50.0 * PT,
@@ -153,15 +153,17 @@ impl Run<'_> {
                     pointer: None,
                     keys: &mut keys,
                 };
-                let Some(g) = crate::engine::shapes::compute(other, &mut input) else {
+                let Some(g) = tikra_engine::engine::shapes::compute(other, &mut input) else {
                     self.e.warn(format!("shape backgrounds: shape '{other}' not supported: drawn as a rectangle"));
                     self.rectangle(&t, w, h);
                     return;
                 };
                 // the path stretched to be as wide and high as the shape's size, as pgf scales the
                 // background it measured
-                let mut bounds = crate::canvas::Canvas::default();
-                for path in g.paths.iter().filter(|p| matches!(p.layer, crate::engine::shapes::Layer::Background) && matches!(p.usage, crate::engine::shapes::Usage::Node)) {
+                let mut bounds = tikra_engine::canvas::Canvas::default();
+                for path in
+                    g.paths.iter().filter(|p| matches!(p.layer, tikra_engine::engine::shapes::Layer::Background) && matches!(p.usage, tikra_engine::engine::shapes::Usage::Node))
+                {
                     bounds.include_path(&path.segments);
                 }
                 let stretch = match (bounds.min, bounds.max) {
@@ -176,13 +178,15 @@ impl Run<'_> {
                 let at = stretch.apply(g.anchor(&anchor).unwrap_or(g.center));
                 // node coordinates are cm, the decoration's pt
                 let m = base.compose(&Transform::scaling(1.0 / PT, 1.0 / PT)).compose(&Transform::translation(-at.x, -at.y)).compose(&stretch);
-                for path in g.paths.iter().filter(|p| matches!(p.layer, crate::engine::shapes::Layer::Background) && matches!(p.usage, crate::engine::shapes::Usage::Node)) {
+                for path in
+                    g.paths.iter().filter(|p| matches!(p.layer, tikra_engine::engine::shapes::Layer::Background) && matches!(p.usage, tikra_engine::engine::shapes::Usage::Node))
+                {
                     for seg in &path.segments {
                         match *seg {
-                            crate::scene::Segment::MoveTo(q) => self.w.out.move_to(m.apply(q)),
-                            crate::scene::Segment::LineTo(q) => self.w.out.line_to(m.apply(q)),
-                            crate::scene::Segment::CurveTo(a, b, q) => self.w.out.curve_to(m.apply(a), m.apply(b), m.apply(q)),
-                            crate::scene::Segment::Close => self.w.out.close(),
+                            tikra_engine::scene::Segment::MoveTo(q) => self.w.out.move_to(m.apply(q)),
+                            tikra_engine::scene::Segment::LineTo(q) => self.w.out.line_to(m.apply(q)),
+                            tikra_engine::scene::Segment::CurveTo(a, b, q) => self.w.out.curve_to(m.apply(a), m.apply(b), m.apply(q)),
+                            tikra_engine::scene::Segment::Close => self.w.out.close(),
                         }
                     }
                 }

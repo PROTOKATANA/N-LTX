@@ -11,6 +11,7 @@ mod command;
 pub mod coords;
 pub mod decorations;
 pub mod fadings;
+mod finish;
 pub mod functional;
 pub mod graphics;
 pub mod groups;
@@ -114,8 +115,6 @@ pub struct Engine {
     pub fading: groups::Fadings,
     pub declared: groups::Declared,
     pub node_run: groups::NodeRun,
-    /// open `\pgfdecoration`s
-    pub decoration_envs: Vec<decorations::Env>,
     pub keyrun: groups::KeyRun,
     /// node sets (`new set`, `set=`): a node with `set=` joins the set once it has a name
     pub node_sets: nodes::NodeSets,
@@ -165,7 +164,6 @@ impl Clone for Engine {
             nesting: self.nesting,
             keyrun: self.keyrun.clone(),
             pgf: self.pgf.clone(),
-            decoration_envs: self.decoration_envs.clone(),
             last_node: self.last_node.clone(),
             last_node_name: self.last_node_name.clone(),
             tree: self.tree.clone(),
@@ -319,11 +317,6 @@ impl Engine {
                 Ok(())
             }
             Cmd::Tikz => self.tikz_command(),
-            Cmd::Arrow => self.arrow_command(false),
-            Cmd::ArrowReversed => self.arrow_command(true),
-            Cmd::DecorationBegin => self.decoration_begin(),
-            Cmd::DecorationEnd => self.decoration_end(),
-            Cmd::DecorateCurrentPath => self.decorate_current_path(),
             Cmd::Begin => self.begin_environment(),
             Cmd::End => self.end_environment(),
             Cmd::Scoped => self.command_scoped(),

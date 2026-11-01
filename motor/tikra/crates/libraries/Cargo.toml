@@ -7,3 +7,6 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 tikra_engine = { path = "../engine" }
+
+[dev-dependencies]
+tikra_decorations = { path = "../decorations" }

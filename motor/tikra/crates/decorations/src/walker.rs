@@ -4,7 +4,7 @@
 //! on the whole path, on the current section, on the current input segment) and, on curves, the
 //! curve time found by pgf's own bisection. Everything is in pt, in canvas coordinates.
 
-use crate::scene::{Point, Segment, Transform};
+use tikra_engine::scene::{Point, Segment, Transform};
 
 /// One scaled point in pt.
 pub const SP: f64 = 1.0 / 65536.0;

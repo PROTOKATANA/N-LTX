@@ -1,8 +1,8 @@
 //! `text along path`: each character measured, then typeset on the path.
 
 use super::*;
-use crate::canvas::Item;
-use crate::color::Color;
+use tikra_engine::canvas::Item;
+use tikra_engine::color::Color;
 
 impl Run<'_> {
     pub(super) fn text_width(&self) -> f64 {
@@ -75,18 +75,18 @@ impl Run<'_> {
                 break;
             }
             match &t {
-                Token::Char(_, crate::tex::Cat::Space) => {
+                Token::Char(_, tikra_engine::tex::Cat::Space) => {
                     tx.is_space = true;
                     tx.current = Some((" ".into(), tx.format.clone(), self.char_width(" ", &tx.format, tx.math)));
                     return Ok(());
                 }
-                Token::Char(_, crate::tex::Cat::Begin) => {
+                Token::Char(_, tikra_engine::tex::Cat::Begin) => {
                     let mut depth = 1;
                     let mut inner = Vec::new();
                     while let Some(u) = tx.rest.pop_front() {
                         match u {
-                            Token::Char(_, crate::tex::Cat::Begin) => depth += 1,
-                            Token::Char(_, crate::tex::Cat::End) => {
+                            Token::Char(_, tikra_engine::tex::Cat::Begin) => depth += 1,
+                            Token::Char(_, tikra_engine::tex::Cat::End) => {
                                 depth -= 1;
                                 if depth == 0 {
                                     break;
@@ -96,7 +96,7 @@ impl Run<'_> {
                         }
                         inner.push(u);
                     }
-                    let s = crate::tex::tokens_to_string(&inner);
+                    let s = tikra_engine::tex::tokens_to_string(&inner);
                     let w = self.char_width(&s, &tx.format, tx.math);
                     tx.current = Some((s, tx.format.clone(), w));
                     return Ok(());
@@ -112,7 +112,7 @@ impl Run<'_> {
                         }
                         f.push(u);
                     }
-                    let s = crate::tex::tokens_to_string(&f);
+                    let s = tikra_engine::tex::tokens_to_string(&f);
                     match s.strip_prefix('+') {
                         Some(add) => tx.format.push_str(add),
                         None => tx.format = s,
@@ -147,7 +147,7 @@ impl Run<'_> {
                             tx.rest.push_front(x);
                         }
                     } else {
-                        let s = crate::tex::show_token(&t);
+                        let s = tikra_engine::tex::show_token(&t);
                         let w = self.char_width(&s, &tx.format, tx.math);
                         tx.current = Some((s, tx.format.clone(), w));
                         return Ok(());
@@ -159,12 +159,12 @@ impl Run<'_> {
     }
 
     /// The label of one character, with the format's color (`\color{…}`) taken out.
-    fn char_label(&mut self, text: &str, format: &str, math: bool) -> crate::scene::Label {
+    fn char_label(&mut self, text: &str, format: &str, math: bool) -> tikra_engine::scene::Label {
         let (font, color) = split_color(format);
         let color = color.and_then(|c| self.e.color(&c)).or_else(|| self.e.color(&self.s.text_color.clone())).unwrap_or(Color::BLACK);
         let body = if math { format!("${text}$") } else { text.to_string() };
         let mut warnings = Vec::new();
-        let label = crate::label::compose_label(&body, &font, None, 'l', color, &mut warnings);
+        let label = tikra_engine::label::compose_label(&body, &font, None, 'l', color, &mut warnings);
         for w in warnings {
             self.e.warn(w);
         }
@@ -174,7 +174,7 @@ impl Run<'_> {
     fn char_width(&mut self, text: &str, format: &str, math: bool) -> f64 {
         if text == " " {
             // an interword space of the 10pt font
-            return 3.33333 * crate::label::font_size(format);
+            return 3.33333 * tikra_engine::label::font_size(format);
         }
         self.char_label(text, format, math).width() / PT
     }

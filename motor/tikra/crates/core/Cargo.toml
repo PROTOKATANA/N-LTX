@@ -15,6 +15,7 @@ include = ["src/**", "Cargo.toml"]
 [dependencies]
 mathra = { path = "../../../mathra/crates/core", features = ["latin-modern"] }
 tikra_calendar = { path = "../calendar" }
+tikra_decorations = { path = "../decorations" }
 tikra_libraries = { path = "../libraries" }
 tikra_datavis = { path = "../datavis" }
 tikra_canvas = { path = "../canvas" }

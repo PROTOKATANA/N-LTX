@@ -8,13 +8,13 @@
 
 use std::collections::VecDeque;
 
-use crate::scene::{Point, Transform};
-use crate::tex::Token;
-use crate::{Error, PT};
+use tikra_engine::scene::{Point, Transform};
+use tikra_engine::tex::Token;
+use tikra_engine::{Error, PT};
 
 use super::walker::{Walker, EPS, SP};
 use super::{Mark, Settings};
-use crate::engine::Engine;
+use tikra_engine::engine::Engine;
 
 mod catalog;
 mod draw;
@@ -26,7 +26,7 @@ mod textpath;
 
 use catalog::initial;
 use catalog::macro_body;
-pub use catalog::{intern, lookup, lookup_meta, resolve, resolve_meta, Dec, Meta};
+pub use catalog::{intern, resolve, resolve_meta, Dec, Meta};
 
 /// The options of a state (`/pgf/decoration automaton/…`), in their order.
 #[derive(Debug, Clone, Copy)]
@@ -187,8 +187,8 @@ impl<'a> Run<'a> {
 
     /// A length stored in a key (`/pgf/decoration/pre length`…), in pt.
     pub fn key_pt(&mut self, key: &str, default: f64) -> f64 {
-        match crate::keys::value(&self.e.tex, &format!("/pgf/decoration/{key}")) {
-            Some(v) if !crate::keys::trim(&v).is_empty() => match self.e.length_of(v) {
+        match tikra_engine::keys::value(&self.e.tex, &format!("/pgf/decoration/{key}")) {
+            Some(v) if !tikra_engine::keys::trim(&v).is_empty() => match self.e.length_of(v) {
                 Ok(l) => l / PT,
                 Err(err) => {
                     self.e.warn(format!("decoration: {key}: {err}"));
@@ -200,7 +200,7 @@ impl<'a> Run<'a> {
     }
 
     pub fn key_text(&mut self, key: &str) -> String {
-        let v = crate::keys::value(&self.e.tex, &format!("/pgf/decoration/{key}")).unwrap_or_default();
+        let v = tikra_engine::keys::value(&self.e.tex, &format!("/pgf/decoration/{key}")).unwrap_or_default();
         self.e.tex.expand_to_string(v).unwrap_or_default().trim().to_string()
     }
 
@@ -214,7 +214,7 @@ impl<'a> Run<'a> {
 
     /// pgf's `rand`, from the one generator pgfmath has (`\pgfmathsetseed` sets it).
     fn rand(&mut self) -> f64 {
-        crate::expr::pseudo_random_signed()
+        tikra_engine::expr::pseudo_random_signed()
     }
 
     /// The transformation of the code: the input segment's, then the additional one.
@@ -240,8 +240,8 @@ impl<'a> Run<'a> {
     /// `\pgfpatharc{a0}{a1}{r}` from the current point.
     fn arc(&mut self, t: &Transform, a0: f64, a1: f64, r: f64) {
         let c = self.w.out.last.minus(t.linear(polar(a0, r)));
-        for s in crate::engine::path::arc_segments(crate::engine::path::EllipseArc { center: c, rx: r, ry: r, start: a0, end: a1 }, t) {
-            if let crate::scene::Segment::CurveTo(a, b, q) = s {
+        for s in tikra_engine::engine::path::arc_segments(tikra_engine::engine::path::EllipseArc { center: c, rx: r, ry: r, start: a0, end: a1 }, t) {
+            if let tikra_engine::scene::Segment::CurveTo(a, b, q) = s {
                 self.w.out.curve_to(a, b, q);
             }
         }
@@ -290,7 +290,7 @@ impl<'a> Run<'a> {
             self.s.amplitude = v;
         }
         if let Some(code) = macro_body(self.e, "pgf@decorate@additionaltransform") {
-            if !crate::keys::trim(&code).is_empty() {
+            if !tikra_engine::keys::trim(&code).is_empty() {
                 let e = &mut *self.e;
                 e.begin_group();
                 e.st.transform = Transform::default();
@@ -329,8 +329,8 @@ impl<'a> Run<'a> {
         let total = w.total;
         let rem = w.rem_total;
         for (n, v) in defs {
-            let tokens = crate::engine::tikra_tokens(&v);
-            self.e.tex.set_meaning(&Token::cs(&n), crate::engine::macro_tokens(tokens), false);
+            let tokens = tikra_engine::engine::tikra_tokens(&v);
+            self.e.tex.set_meaning(&Token::cs(&n), tikra_engine::engine::macro_tokens(tokens), false);
         }
         self.e.tex.define_string("pgfmetadecoratedpathlength", &format!("{total}pt"), false);
         let (ml, ma) = (self.s.meta_segment_length, self.s.meta_amplitude);
@@ -346,10 +346,10 @@ impl<'a> Run<'a> {
         self.install_points(t);
         let out = &mut self.w.out;
         let scale = Transform::scaling(PT, PT);
-        let mut path = super::super::basic::PgfPath { segments: Vec::new(), last: Some(out.last.scale(PT)), start: Some(out.start.scale(PT)), quick: false };
+        let mut path = tikra_engine::engine::basic::PgfPath { segments: Vec::new(), last: Some(out.last.scale(PT)), start: Some(out.start.scale(PT)), quick: false };
         let had = !out.segs.is_empty();
         if full {
-            path.segments = crate::canvas::transform_segments(&std::mem::take(&mut out.segs), &scale);
+            path.segments = tikra_engine::canvas::transform_segments(&std::mem::take(&mut out.segs), &scale);
         }
         let e = &mut *self.e;
         let saved = std::mem::replace(&mut e.pgf.pgf_path, path);
@@ -366,11 +366,11 @@ impl<'a> Run<'a> {
             (e.st.transform, e.st.pending) = saved_t;
         }
         let path = std::mem::replace(&mut e.pgf.pgf_path, saved);
-        let mut segs = crate::canvas::transform_segments(&path.segments, &Transform::scaling(1.0 / PT, 1.0 / PT));
+        let mut segs = tikra_engine::canvas::transform_segments(&path.segments, &Transform::scaling(1.0 / PT, 1.0 / PT));
         let out = &mut self.w.out;
         if !full && had {
             // the basic layer starts a path with a moveto to its current point: the decoration's path goes on
-            if let Some(crate::scene::Segment::MoveTo(q)) = segs.first() {
+            if let Some(tikra_engine::scene::Segment::MoveTo(q)) = segs.first() {
                 if q.minus(out.last).norm() < 1e-6 {
                     segs.remove(0);
                 }
@@ -389,7 +389,7 @@ impl<'a> Run<'a> {
     /// `\pgf@decorate@run`: states until `final`.
     fn run(&mut self, dec: Dec) -> Result<(), Error> {
         self.state = match dec {
-            Dec::User(n) => intern(macro_body(self.e, &format!("pgf@decorate@@{n}@initial")).map(|v| crate::tex::tokens_to_string(&v)).unwrap_or_default().trim()),
+            Dec::User(n) => intern(macro_body(self.e, &format!("pgf@decorate@@{n}@initial")).map(|v| tikra_engine::tex::tokens_to_string(&v)).unwrap_or_default().trim()),
             _ => initial(dec),
         };
         self.repeat = -1;
@@ -399,7 +399,7 @@ impl<'a> Run<'a> {
                 return Ok(());
             }
             guard += 1;
-            if guard > crate::engine::MAX_DECORATION_STEPS {
+            if guard > tikra_engine::engine::MAX_DECORATION_STEPS {
                 self.e.warn("decoration: too many steps (segment length too small?): stopped");
                 return Ok(());
             }

@@ -43,8 +43,8 @@ impl Run<'_> {
         let a = self.amp();
         let (r1, r2) = (self.key_pt("start radius", 2.5), self.key_pt("end radius", 2.5));
         let (ang, rem) = (self.s.angle, self.w.remaining);
-        let all = crate::engine::mindmap::bar(r1, r2, a, ang, rem, t);
-        let mut pieces = all.split_inclusive(|s| matches!(s, crate::scene::Segment::Close));
+        let all = tikra_engine::engine::mindmap::bar(r1, r2, a, ang, rem, t);
+        let mut pieces = all.split_inclusive(|s| matches!(s, tikra_engine::scene::Segment::Close));
         let piece = match state {
             "initial" => pieces.next(),
             "bar" => pieces.nth(1),
@@ -52,10 +52,10 @@ impl Run<'_> {
         };
         for seg in piece.unwrap_or_default() {
             match *seg {
-                crate::scene::Segment::MoveTo(q) => self.w.out.move_to(q),
-                crate::scene::Segment::LineTo(q) => self.w.out.line_to(q),
-                crate::scene::Segment::CurveTo(c1, c2, q) => self.w.out.curve_to(c1, c2, q),
-                crate::scene::Segment::Close => self.w.out.close(),
+                tikra_engine::scene::Segment::MoveTo(q) => self.w.out.move_to(q),
+                tikra_engine::scene::Segment::LineTo(q) => self.w.out.line_to(q),
+                tikra_engine::scene::Segment::CurveTo(c1, c2, q) => self.w.out.curve_to(c1, c2, q),
+                tikra_engine::scene::Segment::Close => self.w.out.close(),
             }
         }
     }

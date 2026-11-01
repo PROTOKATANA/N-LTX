@@ -7,10 +7,10 @@ impl Run<'_> {
     pub(super) fn set_mark_info(&mut self) -> Result<(), Error> {
         let seq = self.seq;
         // a dimension, as `\the` writes it (`120.0pt`)
-        let at = if seq == 0 { String::new() } else { crate::tex::dimen::show((self.mark_at * 65536.0).round() as i64) };
+        let at = if seq == 0 { String::new() } else { tikra_engine::tex::dimen::show((self.mark_at * 65536.0).round() as i64) };
         let e = &mut *self.e;
-        e.tex.define_string(&crate::keys::macro_name("/pgf/decoration/mark info/sequence number"), &seq.to_string(), false);
-        e.tex.define_string(&crate::keys::macro_name("/pgf/decoration/mark info/distance from start"), &at, false);
+        e.tex.define_string(&tikra_engine::keys::macro_name("/pgf/decoration/mark info/sequence number"), &seq.to_string(), false);
+        e.tex.define_string(&tikra_engine::keys::macro_name("/pgf/decoration/mark info/distance from start"), &at, false);
         Ok(())
     }
 
@@ -23,7 +23,7 @@ impl Run<'_> {
             Pos::Tokens(t) => {
                 super::super::set_registers(self.e, &self.w);
                 let s = self.e.math_string(t.clone())?;
-                let (v, unit) = crate::expr::eval_length(&s, &self.e.vars())?;
+                let (v, unit) = tikra_engine::expr::eval_length(&s, &self.e.vars())?;
                 Ok(if unit {
                     let v = v / PT;
                     if v < 0.0 {

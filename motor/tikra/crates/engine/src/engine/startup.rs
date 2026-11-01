@@ -52,7 +52,6 @@ fn blank() -> Engine {
         fading: groups::Fadings::default(),
         declared: groups::Declared::default(),
         node_run: groups::NodeRun::default(),
-        decoration_envs: Vec::new(),
         keyrun: groups::KeyRun::default(),
         node_sets: super::nodes::NodeSets::default(),
         facts: Default::default(),

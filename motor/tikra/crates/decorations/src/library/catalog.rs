@@ -1,7 +1,7 @@
 //! Decoration and meta-decoration names, and the macros a declared decoration stores.
 
-use crate::engine::Engine;
-use crate::tex::Token;
+use tikra_engine::engine::Engine;
+use tikra_engine::tex::Token;
 
 /// A decoration (`\pgfdeclaredecoration`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,7 +68,7 @@ pub fn intern(s: &str) -> &'static str {
 /// The body of a macro, if defined.
 pub(super) fn macro_body(e: &Engine, name: &str) -> Option<Vec<Token>> {
     match e.tex.meaning_of(name) {
-        crate::tex::Meaning::Macro(m) => Some(crate::tex::substitute(&m.body, &[])),
+        tikra_engine::tex::Meaning::Macro(m) => Some(tikra_engine::tex::substitute(&m.body, &[])),
         _ => None,
     }
 }

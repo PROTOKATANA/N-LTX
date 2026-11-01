@@ -20,6 +20,7 @@ pub use tikra_engine::extension;
 
 /// The parts of TikZ that are pieces, with which every figure is read.
 const PIECES: &[&Piece] = &[
+    &tikra_decorations::PIECE,
     &tikra_calendar::PIECE,
     &tikra_libraries::folding::PIECE,
     &tikra_libraries::mindmap::PIECE,

@@ -244,7 +244,7 @@ pub fn split_parts(tokens: &[Token]) -> Vec<(String, Vec<Token>)> {
 }
 
 /// The shape keys, read from the engine's pgfkeys.
-pub(super) struct EngineKeys<'a>(pub(super) &'a mut Engine);
+pub struct EngineKeys<'a>(pub &'a mut Engine);
 
 impl shapes::Keys for EngineKeys<'_> {
     fn length(&mut self, key: &str, default: f64) -> f64 {
