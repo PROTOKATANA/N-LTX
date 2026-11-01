@@ -15,8 +15,8 @@ documento/    modo texto: LaTeX en flujo continuo, con fórmulas y figuras inyec
 animacion/    animaciones por parámetro: la misma figura, recompuesta en cada fotograma.
 pintor/       pintor GPU: Rust compila la escena y C++ la pinta sobre Diligent/Vulkan, unidos por `cxx`.
 adaptador/    `Compositor` sobre el motor. Desaparecerá cuando el motor emita `primitivas`.
-motor/        fork de `mathra` (fórmulas, química, física), `tikra` (TikZ) y `voltik`
-              (CircuiTikZ), con su historia (ver motor/README.md).
+motor/        `mathra` (fórmulas, química, física), `tikra` (TikZ) y `voltik` (CircuiTikZ): nacieron
+              de un fork y hoy son código propio, en piezas (ver motor/README.md).
 ejemplo/      app Flutter: galería y editor de LaTeX, unida a Rust por `rinf` (ver su README).
 ```
 
