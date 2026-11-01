@@ -3,3 +3,7 @@
 
 pub mod folding;
 pub mod mindmap;
+pub mod spy;
+pub mod three_d;
+pub mod tikzmath;
+pub mod turtle;

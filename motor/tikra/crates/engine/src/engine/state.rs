@@ -372,6 +372,12 @@ pub struct PicSettings {
     pub quotes_in_pic: bool,
 }
 
+/// The perspective library's homogeneous matrix, rows `a`, `b`, `c` (x, y, z) and `d` (w), by columns x, y, z.
+pub type Perspective = [[f64; 3]; 4];
+
+/// Without vanishing points: the identity.
+pub const NO_PERSPECTIVE: Perspective = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 0.0]];
+
 /// The groups that rarely change are [`Shared`]: the copy each statement makes does not repeat
 /// them, 2 % to 3 % less per element (`banco_animacion`, 5,000 elements: 39.3 to 38.0 ms per frame).
 #[derive(Debug, Clone)]
@@ -434,7 +440,7 @@ pub struct GState {
     /// the box of the path being used (`current path bounding box`), for its actions
     pub path_box: Option<(Point, Point)>,
     /// the perspective library's matrix, and the points of `plane origin`, `plane x`, `plane y`
-    pub perspective: super::three_d::Perspective,
+    pub perspective: Perspective,
     pub plane: [Option<String>; 3],
     /// `insert path={…}`: path operations the options put where they are
     pub insert_path: Vec<Token>,
@@ -507,7 +513,7 @@ impl Default for GState {
             active_in_code: false,
             active_in_nodes: false,
             path_box: None,
-            perspective: super::three_d::NO_PERSPECTIVE,
+            perspective: NO_PERSPECTIVE,
             plane: [None, None, None],
             insert_path: Vec::new(),
             name_path: None,

@@ -372,10 +372,7 @@ impl Engine {
             other if matches!(self.tex.meaning_of(&format!("tikra@cs@{other}")), tex::Meaning::Macro(_)) => self.declared_cs(other, args),
             other => match self.piece_coordinate(other, args) {
                 Some(r) => r,
-                None => match self.three_d_coordinate(other, &items)? {
-                    Some(c) => Ok(c),
-                    None => Err(Error::Figure(format!("coordinate system '{other}' not supported"))),
-                },
+                None => Err(Error::Figure(format!("coordinate system '{other}' not supported"))),
             },
         }
     }

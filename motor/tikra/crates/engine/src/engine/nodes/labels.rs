@@ -1,7 +1,7 @@
 use crate::canvas::Item;
 use crate::keys;
 use crate::scene::{Point, Transform};
-use crate::tex::{self, Token};
+use crate::tex::{self, Meaning, Token};
 use crate::{Error, PT};
 
 use super::super::{tikra_tokens, Engine};
@@ -151,10 +151,18 @@ impl Engine {
         (border.plus(u.scale(distance)), auto_anchor(Point::new(u.y, -u.x).scale(PT), false).to_string())
     }
 
+    /// The text of a parameterless macro, as tokens. The pin reads `\tikra@pinedge`.
+    fn macro_body(&self, name: &str) -> Vec<Token> {
+        match self.tex.meaning_of(name) {
+            Meaning::Macro(m) => tex::substitute(&m.body, &[]),
+            _ => Vec::new(),
+        }
+    }
+
     /// The edge from the node to its pin.
     fn pin_edge(&mut self, info: &NodeInfo, items: Vec<Item>) -> Result<Vec<Item>, Error> {
         let Some(label) = self.last_node.clone() else { return Ok(items) };
-        let edge_options = super::super::spy::macro_body(self, "tikra@pinedge");
+        let edge_options = self.macro_body("tikra@pinedge");
         let saved = (self.last_node.clone(), self.last_node_name.clone());
         self.nodes.insert("tikra@pin@node".into(), info.clone());
         self.nodes.insert("tikra@pin@label".into(), label);

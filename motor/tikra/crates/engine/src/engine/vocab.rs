@@ -19,7 +19,6 @@ pub enum Cmd {
     Matrix,
     PgfMatrix,
     Chainin,
-    TikzMath,
     DeclareFading,
     /// `\pgfdeclareimage[options]{name}{file}`
     DeclareImage,
@@ -118,10 +117,6 @@ pub enum Cmd {
     DecorationBegin,
     DecorationEnd,
     DecorateCurrentPath,
-    /// the spy library: `\spy`, and what a spy scope does at its start and end
-    Spy,
-    SpyBegin,
-    SpyEnd,
     /// `\quad` and `\qquad` between pictures
     Quad,
     /// `\tikz@checkunit{value}`
@@ -149,7 +144,6 @@ pub(super) const COMMANDS: &[(&str, Cmd)] = &[
     ("matrix", Cmd::Matrix),
     ("pgfmatrix", Cmd::PgfMatrix),
     ("chainin", Cmd::Chainin),
-    ("tikzmath", Cmd::TikzMath),
     ("pgfdeclarefading", Cmd::DeclareFading),
     ("pgfdeclareimage", Cmd::DeclareImage),
     ("pgfdeclarepatternformonly", Cmd::DeclarePatternForm),
@@ -309,9 +303,6 @@ pub(super) const COMMANDS: &[(&str, Cmd)] = &[
     ("selectfont", Cmd::FontSeries),
     ("quad", Cmd::Quad),
     ("qquad", Cmd::Quad),
-    ("spy", Cmd::Spy),
-    ("tikra@spybegin", Cmd::SpyBegin),
-    ("tikra@spyend", Cmd::SpyEnd),
 ];
 
 /// Commands that the drawing layer turns into a path statement, with their default options.

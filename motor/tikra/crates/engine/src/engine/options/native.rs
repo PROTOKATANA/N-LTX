@@ -1111,8 +1111,6 @@ keyfn!(k_current_point_local, |e, v| {
     Ok(())
 });
 keyfn!(k_animate, |e, v| e.animate_key(v.unwrap_or_default()));
-// the math library's `evaluate={…}`: \tikzmath statements
-keyfn!(k_evaluate, |e, v| e.math_statements(&v.unwrap_or_default()));
 keyfn!(k_trim_left, |e, v| {
     e.st.trim_left = Some(text(e, &v)?);
     Ok(())
@@ -1825,7 +1823,6 @@ const NATIVE: &[(&str, KeyFn)] = &[
     ("/tikz/save path", k_save_path),
     ("/tikz/use path", k_use_path),
     ("/tikz/trim left", k_trim_left),
-    ("/tikz/evaluate", k_evaluate),
     ("/tikz/make snapshot of", k_snapshot),
     ("/tikz/make snapshot after", k_snapshot_after),
     ("/tikz/make snapshot if necessary", k_ignore),
@@ -2046,7 +2043,7 @@ pub fn define_keys(e: &mut Engine, pieces: &[&'static super::super::piece::Piece
     e.tex.dimens.insert(4000, (0.4 * 65536.0) as i64);
     super::super::trees::define(e);
     super::super::decorations::define(e);
-    for (path, f) in NATIVE.iter().chain(super::super::decorations::KEYS).chain(super::super::libraries::KEYS).chain(super::super::three_d::KEYS) {
+    for (path, f) in NATIVE.iter().chain(super::super::decorations::KEYS).chain(super::super::libraries::KEYS) {
         let id = NATIVE_KEY_BASE + e.plug.key_fns.len() as u16;
         e.plug.key_fns.push(*f);
         e.tex.define(&macro_name(&format!("{path}/.@cmd")), Meaning::Native(id));
@@ -2069,12 +2066,10 @@ pub fn define_keys(e: &mut Engine, pieces: &[&'static super::super::piece::Piece
         lexer.push_text(text);
     }
     lexer.push_text(super::super::trees::DEFINITIONS);
-    lexer.push_text(super::super::turtle::DEFINITIONS);
     lexer.push_text(super::super::lsystem::DEFINITIONS);
     let circuits = (super::super::circuits::LIBRARY.definitions)();
     lexer.push_text(&circuits);
     lexer.push_text(super::super::libraries::DEFINITIONS);
-    lexer.push_text(super::super::spy::DEFINITIONS);
     let mut tokens = Vec::new();
     while let Some(t) = lexer.get_token() {
         tokens.push(t);

@@ -6,8 +6,13 @@
 //!
 //! The steps go in with `insert path`, so the direction is read when the key runs.
 
+use tikra_engine::engine::piece::Piece;
+
+/// The turtle library.
+pub static PIECE: Piece = Piece { name: "turtle", definitions: || DEFINITIONS.to_string(), ..Piece::EMPTY };
+
 /// The keys, as tikra's TikZ styles.
-pub const DEFINITIONS: &str = r"
+const DEFINITIONS: &str = r"
 \def\tikra@turtle@dir{90}
 \def\tikra@insertpath{}
 \tikzset{
@@ -36,9 +41,16 @@ pub const DEFINITIONS: &str = r"
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use tikra_engine::engine::piece::Parts;
+
     #[test]
     fn the_turtle_walks() {
-        let (canvas, warnings) = super::super::run_document(r"\tikz[turtle/distance=2mm] \draw [turtle={home,forward,right,forward,left,fd,lt,fd}];").unwrap();
+        let (canvas, warnings, _) = tikra_engine::engine::run_document_in(
+            r"\tikz[turtle/distance=2mm] \draw [turtle={home,forward,right,forward,left,fd,lt,fd}];",
+            Parts { pieces: &[&PIECE], libraries: &[] },
+        )
+        .unwrap();
         assert!(warnings.is_empty(), "{warnings:?}");
         let (lo, hi) = (canvas.min.unwrap(), canvas.max.unwrap());
         // up, right, up, left: 0.2 cm wide, 0.4 cm high (and the line's width)

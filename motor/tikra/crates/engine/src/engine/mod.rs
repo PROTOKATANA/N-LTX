@@ -38,14 +38,10 @@ pub mod saveboxes;
 mod scope;
 pub mod shadings;
 pub use tikra_shapes as shapes;
-pub mod spy;
 mod startup;
 pub mod state;
-pub mod three_d;
-pub mod tikzmath;
 mod tips;
 pub mod trees;
-pub mod turtle;
 pub mod user_shapes;
 pub mod views;
 mod vocab;
@@ -113,8 +109,6 @@ pub struct Engine {
     pub tree: groups::TreeRun,
     /// the chains of the chains library (global, as TikZ keeps their counts)
     pub chain_list: std::collections::HashMap<String, chains::Chain>,
-    /// the types `\tikzmath` declarations gave variables
-    pub math_kinds: HashMap<String, tikzmath::Kind>,
     /// path operations to run after the node just made (`after node path`, joins)
     pub after_node_path: Vec<Token>,
     pub fading: groups::Fadings,
@@ -125,8 +119,6 @@ pub struct Engine {
     pub keyrun: groups::KeyRun,
     /// node sets (`new set`, `set=`): a node with `set=` joins the set once it has a name
     pub node_sets: nodes::NodeSets,
-    /// the open spy scopes, innermost last
-    pub spy_scopes: Vec<spy::SpyScope>,
     /// what the figure shows, noted as it is drawn, for its description in words
     pub facts: crate::describe::Facts,
 }
@@ -178,7 +170,6 @@ impl Clone for Engine {
             last_node_name: self.last_node_name.clone(),
             tree: self.tree.clone(),
             chain_list: self.chain_list.clone(),
-            math_kinds: self.math_kinds.clone(),
             after_node_path: Vec::new(),
             scoped: self.scoped.clone(),
             fading: self.fading.clone(),
@@ -187,7 +178,6 @@ impl Clone for Engine {
             anim: self.anim.clone(),
             layering: self.layering.clone(),
             node_sets: self.node_sets.clone(),
-            spy_scopes: self.spy_scopes.clone(),
             facts: self.facts.clone(),
         }
     }
@@ -287,7 +277,6 @@ impl Engine {
             Cmd::Matrix => self.matrix(),
             Cmd::PgfMatrix => self.pgf_matrix(),
             Cmd::Chainin => self.chainin(),
-            Cmd::TikzMath => self.tikzmath(),
             Cmd::DeclareFading => self.declare_fading(),
             Cmd::DeclareImage => self.declare_image(),
             Cmd::DeclarePatternForm => self.declare_pattern(false),
@@ -335,12 +324,6 @@ impl Engine {
             Cmd::DecorationBegin => self.decoration_begin(),
             Cmd::DecorationEnd => self.decoration_end(),
             Cmd::DecorateCurrentPath => self.decorate_current_path(),
-            Cmd::Spy => self.spy_command(),
-            Cmd::SpyBegin => {
-                self.spy_begin();
-                Ok(())
-            }
-            Cmd::SpyEnd => self.spy_end(),
             Cmd::Begin => self.begin_environment(),
             Cmd::End => self.end_environment(),
             Cmd::Scoped => self.command_scoped(),

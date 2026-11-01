@@ -48,7 +48,6 @@ fn blank() -> Engine {
         last_node_name: None,
         tree: groups::TreeRun::default(),
         chain_list: Default::default(),
-        math_kinds: Default::default(),
         after_node_path: Vec::new(),
         fading: groups::Fadings::default(),
         declared: groups::Declared::default(),
@@ -56,7 +55,6 @@ fn blank() -> Engine {
         decoration_envs: Vec::new(),
         keyrun: groups::KeyRun::default(),
         node_sets: super::nodes::NodeSets::default(),
-        spy_scopes: Vec::new(),
         facts: Default::default(),
     }
 }
