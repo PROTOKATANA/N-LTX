@@ -6,6 +6,7 @@ members = [
     "animacion",
     "pintor",
     "adaptador",
+    "visor",
     "ejemplo/native/hub",
     "motor/tikra/crates/core",
     "motor/tikra/crates/arrows",

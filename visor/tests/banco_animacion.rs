@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 //! Cuánto cuesta un fotograma de animación, con figuras de muchos elementos. A mano:
-//! `cargo test --release -p hub --test banco_animacion -- --ignored --nocapture`
+//! `cargo test --release -p visor --test banco_animacion -- --ignored --nocapture`
 
 use std::time::{Duration, Instant};
 
@@ -13,7 +13,7 @@ use pintor::geometria::Afin;
 use pintor::lista::Lista;
 use pintor::rampas::Rampas;
 
-/// El mismo que la app: esta prueba no enlaza `hub`, donde se declara.
+/// El mismo que la app: lo declara el `hub` de cada proyecto, y esta prueba no enlaza ninguno.
 #[global_allocator]
 static ASIGNADOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
@@ -159,7 +159,7 @@ fn reproduccion_en_vivo() {
     }
 }
 
-const K1: &str = include_str!("../../../assets/k1.tex");
+const K1: &str = include_str!("../../ejemplo/assets/k1.tex");
 
 /// La carga real: las animaciones de K1, con su preámbulo.
 fn animaciones_de_k1() -> Vec<String> {

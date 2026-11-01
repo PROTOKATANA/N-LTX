@@ -1,4 +1,4 @@
-//! Compone documentos en su propio hilo: la primera vez puede tardar, y el bucle de señales no debe
+//! Compone documentos en su propio hilo: la primera vez puede tardar, y quien encarga no debe
 //! bloquearse nunca. Si llegan varios encargos seguidos, solo se hace el último.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -53,10 +53,18 @@ pub struct Compositor {
 }
 
 impl Compositor {
-    pub fn abrir<D: Destino, A: Avisos>(destino: Arc<D>, avisos: A, muestras: Muestras) -> Compositor {
+    /// `carpetas`: de dónde se pueden leer las imágenes de los documentos.
+    pub fn abrir<D: Destino, A: Avisos>(
+        destino: Arc<D>,
+        avisos: A,
+        muestras: Muestras,
+        carpetas: Vec<PathBuf>,
+    ) -> Compositor {
         let (tx, rx) = channel();
         let hilo = hilos::lanzar("nltx-compositor", move || {
+            let imprenta = Imprenta::nueva(carpetas);
             let trabajo = Trabajo {
+                imprenta: &imprenta,
                 destino: destino.as_ref(),
                 avisos: &avisos,
                 muestras: &muestras,
@@ -89,6 +97,7 @@ impl Drop for Compositor {
 
 /// A quién sirve el hilo del compositor.
 struct Trabajo<'a> {
+    imprenta: &'a Imprenta,
     destino: &'a dyn Destino,
     avisos: &'a dyn Avisos,
     muestras: &'a Muestras,
@@ -99,50 +108,48 @@ fn trabajar(encargos: &Receiver<Encargo>, t: &Trabajo<'_>) {
         while let Ok(siguiente) = encargos.try_recv() {
             encargo = siguiente;
         }
-        t.avisos.publicado(componer(&encargo, t.muestras, t.destino));
+        t.avisos
+            .publicado(componer(t.imprenta, &encargo, t.muestras, t.destino));
     }
 }
 
-/// De dónde se leen las imágenes: los recursos de la aplicación y las muestras.
-#[cfg(not(test))]
-fn carpetas_de_imagenes() -> Vec<PathBuf> {
-    let recursos = std::env::current_exe()
-        .ok()
-        .and_then(|e| Some(e.parent()?.join("data/flutter_assets/assets")));
-    let muestras = std::env::var_os("NLTX_MUESTRAS").map(PathBuf::from);
-    recursos.into_iter().chain(muestras).collect()
+/// Cargar las fuentes y componer lo incrustado es lo caro: se hace una vez, con el primer encargo.
+struct Imprenta {
+    documento: OnceLock<Documento>,
+    carpetas: Vec<PathBuf>,
 }
 
-/// Las pruebas no corren desde el paquete de la aplicación.
-#[cfg(test)]
-fn carpetas_de_imagenes() -> Vec<PathBuf> {
-    vec![PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets"))]
+impl Imprenta {
+    fn nueva(carpetas: Vec<PathBuf>) -> Imprenta {
+        Imprenta {
+            documento: OnceLock::new(),
+            carpetas,
+        }
+    }
+
+    fn documento(&self) -> &Documento {
+        self.documento.get_or_init(|| {
+            let formato = Formato {
+                tam: TAM_FORMULA,
+                color: NEGRO,
+                ..Formato::default()
+            };
+            Documento::nuevo(formato, piezas_con_imagenes(NEGRO, self.carpetas.clone()))
+        })
+    }
 }
 
-/// Cargar las fuentes y componer lo incrustado es lo caro: se hace una vez para toda la aplicación.
-fn documento() -> &'static Documento {
-    static DOCUMENTO: OnceLock<Documento> = OnceLock::new();
-    DOCUMENTO.get_or_init(|| {
-        let formato = Formato {
-            tam: TAM_FORMULA,
-            color: NEGRO,
-            ..Formato::default()
-        };
-        Documento::nuevo(formato, piezas_con_imagenes(NEGRO, carpetas_de_imagenes()))
-    })
-}
-
-fn compuesto(encargo: &Encargo, muestras: &Muestras) -> Result<Composicion, ErrorComposicion> {
+fn compuesto(imprenta: &Imprenta, encargo: &Encargo, muestras: &Muestras) -> Result<Composicion, ErrorComposicion> {
     let ancho = ancho_de_texto(encargo.ancho);
     if !encargo.con_muestras {
-        return documento().componer_a(&encargo.fuente, ancho);
+        return imprenta.documento().componer_a(&encargo.fuente, ancho);
     }
     let propio = Apartado {
         titulo: None,
         fuente: &encargo.fuente,
     };
     let apartados: Vec<Apartado<'_>> = std::iter::once(propio).chain(muestras.apartados()).collect();
-    documento().componer_serie(&apartados, ancho)
+    imprenta.documento().componer_serie(&apartados, ancho)
 }
 
 /// Los documentos de lo compuesto, en orden.
@@ -156,8 +163,8 @@ fn fuentes_de(encargo: &Encargo, muestras: &Muestras) -> Vec<String> {
         .collect()
 }
 
-fn componer(encargo: &Encargo, muestras: &Muestras, destino: &dyn Destino) -> Resultado {
-    match catch_unwind(AssertUnwindSafe(|| compuesto(encargo, muestras))) {
+fn componer(imprenta: &Imprenta, encargo: &Encargo, muestras: &Muestras, destino: &dyn Destino) -> Resultado {
+    match catch_unwind(AssertUnwindSafe(|| compuesto(imprenta, encargo, muestras))) {
         Ok(Ok(Composicion { escena, mut avisos })) => {
             let alto = escena.caja.alto + 2.0 * pintor::MARGEN;
             avisos.extend(carencias(&escena));
@@ -223,7 +230,15 @@ mod tests {
     use adaptador::FiguraTikra;
     use animacion::Reproductor;
 
-    const K1: &str = include_str!("../../../assets/k1.tex");
+    const K1: &str = include_str!("../../ejemplo/assets/k1.tex");
+
+    /// Una para todas las pruebas: cargar las fuentes es lo caro.
+    fn imprenta() -> &'static Imprenta {
+        static IMPRENTA: OnceLock<Imprenta> = OnceLock::new();
+        IMPRENTA.get_or_init(|| Imprenta::nueva(vec![PathBuf::from(RECURSOS)]))
+    }
+
+    const RECURSOS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../ejemplo/assets");
 
     /// Los hilos de prueba tienen poca pila, y K1 es largo.
     fn con_pila<T: Send + 'static>(trabajo: impl FnOnce() -> T + Send + 'static) -> T {
@@ -237,7 +252,7 @@ mod tests {
 
     #[test]
     fn k1_se_compone_sin_avisos() {
-        let resultado = con_pila(|| componer(&encargo(K1, 800.0), &sin_muestras(), &Falso::default()));
+        let resultado = con_pila(|| componer(imprenta(), &encargo(K1, 800.0), &sin_muestras(), &Falso::default()));
         assert_eq!(resultado.error, "");
         assert!(resultado.avisos.is_empty(), "{:#?}", resultado.avisos);
     }
@@ -272,25 +287,26 @@ mod tests {
     #[test]
     fn publicar_da_el_alto_con_su_margen_y_pasa_los_avisos() {
         let falso = Falso::default();
-        let r = componer(&encargo("Hola", 400.0), &sin_muestras(), &falso);
+        let r = componer(imprenta(), &encargo("Hola", 400.0), &sin_muestras(), &falso);
         assert!(r.alto > 2.0 * pintor::MARGEN, "{r:?}");
         assert_eq!(falso.0.lock().unwrap()[0], ancho_de_texto(400.0));
         let fuente =
             r"\usetikzlibrary{patterns}\begin{tikzpicture}\fill[pattern=dots] (0,0) rectangle (1,1);\end{tikzpicture}";
-        let r = componer(&encargo(fuente, 400.0), &sin_muestras(), &falso);
+        let r = componer(imprenta(), &encargo(fuente, 400.0), &sin_muestras(), &falso);
         assert!(r.avisos.iter().any(|a| a.contains("patrones")), "{r:?}");
     }
 
     #[test]
     fn un_ancho_menor_alarga_el_documento() {
         let fuente = "Un párrafo con bastantes palabras para que se parta en varias líneas al estrecharlo.";
-        let alto = |ancho| componer(&encargo(fuente, ancho), &sin_muestras(), &Falso::default()).alto;
+        let alto = |ancho| componer(imprenta(), &encargo(fuente, ancho), &sin_muestras(), &Falso::default()).alto;
         assert!(alto(120.0) > alto(800.0));
     }
 
     #[test]
     fn un_documento_mezcla_texto_y_formulas() {
         let r = componer(
+            imprenta(),
             &encargo(r"Sea $x^2$ y \ce{H2O}.", 400.0),
             &sin_muestras(),
             &Falso::default(),
@@ -320,7 +336,7 @@ mod tests {
     fn el_hilo_avisa_y_al_soltarlo_se_ha_hecho_lo_ultimo() {
         let avisados = Avisados::default();
         let vistos = Arc::clone(&avisados.0);
-        let c = Compositor::abrir(Arc::new(Falso::default()), avisados, sin_muestras());
+        let c = Compositor::abrir(Arc::new(Falso::default()), avisados, sin_muestras(), Vec::new());
         c.encargar(encargo("uno", 400.0));
         c.encargar(encargo("dos", 400.0));
         drop(c);

@@ -2,7 +2,7 @@
 
 //! Lo que cuesta un fotograma, contado en reservas de memoria: a diferencia del tiempo, es igual en
 //! cada ejecución y en cada máquina, y por eso puede fallar una prueba. Si una de estas falla, se
-//! ha perdido una ganancia medida (RAYO, paso 8): `ejemplo/native/hub/tests/banco_animacion.rs`
+//! ha perdido una ganancia medida (RAYO, paso 8): `visor/tests/banco_animacion.rs`
 //! dice cuánto vale en milisegundos.
 
 use std::alloc::{GlobalAlloc, Layout, System};

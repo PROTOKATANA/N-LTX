@@ -2,7 +2,7 @@
 
 //! La salida exacta de la cadena, resumida en una huella: si un cambio que solo debía acelerar la
 //! mueve, ha cambiado el resultado. A mano, con otra carpeta de muestras si se quiere:
-//! `NLTX_HUELLA=carpeta cargo test --release -p hub --test huella -- --ignored --nocapture`
+//! `NLTX_HUELLA=carpeta cargo test --release -p visor --test huella -- --ignored --nocapture`
 
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
@@ -14,7 +14,7 @@ use animacion::Reproductor;
 use documento::{Documento, Formato};
 use primitivas::{Color, Composicion, Compositor, Escena};
 
-const K1: &str = include_str!("../../../assets/k1.tex");
+const K1: &str = include_str!("../../ejemplo/assets/k1.tex");
 const NEGRO: Color = Color { r: 0.0, g: 0.0, b: 0.0 };
 const PILA: usize = 256 << 20;
 
@@ -37,7 +37,7 @@ fn documento() -> Documento {
         color: NEGRO,
         ..Formato::default()
     };
-    let recursos = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets"));
+    let recursos = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../ejemplo/assets"));
     Documento::nuevo(formato, piezas_con_imagenes(NEGRO, vec![recursos]))
 }
 
@@ -105,7 +105,7 @@ fn figuras(carpeta: &Path, encontradas: &mut Vec<PathBuf>) {
 /// por error de una figura a otra se nota. Cazó `mark options` perdido al sacar pgfplots del motor,
 /// que no hizo fallar ninguna prueba.
 fn corpus(huella: &mut DefaultHasher) {
-    let motores = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../motor");
+    let motores = concat!(env!("CARGO_MANIFEST_DIR"), "/../motor");
     let mut rutas = Vec::new();
     figuras(&Path::new(motores).join("tikra/corpus"), &mut rutas);
     figuras(&Path::new(motores).join("voltik/corpus"), &mut rutas);

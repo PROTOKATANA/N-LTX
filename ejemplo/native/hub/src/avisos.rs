@@ -2,8 +2,8 @@
 
 use pintor::medidas::Medidas;
 use rinf::RustSignal;
+use visor::{Avisos, Resultado};
 
-use crate::compositor::{Avisos, Resultado};
 use crate::signals;
 
 pub struct AvisosRinf;

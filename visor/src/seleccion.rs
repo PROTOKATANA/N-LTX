@@ -1,5 +1,5 @@
-//! La selección del documento publicado. Guarda las anclas y las fuentes, responde a las señales de
-//! Dart y le dice al taller qué marcar. Lo que se copia sale de `documento::seleccion`.
+//! La selección del documento publicado. Guarda las anclas y las fuentes, responde a lo que hace
+//! quien mira y le dice al taller qué marcar. Lo que se copia sale de `documento::seleccion`.
 
 use std::sync::{Arc, Mutex, PoisonError};
 

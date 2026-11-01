@@ -1,0 +1,17 @@
+[package]
+name = "visor"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+adaptador = { path = "../adaptador" }
+documento = { path = "../documento" }
+pintor = { path = "../pintor" }
+primitivas = { path = "../primitivas" }
+
+[dev-dependencies]
+animacion = { path = "../animacion" }
+mimalloc = { version = "=0.1.52", default-features = false }
+
+[lints]
+workspace = true

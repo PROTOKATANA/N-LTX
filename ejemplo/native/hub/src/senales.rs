@@ -6,10 +6,9 @@ use std::time::Duration;
 
 use pintor::{Taller, Vista, medidas};
 use rinf::DartSignal;
+use visor::{Compositor, Encargo, Seleccion};
 
 use crate::avisos;
-use crate::compositor::{Compositor, Encargo};
-use crate::seleccion::Seleccion;
 use crate::signals;
 
 const CADA_MEDIDA: Duration = Duration::from_secs(1);

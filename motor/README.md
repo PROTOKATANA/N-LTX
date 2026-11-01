@@ -43,7 +43,7 @@ Se quedan en el motor `trees`, `chains`, `shadings`, `patterns`, `fadings`, `lsy
 el dibujo normal las usa, o sacarlas exigiría un gancho solo para ellas.
 
 Para comprobar que un cambio no altera la salida:
-`cargo test --release -p hub --test huella -- --ignored --nocapture`. Resume K1, sus animaciones y las
+`cargo test --release -p visor --test huella -- --ignored --nocapture`. Resume K1, sus animaciones y las
 figuras de `tikra` y `voltik`. `adaptador/tests/presupuesto.rs` falla si vuelven las copias por elemento.
 
 ## Pendiente en el motor

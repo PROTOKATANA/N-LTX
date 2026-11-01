@@ -8,11 +8,8 @@ edition = "2024"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [dependencies]
-adaptador = { path = "../../../adaptador" }
-animacion = { path = "../../../animacion" }
-documento = { path = "../../../documento" }
 pintor = { path = "../../../pintor" }
-primitivas = { path = "../../../primitivas" }
+visor = { path = "../../../visor" }
 mimalloc = { version = "=0.1.52", default-features = false }
 rinf = "=8.10.0"
 serde = { version = "1.0", features = ["derive"] }

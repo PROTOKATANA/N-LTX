@@ -1,5 +1,5 @@
-//! Una carpeta de archivos `.tex` para ver en la aplicación cómo se comporta el motor con LaTeX de
-//! fuera. Las muestras son datos del usuario y no se versionan.
+//! Una carpeta de archivos `.tex` para ver cómo se comporta el motor con LaTeX de fuera. Las muestras
+//! son datos del usuario y no se versionan.
 
 use std::fs;
 use std::path::Path;

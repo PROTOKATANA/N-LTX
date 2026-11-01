@@ -4,13 +4,13 @@
 //! se mueven con `\t`, el salto cambia de forma en cada fotograma. Con `domain=0.01:\t,samples=240`
 //! se movía 0,6 pt entre fotogramas. La rejilla fija de 0,05 mL lo deja en 0 y da el ancho real del
 //! salto (0,54 pt); la de 0,1 mL lo dobla. Cuesta 2,7 ms el último fotograma frente a 1,1 ms.
-//! `cargo test -p hub --test temblor -- --nocapture` imprime lo que se desplaza.
+//! `cargo test -p visor --test temblor -- --nocapture` imprime lo que se desplaza.
 
 use adaptador::FiguraTikra;
 use animacion::Reproductor;
 use primitivas::{Capa, Composicion, Primitiva, Punto, Segmento};
 
-const K1: &str = include_str!("../../../assets/k1.tex");
+const K1: &str = include_str!("../../ejemplo/assets/k1.tex");
 
 /// Fotogramas por segundo de la app, y cuántos seguidos se miran.
 const FPS: f64 = 60.0;
