@@ -108,6 +108,22 @@ struct GpuLienzo :: Impl {
 
 	}
 
+	bool hornear(const ltx :: Gpu & gpu , GError ** error) {
+
+		std :: string fallo ;
+
+		const std :: string horneado = ltx :: hornear(gpu , fallo) ;
+
+		if (horneado.empty()) { return gpu_fallo(error , fallo.c_str()) ; }
+
+		std :: ofstream(horno) << horneado ;
+
+		horno = nullptr ;
+
+		return true ;
+
+	}
+
 	bool dibujar(GError ** error) {
 
 		if (banco) { banco->empezar() ; }
@@ -136,17 +152,7 @@ struct GpuLienzo :: Impl {
 
 		if (!pintor.preparar(gpu , fallo)) { return gpu_fallo(error , fallo.c_str()) ; }
 
-		if (horno) {
-
-			const std :: string horneado = ltx :: hornear(gpu , fallo) ;
-
-			if (horneado.empty()) { return gpu_fallo(error , fallo.c_str()) ; }
-
-			std :: ofstream(horno) << horneado ;
-
-			horno = nullptr ;
-
-		}
+		if (horno && !hornear(gpu , error)) { return false ; }
 
 		if (banco) { banco->comenzar() ; }
 

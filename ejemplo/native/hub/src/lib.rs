@@ -9,7 +9,8 @@
 
 /// El intérprete de TikZ pide y suelta memoria por cada elemento. Con `banco_animacion` (5.000
 /// elementos), frente al asignador del sistema: entre un 5 % y un 13 % menos por fotograma, a cambio
-/// de un 14 % más de memoria pico (621 frente a 543 MiB, en una ejecución).
+/// de un 14 % más de memoria pico (621 frente a 543 MiB, en una ejecución). Con documentos la memoria
+/// sube más: K1 ocupaba de 593 a 634 MiB, frente a 199-206 del sistema.
 #[global_allocator]
 static ASIGNADOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 

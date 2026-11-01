@@ -2,15 +2,13 @@
 
 # include <algorithm>
 
-# include <cstdio>
-
 # include <cstdlib>
 
 # include <string>
 
 # include <unordered_set>
 
-# include "sombreadores_horneados.h"
+# include "horno_lienzo.h"
 
 # include "sombreadores_lienzo.h"
 
@@ -93,104 +91,6 @@ constexpr BlendStateDesc premultiplicada() {
 	rt.DestBlendAlpha = BLEND_FACTOR_INV_SRC_ALPHA ;
 
 	return mezcla ;
-
-}
-
-// Los tipos de tinta, como los dice Rust
-
-std :: string con_tipos(const char * fuente) {
-
-	const auto definir = [](const char * nombre , ltx :: TipoTinta tipo) {
-
-		return std :: string("#define ") + nombre + " " + std :: to_string(static_cast<std :: uint32_t>(tipo)) + "\n" ;
-
-	} ;
-
-	return
-
-		definir("TIPO_GLIFO" , ltx :: TipoTinta :: Glifo) +
-
-		definir("TIPO_LINEAL" , ltx :: TipoTinta :: Lineal) +
-
-		definir("TIPO_RADIAL" , ltx :: TipoTinta :: Radial) +
-
-		definir("TIPO_TRAZO" , ltx :: TipoTinta :: Trazo) +
-
-		fuente ;
-
-}
-
-// FNV-1a de 64 bits : la clave de lo horneado es el texto del shader
-
-std :: uint64_t huella(const char * fuente) {
-
-	std :: uint64_t h = 0xcbf29ce484222325ull ;
-
-	for (; * fuente ; fuente++) { h = (h ^ static_cast<unsigned char>(* fuente)) * 0x100000001b3ull ; }
-
-	return h ;
-
-}
-
-const Horneado * horneado(const char * fuente) {
-
-	const std :: uint64_t buscada = huella(fuente) ;
-
-	for (const Horneado & h : horneados) {
-
-		if (h.huella == buscada) { return &h ; }
-
-	}
-
-	return nullptr ;
-
-}
-
-ShaderCreateInfo descripcion(const char * nombre , SHADER_TYPE tipo) {
-
-	ShaderCreateInfo info ;
-
-	info.SourceLanguage = SHADER_SOURCE_LANGUAGE_HLSL ;
-
-	info.Desc.UseCombinedTextureSamplers = true ;
-
-	info.EntryPoint = "main" ;
-
-	info.Desc.Name = nombre ;
-
-	info.Desc.ShaderType = tipo ;
-
-	return info ;
-
-}
-
-// Compilar HLSL en cada arranque se llevaba 32 de los 36 ms de preparar el pintor, y no depende de
-// ningún documento : en Vulkan se usa lo horneado. Si el texto cambia, su huella ya no está y se
-// compila como antes. Otros backends compilan siempre
-
-RefCntAutoPtr<IShader> compilar(IRenderDevice * device , const char * nombre , SHADER_TYPE tipo , const char * fuente) {
-
-	ShaderCreateInfo info = descripcion(nombre , tipo) ;
-
-	const Horneado * hecho = device->GetDeviceInfo().IsVulkanDevice() ? horneado(fuente) : nullptr ;
-
-	if (hecho) {
-
-		info.ByteCode = hecho->palabras ;
-
-		info.ByteCodeSize = hecho->cuantas * sizeof(std :: uint32_t) ;
-
-	} else {
-
-		info.Source = fuente ;
-
-	}
-
-	RefCntAutoPtr<IShader> shader ;
-
-	device->CreateShader(info , &shader) ;
-
-	return shader ;
 
 }
 
@@ -341,102 +241,6 @@ bool Malla :: subir(const Gpu & gpu , const Geometria & geometria , std :: strin
 	gpu.ctx->UpdateBuffer(indices , 0 , bytes_i , i.data() , RESOURCE_STATE_TRANSITION_MODE_TRANSITION) ;
 
 	return true ;
-
-}
-
-std :: string hornear(const Gpu & gpu , std :: string & error) {
-
-	const std :: string lista_ps = con_tipos(hlsl_lista_ps) ;
-
-	const struct { const char * nombre ; SHADER_TYPE tipo ; const char * fuente ; } todos[] = {
-
-		{ "lista_vs" , SHADER_TYPE_VERTEX , hlsl_lista_vs } ,
-
-		{ "lista_ps" , SHADER_TYPE_PIXEL , lista_ps.c_str() } ,
-
-		{ "marca_ps" , SHADER_TYPE_PIXEL , hlsl_marca_ps } ,
-
-		{ "imagen_ps" , SHADER_TYPE_PIXEL , hlsl_imagen_ps } ,
-
-		{ "pantalla_vs" , SHADER_TYPE_VERTEX , hlsl_pantalla_vs } ,
-
-		{ "capa_ps" , SHADER_TYPE_PIXEL , hlsl_capa_ps } ,
-
-		{ "mezcla_ps" , SHADER_TYPE_PIXEL , hlsl_mezcla_ps } ,
-
-		{ "copia_ps" , SHADER_TYPE_PIXEL , hlsl_copia_ps } ,
-
-	} ;
-
-	char hexadecimal[32] ;
-
-	std :: string datos ;
-
-	std :: string tabla ;
-
-	for (const auto & s : todos) {
-
-		ShaderCreateInfo info = descripcion(s.nombre , s.tipo) ;
-
-		info.Source = s.fuente ;
-
-		RefCntAutoPtr<IShader> shader ;
-
-		gpu.device->CreateShader(info , &shader) ;
-
-		const void * bytes = nullptr ;
-
-		Uint64 cuantos = 0 ;
-
-		if (shader) { shader->GetBytecode(&bytes , cuantos) ; }
-
-		if (!bytes || !cuantos) {
-
-			error = std :: string("No se pudo compilar el shader ") + s.nombre ;
-
-			return {} ;
-
-		}
-
-		const auto * palabras = static_cast<const std :: uint32_t *>(bytes) ;
-
-		const std :: size_t n = cuantos / sizeof(std :: uint32_t) ;
-
-		datos += std :: string("inline constexpr std :: uint32_t ") + s.nombre + "[] = {" ;
-
-		for (std :: size_t i = 0 ; i < n ; i++) {
-
-			std :: snprintf(hexadecimal , sizeof(hexadecimal) , "0x%x," , palabras[i]) ;
-
-			datos += (i % 16 == 0 ? "\n" : "") ;
-
-			datos += hexadecimal ;
-
-		}
-
-		datos += "\n} ;\n\n" ;
-
-		std :: snprintf(hexadecimal , sizeof(hexadecimal) , "0x%llxull" , static_cast<unsigned long long>(huella(s.fuente))) ;
-
-		tabla += std :: string("\tHorneado{ ") + hexadecimal + " , " + s.nombre + " , " + std :: to_string(n) + " } ,\n" ;
-
-	}
-
-	return
-
-		"# pragma once\n\n"
-
-		"// Generado con NLTX_HORNEAR (ver pintor/README.md) : los shaders ya compilados, como los dejó\n"
-
-		"// Diligent. No se edita a mano.\n\n"
-
-		"# include <cstddef>\n\n# include <cstdint>\n\nnamespace ltx {\n\n"
-
-		"struct Horneado {\n\n\tstd :: uint64_t huella ;\n\n\tconst std :: uint32_t * palabras ;\n\n\tstd :: size_t cuantas ;\n\n} ;\n\n"
-
-		+ datos +
-
-		"inline constexpr Horneado horneados[] = {\n" + tabla + "} ;\n\n}  // namespace ltx\n" ;
 
 }
 

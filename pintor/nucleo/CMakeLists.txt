@@ -12,6 +12,7 @@ endif()
 
 add_library(ltx_pintor STATIC
   "ejecucion_lienzo.cc"
+  "horno_lienzo.cc"
   "pintor_lienzo.cc"
   "recursos_lienzo.cc"
   "${NLTX_CXX}/puente_lienzo.rs.cc"

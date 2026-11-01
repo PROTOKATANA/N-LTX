@@ -1,12 +1,14 @@
 //! Lo que hace falta para ver un documento, sin interfaz. Quien integra N-LTX traduce sus señales a
 //! estas llamadas: aquí no se sabe nada de Flutter ni de rinf.
 //! - `compositor`: compone los documentos en su propio hilo.
+//! - `tramos`: cuándo enseñar lo que aún se está componiendo y cuándo dejarlo.
 //! - `seleccion`: lo seleccionado en el documento publicado.
 //! - `muestras`: una carpeta de `.tex` para ver seguidos.
 
 mod compositor;
 mod muestras;
 mod seleccion;
+mod tramos;
 
 pub use primitivas::Color;
 

@@ -32,6 +32,17 @@ pub enum Colocado<'e> {
     Contorno(&'e [Segmento]),
 }
 
+/// La línea base en un píxel entero, si no hay giro: es lo que hace Skia (`SkFont::setBaselineSnap`).
+/// Con la y en cuartos de píxel, a escala 1,25 cada línea cae en una fracción distinta y sus trazos
+/// horizontales se reparten entre dos filas: en K1 el salto de tinta en la base iba de 10 a 83.
+pub fn en_linea_entera(d: Afin) -> Afin {
+    if d.b == 0.0 && d.c == 0.0 {
+        Afin { f: d.f.round(), ..d }
+    } else {
+        d
+    }
+}
+
 /// Los glifos de una escena.
 pub struct Glifos<'e> {
     contornos: &'e BTreeMap<GlifoId, Vec<Segmento>>,

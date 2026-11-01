@@ -17,7 +17,7 @@ fn huella(texto: &str) -> u64 {
     })
 }
 
-/// Lo que hace `con_tipos`, en `recursos_lienzo.cc`.
+/// Lo que hace `con_tipos`, en `horno_lienzo.cc`.
 fn con_tipos(texto: &str) -> String {
     let tipos = [
         ("TIPO_GLIFO", TipoTinta::Glifo),

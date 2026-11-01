@@ -16,7 +16,7 @@ use primitivas::{
 
 use crate::atlas::Atlas;
 use crate::geometria::{Afin, razon_de_inglete, ruta};
-use crate::glifos::{Colocado, Glifos};
+use crate::glifos::{Colocado, Glifos, en_linea_entera};
 use crate::lista::{Acabado, FRANJA, Lista, Rango, comando_vacio};
 use crate::puente_lienzo::ffi::{Comando, Orden};
 use crate::rampas::Rampas;
@@ -119,17 +119,6 @@ fn con_franja(segmentos: &[Segmento], t: &Trazo) -> bool {
     };
     let razon = razon_de_inglete(&r, TOLERANCIA_CODOS);
     razon <= CODO_SEGURO || (t.union == Union::Inglete && f64::from(razon) <= t.limite_inglete)
-}
-
-/// La línea base en un píxel entero, si no hay giro: es lo que hace Skia (`SkFont::setBaselineSnap`).
-/// Con la y en cuartos de píxel, a escala 1,25 cada línea cae en una fracción distinta y sus trazos
-/// horizontales se reparten entre dos filas: en K1 el salto de tinta en la base iba de 10 a 83.
-fn en_linea_entera(d: Afin) -> Afin {
-    if d.b == 0.0 && d.c == 0.0 {
-        Afin { f: d.f.round(), ..d }
-    } else {
-        d
-    }
 }
 
 /// Lo que hay que deshacer al llegar a su `Primitiva::Cerrar`.

@@ -265,6 +265,29 @@ class _VistaDocumentoState extends State<VistaDocumento> {
     );
   }
 
+  /// El ratón y el desplazamiento: lo que se pinta está debajo, en la textura.
+  Widget _lectura() => Listener(
+    behavior: HitTestBehavior.translucent,
+    onPointerDown: _alBajar,
+    onPointerMove: _alMover,
+    onPointerUp: _alSubir,
+    onPointerCancel: _alSubir,
+    child: MouseRegion(
+      cursor: SystemMouseCursors.text,
+      child: Scrollbar(
+        controller: _desplazamiento,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _desplazamiento,
+          child: SizedBox(
+            width: double.infinity,
+            height: _publicado.alto * widget.zoom,
+          ),
+        ),
+      ),
+    ),
+  );
+
   /// Oculta, en un solo píxel: la textura ya pintada se enseña entera en el siguiente fotograma.
   Widget _pintada(int textura, double pixeles) {
     final imagen = _textura1a1(textura, pixeles);
@@ -322,27 +345,7 @@ class _VistaDocumentoState extends State<VistaDocumento> {
                 Offstage(
                   key: const ValueKey('interaccion'),
                   offstage: !widget.visible,
-                  child: Listener(
-                    behavior: HitTestBehavior.translucent,
-                    onPointerDown: _alBajar,
-                    onPointerMove: _alMover,
-                    onPointerUp: _alSubir,
-                    onPointerCancel: _alSubir,
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.text,
-                      child: Scrollbar(
-                        controller: _desplazamiento,
-                        thumbVisibility: true,
-                        child: SingleChildScrollView(
-                          controller: _desplazamiento,
-                          child: SizedBox(
-                            width: double.infinity,
-                            height: _publicado.alto * widget.zoom,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                  child: _lectura(),
                 ),
                 if (widget.visible)
                   Positioned(

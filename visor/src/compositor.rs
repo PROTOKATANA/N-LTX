@@ -7,7 +7,6 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
 
 use adaptador::{filmoteca, piezas_con_imagenes};
 use documento::{Apartado, Documento, Formato, Seguimiento};
@@ -15,15 +14,10 @@ use pintor::{Animador, ancho_de_texto, carencias, hilos};
 use primitivas::{Color, Composicion, ErrorComposicion, Escena};
 
 use crate::muestras::Muestras;
+use crate::tramos::{Mostrado, Tramos, alto_con_margen};
 
 /// Bp por em del texto y de las fórmulas.
 const TAM_FORMULA: f64 = 14.0;
-
-/// Lo que se espera a enseñar el primer tramo: K1 llena una pantalla en 5 ms, en frío. Lo que se
-/// compone antes sale entero, sin tramos.
-const PRIMER_TRAMO: Duration = Duration::from_millis(4);
-/// Hasta dónde crece la espera entre tramos: basta para ver crecer un documento largo.
-const MAYOR_ESPERA: Duration = Duration::from_millis(250);
 
 /// Lo que se cuenta a la interfaz al publicar. `error` vacío si no hubo.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -139,17 +133,6 @@ impl Trabajo<'_> {
     }
 }
 
-fn alto_con_margen(alto: f64) -> f64 {
-    alto + 2.0 * pintor::MARGEN
-}
-
-/// Lo último que se ha dejado a la vista.
-#[derive(Debug, Default)]
-struct Mostrado {
-    fuente: String,
-    alto: f64,
-}
-
 fn trabajar(encargos: &Receiver<Encargo>, t: &Trabajo<'_>) {
     let mut mostrado = Mostrado::default();
     let mut pendiente = None;
@@ -157,16 +140,16 @@ fn trabajar(encargos: &Receiver<Encargo>, t: &Trabajo<'_>) {
         while let Ok(siguiente) = encargos.try_recv() {
             encargo = siguiente;
         }
-        let mut tramos = Tramos {
-            trabajo: t,
-            encargos,
-            encargo: &encargo,
-            ritmo: Ritmo::nuevo(&encargo, &mostrado),
-            siguiente: None,
+        let mostrar = |parcial| {
+            let resultado = t.entregar(&encargo, parcial, false);
+            let alto = resultado.alto;
+            t.avisos.publicado(resultado);
+            alto
         };
+        let mut tramos = Tramos::nuevos(&encargo, encargos, &mostrado, &mostrar);
         let resultado = componer(t, &encargo, &mut tramos);
-        let alcanzado = tramos.ritmo.alcanzado();
-        pendiente = tramos.siguiente;
+        let (alcanzado, siguiente) = tramos.acabar();
+        pendiente = siguiente;
         let alto = resultado.as_ref().filter(|r| r.error.is_empty()).map(|r| r.alto);
         if let Some(alto) = alto.or(alcanzado) {
             mostrado = Mostrado {
@@ -177,91 +160,6 @@ fn trabajar(encargos: &Receiver<Encargo>, t: &Trabajo<'_>) {
         if let Some(resultado) = resultado {
             t.avisos.publicado(resultado);
         }
-    }
-}
-
-/// Si `nuevo` deja sin sentido lo que se está componiendo. Más texto detrás o otro ancho, no: acabar
-/// enseña algo mejor que lo que hay, y un modelo que escribe más deprisa de lo que se compone, o una
-/// ventana que se arrastra, no llegarían a verse nunca.
-fn sustituye(actual: &Encargo, nuevo: &Encargo) -> bool {
-    nuevo.tinta != actual.tinta
-        || nuevo.con_muestras != actual.con_muestras
-        || !nuevo.fuente.starts_with(&actual.fuente)
-}
-
-/// Cuándo enseñar lo colocado. Cada tramo copia la escena y la recompila entera (K1: 1,1 ms y de 6 a
-/// 17 ms), así que se espacian: la espera se dobla y K1 se queda en menos de diez, en vez de uno por bloque.
-struct Ritmo {
-    ultimo: Instant,
-    espera: Duration,
-    /// Hasta dónde se ve lo mismo o algo mejor: un tramo más corto se comería lo que ya está a la vista.
-    visto: f64,
-    alguno: bool,
-}
-
-impl Ritmo {
-    /// Otra composición del mismo documento, o el mismo con más texto, deja lo que hay hasta que lo
-    /// supere: cambiar de tinta o de ancho no debe dejar la vista en blanco, ni un modelo que escribe
-    /// hacer parpadear lo ya escrito.
-    fn nuevo(encargo: &Encargo, mostrado: &Mostrado) -> Ritmo {
-        let sigue = encargo.fuente.starts_with(&mostrado.fuente);
-        Ritmo {
-            ultimo: Instant::now(),
-            espera: PRIMER_TRAMO,
-            visto: if sigue { mostrado.alto } else { 0.0 },
-            alguno: false,
-        }
-    }
-
-    /// `alto`, con el margen. Lo que puede tardar no espera: lo de arriba no debe quedarse sin enseñar
-    /// por una animación que venga detrás.
-    fn toca(&self, alto: f64, lento: bool, pasado: Duration) -> bool {
-        alto > self.visto && (pasado >= self.espera || (lento && !self.alguno))
-    }
-
-    fn apuntar(&mut self, alto: f64) {
-        self.ultimo = Instant::now();
-        self.espera = (self.espera * 2).min(MAYOR_ESPERA);
-        self.visto = alto;
-        self.alguno = true;
-    }
-
-    /// Hasta dónde se ha enseñado algo de este encargo.
-    fn alcanzado(&self) -> Option<f64> {
-        self.alguno.then_some(self.visto)
-    }
-}
-
-/// Sigue una composición: enseña lo que va saliendo y la deja si llega algo que la hace inútil.
-struct Tramos<'a> {
-    trabajo: &'a Trabajo<'a>,
-    encargos: &'a Receiver<Encargo>,
-    encargo: &'a Encargo,
-    ritmo: Ritmo,
-    /// El último encargo que ha llegado entretanto.
-    siguiente: Option<Encargo>,
-}
-
-impl Seguimiento for Tramos<'_> {
-    fn parar(&mut self) -> bool {
-        while let Ok(encargo) = self.encargos.try_recv() {
-            self.siguiente = Some(encargo);
-        }
-        self.siguiente.as_ref().is_some_and(|s| sustituye(self.encargo, s))
-    }
-
-    fn quiere_tramo(&mut self, alto: f64, lento: bool) -> bool {
-        // sin nada colocado, el margen solo parecería un documento en blanco
-        alto > 0.0
-            && self
-                .ritmo
-                .toca(alto_con_margen(alto), lento, self.ritmo.ultimo.elapsed())
-    }
-
-    fn tramo(&mut self, parcial: Composicion) {
-        let resultado = self.trabajo.entregar(self.encargo, parcial, false);
-        self.ritmo.apuntar(resultado.alto);
-        self.trabajo.avisos.publicado(resultado);
     }
 }
 
@@ -428,81 +326,6 @@ mod tests {
             .unwrap()
             .join()
             .unwrap()
-    }
-
-    fn ritmo(visto: f64) -> Ritmo {
-        Ritmo::nuevo(
-            &encargo("", 400.0),
-            &Mostrado {
-                fuente: String::new(),
-                alto: visto,
-            },
-        )
-    }
-
-    #[test]
-    fn lo_que_se_compone_deprisa_no_se_enseña_a_trozos() {
-        assert!(!ritmo(0.0).toca(100.0, false, PRIMER_TRAMO / 2));
-        assert!(ritmo(0.0).toca(100.0, false, PRIMER_TRAMO));
-    }
-
-    /// RAYO: sin esto, un párrafo seguido de una animación tarda lo que tarde en medirse (K1: hasta
-    /// 208 ms una sola) en verse.
-    #[test]
-    fn lo_lento_no_retiene_lo_que_ya_esta_colocado() {
-        let mut r = ritmo(0.0);
-        assert!(r.toca(100.0, true, Duration::ZERO));
-        r.apuntar(100.0);
-        assert!(!r.toca(200.0, true, Duration::ZERO), "solo el primero se adelanta");
-    }
-
-    #[test]
-    fn sin_nada_nuevo_no_hay_tramo() {
-        assert!(!ritmo(0.0).toca(0.0, true, MAYOR_ESPERA));
-        assert!(!ritmo(300.0).toca(300.0, true, MAYOR_ESPERA));
-    }
-
-    /// RAYO: cada tramo recompila la escena entera. Si dejara de crecer, un documento largo la
-    /// recompilaría cien veces en vez de una decena.
-    #[test]
-    fn los_tramos_se_espacian_hasta_un_tope() {
-        let mut r = ritmo(0.0);
-        let mut esperas = Vec::new();
-        for n in 1..=8 {
-            esperas.push(r.espera);
-            r.apuntar(f64::from(n));
-        }
-        assert_eq!(esperas[1], PRIMER_TRAMO * 2);
-        assert_eq!(r.espera, MAYOR_ESPERA);
-        assert!(esperas.windows(2).all(|p| p[0] <= p[1]));
-    }
-
-    #[test]
-    fn lo_mismo_o_con_mas_texto_no_se_tapa_con_un_tramo_mas_corto() {
-        let mostrado = Mostrado {
-            fuente: "Hola".into(),
-            alto: 500.0,
-        };
-        let mismo = Ritmo::nuevo(&encargo("Hola", 200.0), &mostrado);
-        let mas = Ritmo::nuevo(&encargo("Hola, mundo", 400.0), &mostrado);
-        let otro = Ritmo::nuevo(&encargo("Adiós", 400.0), &mostrado);
-        assert!(!mismo.toca(400.0, true, MAYOR_ESPERA));
-        assert!(!mas.toca(400.0, true, MAYOR_ESPERA));
-        assert!(mas.toca(600.0, true, MAYOR_ESPERA));
-        assert!(otro.toca(400.0, true, MAYOR_ESPERA));
-    }
-
-    #[test]
-    fn solo_lo_que_cambia_de_documento_o_de_tinta_sustituye() {
-        let actual = encargo("Hola", 400.0);
-        assert!(!sustituye(&actual, &encargo("Hola", 300.0)), "otro ancho");
-        assert!(!sustituye(&actual, &encargo("Hola, mundo", 400.0)), "más texto");
-        assert!(sustituye(&actual, &encargo("Adiós", 400.0)));
-        let blanca = Encargo {
-            tinta: Color::BLANCO,
-            ..actual.clone()
-        };
-        assert!(sustituye(&actual, &blanca));
     }
 
     #[test]

@@ -16,7 +16,7 @@ src/lienzo.rs         qué se compila en cada fotograma
 src/taller.rs         el hilo que lo hace y lleva el ritmo
 src/almacen.rs        lo hecho, hasta que C++ lo copia
 src/puente_lienzo.rs  la frontera cxx del lienzo
-nucleo/               el renderizador en C++ y sus recursos; `pintor_lienzo.h` es su frontera
+nucleo/               el renderizador en C++, sus recursos y sus shaders; `pintor_lienzo.h` es su frontera
 ```
 
 El límite de inglete significa lo mismo que en PDF y SVG, comparado con 1/sen(ángulo/2). lyon lo compara

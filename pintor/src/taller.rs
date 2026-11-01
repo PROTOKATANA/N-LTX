@@ -150,20 +150,19 @@ impl Trabajo {
     fn aplicar(&mut self, orden: Orden) -> bool {
         match orden {
             Orden::Publicar(escena, animador) => self.lienzo.publicar(escena, animador),
-            Orden::Ver(vista) => {
-                self.vista = Some(vista);
-                self.lienzo.ocultar(false);
-            }
-            Orden::DejarListo(vista) => {
-                self.vista = Some(vista);
-                self.lienzo.ocultar(true);
-            }
+            Orden::Ver(vista) => self.mirar(vista, false),
+            Orden::DejarListo(vista) => self.mirar(vista, true),
             Orden::Seleccionar(cajas) => self.lienzo.seleccionar(cajas),
             Orden::Fondo(color) => self.lienzo.pintar_sobre(color),
             Orden::Reenviar => self.lienzo.reenviar(),
             Orden::Parar => return false,
         }
         true
+    }
+
+    fn mirar(&mut self, vista: Vista, oculta: bool) {
+        self.vista = Some(vista);
+        self.lienzo.ocultar(oculta);
     }
 
     /// Un pánico al compilar deja el último fotograma bueno en pantalla: tumbar la aplicación por
