@@ -1,7 +1,10 @@
 //! Los hilos que componen fotogramas. Una figura se compone en un solo hilo, pero fotogramas
 //! distintos no comparten nada: el trabajo se reparte por fotogramas.
+//!
+//! Son fijos a propósito: `tikra` guarda por hilo su motor ya definido, y un hilo nuevo lo reconstruye.
+//! Medir las 525 muestras de K1 en hilos fijos tarda 200 ms frente a 575, con 381 MiB frente a 525.
 
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
@@ -60,30 +63,38 @@ impl Cuadrilla {
     }
 }
 
-/// `trabajo(0)`, `trabajo(1)`… en varios hilos, con los resultados en orden.
-pub(crate) fn en_paralelo<T: Send>(cuantos: usize, trabajo: impl Fn(usize) -> T + Sync) -> Vec<T> {
-    let siguiente = AtomicUsize::new(0);
-    let hechos = Mutex::new(Vec::with_capacity(cuantos));
-    let peon = || {
+/// `trabajo(0)`, `trabajo(1)`… en la cuadrilla y en quien llama, con los resultados en orden. Quien
+/// llama trabaja también: aunque la cuadrilla esté ocupada o no tenga hilos, esto acaba.
+pub(crate) fn en_paralelo<T, F>(cuantos: usize, trabajo: F) -> Vec<T>
+where
+    T: Send + 'static,
+    F: Fn(usize) -> T + Send + Sync + 'static,
+{
+    let (entrega, llegadas) = channel();
+    let siguiente = Arc::new(AtomicUsize::new(0));
+    let trabajo = Arc::new(trabajo);
+    let peon = move || {
         loop {
             let n = siguiente.fetch_add(1, Ordering::Relaxed);
             if n >= cuantos {
                 return;
             }
-            let hecho = trabajo(n);
-            hechos.lock().unwrap_or_else(PoisonError::into_inner).push((n, hecho));
+            let hecho = catch_unwind(AssertUnwindSafe(|| trabajo(n)));
+            if entrega.send((n, hecho)).is_err() {
+                return;
+            }
         }
     };
-    thread::scope(|ambito| {
-        for _ in 1..hilos_disponibles().min(cuantos) {
-            // si no se puede lanzar, el resto lo hace quien llama
-            let _ = thread::Builder::new().stack_size(PILA).spawn_scoped(ambito, peon);
-        }
-        peon();
-    });
-    let mut hechos = hechos.into_inner().unwrap_or_else(PoisonError::into_inner);
+    for _ in 1..hilos_disponibles().min(cuantos) {
+        Cuadrilla::global().encargar(Box::new(peon.clone()));
+    }
+    peon();
+    let mut hechos: Vec<_> = llegadas.iter().take(cuantos).collect();
     hechos.sort_by_key(|(n, _)| *n);
-    hechos.into_iter().map(|(_, hecho)| hecho).collect()
+    hechos
+        .into_iter()
+        .map(|(_, hecho)| hecho.unwrap_or_else(|panico| resume_unwind(panico)))
+        .collect()
 }
 
 #[cfg(test)]
@@ -94,6 +105,32 @@ mod tests {
     fn en_paralelo_devuelve_cada_resultado_en_su_sitio() {
         let cuadrados = en_paralelo(100, |n| n * n);
         assert_eq!(cuadrados, (0..100).map(|n| n * n).collect::<Vec<_>>());
+    }
+
+    /// RAYO: un hilo nuevo reconstruye el motor. Si esto falla, K1 vuelve a tardar el triple en medir
+    /// sus animaciones y a gastar 150 MiB más.
+    #[test]
+    fn repartir_no_crea_hilos_nuevos() {
+        let hilos = |_| {
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            thread::current().id()
+        };
+        let mut vistos: Vec<_> = (0..4).flat_map(|_| en_paralelo(64, hilos)).collect();
+        vistos.sort_by_key(|id| format!("{id:?}"));
+        vistos.dedup();
+        assert!(vistos.len() <= hilos_disponibles() + 1, "{}", vistos.len());
+    }
+
+    #[test]
+    fn un_panico_llega_a_quien_llama_y_la_cuadrilla_sigue() {
+        let hecho = catch_unwind(|| {
+            en_paralelo(8, |n| {
+                assert!(n != 5, "a propósito");
+                n
+            })
+        });
+        assert!(hecho.is_err());
+        assert_eq!(en_paralelo(8, |n| n), (0..8).collect::<Vec<_>>());
     }
 
     #[test]

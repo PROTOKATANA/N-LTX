@@ -21,6 +21,8 @@ mod proyector;
 pub use filmoteca::Filmoteca;
 pub use proyector::Proyector;
 
+use std::sync::Arc;
+
 use cuadrilla::en_paralelo;
 use primitivas::{Caja, Capa, Composicion, Compositor, ErrorComposicion, Matriz, Primitiva, Punto};
 
@@ -110,13 +112,14 @@ impl Animacion {
 /// Reproduce una animación con cualquier compositor, en una caja que no cambia.
 pub struct Reproductor<C> {
     animacion: Animacion,
-    compositor: C,
+    compositor: Arc<C>,
     caja: Caja,
 }
 
-impl<C: Compositor + Sync> Reproductor<C> {
+impl<C: Compositor + Send + Sync + 'static> Reproductor<C> {
     pub fn nuevo(fuente: &str, compositor: C) -> Result<Self, ErrorComposicion> {
         let animacion = Animacion::leer(fuente)?;
+        let compositor = Arc::new(compositor);
         let caja = caja_del_recorrido(&animacion, &compositor)?;
         Ok(Reproductor {
             animacion,
@@ -169,8 +172,12 @@ fn traslacion(origen: Punto) -> Matriz {
 }
 
 /// La caja que contiene el recorrido entero, medida desde el origen del dibujo.
-fn caja_del_recorrido<C: Compositor + Sync>(animacion: &Animacion, compositor: &C) -> Result<Caja, ErrorComposicion> {
-    let muestras = en_paralelo(MUESTRAS + 1, |n| {
+fn caja_del_recorrido<C: Compositor + Send + Sync + 'static>(
+    animacion: &Animacion,
+    compositor: &Arc<C>,
+) -> Result<Caja, ErrorComposicion> {
+    let (animacion, compositor) = (animacion.clone(), Arc::clone(compositor));
+    let muestras = en_paralelo(MUESTRAS + 1, move |n| {
         let valor = animacion.desde + (animacion.hasta - animacion.desde) * n as f64 / MUESTRAS as f64;
         compositor.componer(&animacion.con_valor(valor)).map(|c| {
             let e = c.escena;
