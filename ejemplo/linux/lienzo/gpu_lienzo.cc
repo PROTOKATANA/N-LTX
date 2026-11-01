@@ -6,6 +6,8 @@
 
 # include <cstdlib>
 
+# include <fstream>
+
 # include <memory>
 
 # include <string>
@@ -63,6 +65,10 @@ struct GpuLienzo :: Impl {
 	// NLTX_VOLCAR_LIENZO : escribe cada fotograma en ese archivo, en PPM
 
 	const char * volcado = std :: getenv("NLTX_VOLCAR_LIENZO") ;
+
+	// NLTX_HORNEAR : escribe ahí los shaders compilados (ver pintor/README.md)
+
+	const char * horno = std :: getenv("NLTX_HORNEAR") ;
 
 	std :: thread vigia ;
 
@@ -129,6 +135,18 @@ struct GpuLienzo :: Impl {
 		std :: string fallo ;
 
 		if (!pintor.preparar(gpu , fallo)) { return gpu_fallo(error , fallo.c_str()) ; }
+
+		if (horno) {
+
+			const std :: string horneado = ltx :: hornear(gpu , fallo) ;
+
+			if (horneado.empty()) { return gpu_fallo(error , fallo.c_str()) ; }
+
+			std :: ofstream(horno) << horneado ;
+
+			horno = nullptr ;
+
+		}
 
 		if (banco) { banco->comenzar() ; }
 

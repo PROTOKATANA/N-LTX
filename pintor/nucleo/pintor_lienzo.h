@@ -33,6 +33,11 @@ struct Pintado {
 
 } ;
 
+// El contenido de `sombreadores_horneados.h`, compilando aquí mismo el HLSL. Vacío
+// si no se pudo. Solo para regenerarlo : ver pintor/README.md
+
+std :: string hornear(const Gpu & gpu , std :: string & error) ;
+
 class Pintor {
 
 public:

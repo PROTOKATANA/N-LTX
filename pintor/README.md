@@ -22,6 +22,12 @@ nucleo/               el renderizador en C++ y sus recursos; `pintor_lienzo.h` e
 El límite de inglete significa lo mismo que en PDF y SVG, comparado con 1/sen(ángulo/2). lyon lo compara
 con el doble de su propio límite: `teselado` le pasa la mitad.
 
+Los shaders van ya compilados en `nucleo/sombreadores_horneados.h`: compilar HLSL en cada arranque se llevaba
+32 de los 36 ms de preparar el pintor. Cada uno se busca por la huella de su texto, así que uno que cambie se
+compila como siempre, y fuera de Vulkan se compila todo. `tests/horneado.rs` falla si lo horneado no
+corresponde al HLSL; para regenerarlo, se lanza `ejemplo` una vez con
+`NLTX_HORNEAR=pintor/nucleo/sombreadores_horneados.h` (ruta absoluta) y se recompila.
+
 ## Quién hace qué
 
 Rust lleva el ritmo. El **taller**, en su propio hilo, compila lo publicado y compone las animaciones a
