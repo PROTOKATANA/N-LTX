@@ -56,6 +56,17 @@ fn is_bond_start(ch: char) -> bool {
     matches!(ch, '-' | '=' | '~' | '<' | '>')
 }
 
+/// Where the reader is along a chain: the current atom, the direction of the next bond, and,
+/// inside a ring, how many of its bonds are already read.
+struct ChainCursor {
+    cur: AtomId,
+    angle: f32,
+    read: usize,
+    last_edge: Option<f32>,
+    /// The atom a nested ring already put where this ring's next vertex goes.
+    preset: Option<AtomId>,
+}
+
 impl Mol<'_, '_> {
     fn current(&self) -> Option<char> {
         self.c.get(self.pos).copied()
@@ -93,116 +104,123 @@ impl Mol<'_, '_> {
     /// Reads a branch, the rest of a chain: bonds, atoms, branches, rings and `?` marks, until `)` or the end.
     /// `angle` is the default direction of the first bond (each bond's is then the previous one's).
     fn chain(&mut self, start: AtomId, angle: f32, ring: Option<RingState>) -> R<()> {
-        let mut cur = start;
-        let mut angle = angle;
-        // in a ring, the bond count so far and the direction of the last ring bond
-        let mut k = 0usize;
-        let mut last_edge: Option<f32> = None;
-        // the atom a nested ring already put where this ring's next vertex goes
-        let mut preset: Option<AtomId> = None;
+        let mut cursor = ChainCursor { cur: start, angle, read: 0, last_edge: None, preset: None };
         loop {
             self.skip_spaces();
             let Some(ch) = self.current() else { break };
             match ch {
                 ')' => break,
-                '(' => {
-                    let default = self.bisector.get(&cur).copied().unwrap_or(angle);
-                    self.pos += 1;
-                    self.chain(cur, default, None)?;
-                    self.skip_spaces();
-                    if self.current() == Some(')') {
-                        self.pos += 1;
-                    } else {
-                        self.reader.tolerate(rules::E_REC_4, "branch '(' without its ')'", "closed at the end")?;
-                    }
-                }
-                '*' => {
-                    // a ring opened at a vertex a ring bond reached is fused to the parent's next side
-                    let fused = match (ring, last_edge) {
-                        (Some(r), Some(edge)) => Some((r.turn, edge)),
-                        _ => None,
-                    };
-                    let incoming = if ring.is_some() { angle } else { self.bisector.get(&cur).copied().unwrap_or(angle) };
-                    if let Some(shared) = self.ring(cur, incoming, fused)? {
-                        if fused.is_some() {
-                            preset = Some(shared);
-                        }
-                    }
-                }
+                '(' => self.read_branch(cursor.cur, cursor.angle)?,
+                '*' => self.read_star(&mut cursor, ring)?,
                 '?' => {
                     self.pos += 1;
-                    self.closure(cur)?;
+                    self.closure(cursor.cur)?;
                 }
-                '@' => {
-                    self.pos += 1;
-                    if self.current() == Some('{') {
-                        let name = self.group('{', '}')?;
-                        self.m.atoms[cur].hook.get_or_insert_with(|| name.split(',').next().unwrap_or("").trim().to_string());
-                    }
-                }
-                c if is_bond_start(c) => {
-                    let (kind, args) = self.bond_spec()?;
-                    let mut bond_angle = resolve_angle(args.first().map(String::as_str).unwrap_or(""), angle);
-                    let length = args.get(1).and_then(|l| l.trim().parse::<f32>().ok()).filter(|l| *l > 0.0).unwrap_or(1.0);
-                    let explicit = |i: usize| args.get(i).and_then(|v| v.trim().parse::<usize>().ok()).filter(|v| *v > 0).map(|v| v - 1);
-                    let kind = tikz_kind(args.get(4).map(String::as_str).unwrap_or(""), kind);
-                    let mut target = None;
-                    let mut ring_id = None;
-                    if let Some(r) = ring {
-                        if k >= r.bonds {
-                            self.reader.tolerate(rules::E_REC_9, format!("ring of {} sides with more bonds than it can take", self.m.rings[r.id].size), "extra bond left out")?;
-                            // read and drop what follows the extra bond
-                            let _ = self.atom(None, None)?;
-                            continue;
-                        }
-                        bond_angle = r.first + r.turn * k as f32;
-                        ring_id = Some(r.id);
-                        if k + 1 == r.bonds {
-                            target = Some(r.close);
-                        }
-                    }
-                    let departure = explicit(2).unwrap_or_else(|| self.default_departure(cur, bond_angle));
-                    let to = match target {
-                        Some(t) => {
-                            // the label after a closing bond names the start atom again; it is not a new atom
-                            let _ = self.label()?;
-                            t
-                        }
-                        None => match preset.take() {
-                            Some(p) => {
-                                let (label, lewis) = self.label()?;
-                                let atom = &mut self.m.atoms[p];
-                                if atom.label.is_empty() && !label.is_empty() {
-                                    atom.pieces = pieces(&label);
-                                    atom.label = label;
-                                }
-                                atom.lewis.extend(lewis);
-                                p
-                            }
-                            None => self.atom(Some(bond_angle), explicit(3))?,
-                        },
-                    };
-                    let arrival = if target.is_some() { explicit(3).unwrap_or(self.m.atoms[to].anchor) } else { self.m.atoms[to].anchor };
-                    self.add_bond(Bond { from: cur, to, kind, angle: normalize(bond_angle), length, departure, arrival, ring: ring_id });
-                    if let Some(r) = ring {
-                        if target.is_none() && !self.m.rings[r.id].atoms.contains(&to) {
-                            self.m.rings[r.id].atoms.push(to);
-                            // exterior bisector: halfway between this bond and the next, outward
-                            let outward = bond_angle + r.turn / 2.0 - 90.0 * r.turn.signum();
-                            self.bisector.entry(to).or_insert(normalize(outward));
-                        }
-                        k += 1;
-                        last_edge = Some(bond_angle);
-                    }
-                    cur = to;
-                    angle = bond_angle;
-                }
+                '@' => self.read_hook(cursor.cur)?,
+                c if is_bond_start(c) => self.read_bond(&mut cursor, ring)?,
                 other => {
                     self.reader.tolerate(rules::E_REC_9, format!("unexpected '{other}' in a structure"), "ignored")?;
                     self.pos += 1;
                 }
             }
         }
+        Ok(())
+    }
+
+    fn read_branch(&mut self, cur: AtomId, angle: f32) -> R<()> {
+        let default = self.bisector.get(&cur).copied().unwrap_or(angle);
+        self.pos += 1;
+        self.chain(cur, default, None)?;
+        self.skip_spaces();
+        if self.current() == Some(')') {
+            self.pos += 1;
+        } else {
+            self.reader.tolerate(rules::E_REC_4, "branch '(' without its ')'", "closed at the end")?;
+        }
+        Ok(())
+    }
+
+    /// A ring opened at a vertex a ring bond reached is fused to the parent's next side.
+    fn read_star(&mut self, cursor: &mut ChainCursor, ring: Option<RingState>) -> R<()> {
+        let fused = match (ring, cursor.last_edge) {
+            (Some(r), Some(edge)) => Some((r.turn, edge)),
+            _ => None,
+        };
+        let incoming = if ring.is_some() { cursor.angle } else { self.bisector.get(&cursor.cur).copied().unwrap_or(cursor.angle) };
+        if let Some(shared) = self.ring(cursor.cur, incoming, fused)? {
+            if fused.is_some() {
+                cursor.preset = Some(shared);
+            }
+        }
+        Ok(())
+    }
+
+    fn read_hook(&mut self, cur: AtomId) -> R<()> {
+        self.pos += 1;
+        if self.current() == Some('{') {
+            let name = self.group('{', '}')?;
+            self.m.atoms[cur].hook.get_or_insert_with(|| name.split(',').next().unwrap_or("").trim().to_string());
+        }
+        Ok(())
+    }
+
+    /// One bond of the chain. An extra bond past a ring's size is read and dropped, and the cursor stays.
+    fn read_bond(&mut self, cursor: &mut ChainCursor, ring: Option<RingState>) -> R<()> {
+        let (kind, args) = self.bond_spec()?;
+        let mut bond_angle = resolve_angle(args.first().map(String::as_str).unwrap_or(""), cursor.angle);
+        let length = args.get(1).and_then(|l| l.trim().parse::<f32>().ok()).filter(|l| *l > 0.0).unwrap_or(1.0);
+        let explicit = |i: usize| args.get(i).and_then(|v| v.trim().parse::<usize>().ok()).filter(|v| *v > 0).map(|v| v - 1);
+        let kind = tikz_kind(args.get(4).map(String::as_str).unwrap_or(""), kind);
+        let mut target = None;
+        let mut ring_id = None;
+        if let Some(r) = ring {
+            if cursor.read >= r.bonds {
+                self.reader.tolerate(rules::E_REC_9, format!("ring of {} sides with more bonds than it can take", self.m.rings[r.id].size), "extra bond left out")?;
+                // read and drop what follows the extra bond
+                let _ = self.atom(None, None)?;
+                return Ok(());
+            }
+            bond_angle = r.first + r.turn * cursor.read as f32;
+            ring_id = Some(r.id);
+            if cursor.read + 1 == r.bonds {
+                target = Some(r.close);
+            }
+        }
+        let departure = explicit(2).unwrap_or_else(|| self.default_departure(cursor.cur, bond_angle));
+        let to = match target {
+            Some(t) => {
+                // the label after a closing bond names the start atom again; it is not a new atom
+                let _ = self.label()?;
+                t
+            }
+            None => match cursor.preset.take() {
+                Some(p) => {
+                    let (label, lewis) = self.label()?;
+                    let atom = &mut self.m.atoms[p];
+                    if atom.label.is_empty() && !label.is_empty() {
+                        atom.pieces = pieces(&label);
+                        atom.label = label;
+                    }
+                    atom.lewis.extend(lewis);
+                    p
+                }
+                None => self.atom(Some(bond_angle), explicit(3))?,
+            },
+        };
+        let arrival = if target.is_some() { explicit(3).unwrap_or(self.m.atoms[to].anchor) } else { self.m.atoms[to].anchor };
+        self.add_bond(Bond { from: cursor.cur, to, kind, angle: normalize(bond_angle), length, departure, arrival, ring: ring_id });
+        if let Some(r) = ring {
+            if target.is_none() && !self.m.rings[r.id].atoms.contains(&to) {
+                self.m.rings[r.id].atoms.push(to);
+                // exterior bisector: halfway between this bond and the next, outward
+                let outward = bond_angle + r.turn / 2.0 - 90.0 * r.turn.signum();
+                self.bisector.entry(to).or_insert(normalize(outward));
+            }
+            cursor.read += 1;
+            cursor.last_edge = Some(bond_angle);
+        }
+        cursor.cur = to;
+        cursor.angle = bond_angle;
         Ok(())
     }
 

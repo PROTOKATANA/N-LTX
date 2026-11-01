@@ -236,16 +236,7 @@ impl SchemeReader<'_, '_> {
             }
             self.flush(&mut text);
             if ch == '$' {
-                self.pos += 1;
-                let mut math = String::new();
-                while let Some(m) = self.current() {
-                    self.pos += 1;
-                    if m == '$' {
-                        break;
-                    }
-                    math.push(m);
-                }
-                self.compound(Body::Math { tex: math.trim().to_string() }, None);
+                self.read_inline_math()?;
                 continue;
             }
             let start = self.pos;
@@ -262,24 +253,7 @@ impl SchemeReader<'_, '_> {
                     let body = self.braced()?;
                     self.compound(Body::Math { tex: format!("\\ce{{{body}}}") }, None);
                 }
-                "chemname" => {
-                    if self.current() == Some('*') {
-                        self.pos += 1;
-                    }
-                    let _ = self.optional()?;
-                    let inner = self.braced()?;
-                    let label = self.braced()?;
-                    let before = self.scheme.items.len();
-                    let mut sub = SchemeReader { c: inner.chars().collect(), pos: 0, reader: self.reader, scheme: Scheme { items: vec![], moves: vec![] } };
-                    sub.items()?;
-                    let (items, moves) = (sub.scheme.items, sub.scheme.moves);
-                    self.scheme.moves.extend(moves);
-                    self.scheme.items.extend(items);
-                    match self.scheme.items.get_mut(before) {
-                        Some(Item::Compound(c)) => c.name = Some(label),
-                        _ => self.compound(Body::Math { tex: String::new() }, Some(label)),
-                    }
-                }
+                "chemname" => self.read_chemname()?,
                 "+" => {
                     // \+{space before, space after, vertical shift}: the spacing is mathra's
                     if self.current() == Some('{') {
@@ -293,41 +267,85 @@ impl SchemeReader<'_, '_> {
                     let body = self.braced()?;
                     self.moves(&body)?;
                 }
-                "subscheme" => {
-                    let _ = self.optional()?;
-                    let body = self.braced()?;
-                    let mut sub = SchemeReader { c: body.chars().collect(), pos: 0, reader: self.reader, scheme: Scheme { items: vec![], moves: vec![] } };
-                    sub.items()?;
-                    let (items, moves) = (sub.scheme.items, sub.scheme.moves);
-                    self.scheme.items.extend(items);
-                    self.scheme.moves.extend(moves);
-                }
+                "subscheme" => self.read_subscheme()?,
                 "\\" | "," | ";" | "quad" | "qquad" | " " => {}
-                _ => {
-                    // any other command is math for mathra (\Delta, \text…), up to the next scheme command
-                    self.pos = start;
-                    let mut math = String::new();
-                    while let Some(m) = self.current() {
-                        if m == '\\' && self.starts_scheme_command() && !math.is_empty() {
-                            break;
-                        }
-                        if m == '$' {
-                            break;
-                        }
-                        math.push(m);
-                        self.pos += 1;
-                        if m == '\\' {
-                            while let Some(l) = self.current().filter(char::is_ascii_alphabetic) {
-                                math.push(l);
-                                self.pos += 1;
-                            }
-                        }
-                    }
-                    self.compound(Body::Math { tex: math.trim().to_string() }, None);
-                }
+                _ => self.read_loose_math(start)?,
             }
         }
         self.flush(&mut text);
+        Ok(())
+    }
+
+    /// `$…$` as math, the dollars not included.
+    fn read_inline_math(&mut self) -> R<()> {
+        self.pos += 1;
+        let mut math = String::new();
+        while let Some(m) = self.current() {
+            self.pos += 1;
+            if m == '$' {
+                break;
+            }
+            math.push(m);
+        }
+        self.compound(Body::Math { tex: math.trim().to_string() }, None);
+        Ok(())
+    }
+
+    /// The items of a scheme written inside another (`\chemname`, `\subscheme`).
+    fn nested_items(&mut self, source: &str) -> R<(Vec<Item>, Vec<ElectronMove>)> {
+        let mut sub = SchemeReader { c: source.chars().collect(), pos: 0, reader: self.reader, scheme: Scheme { items: vec![], moves: vec![] } };
+        sub.items()?;
+        Ok((sub.scheme.items, sub.scheme.moves))
+    }
+
+    fn read_chemname(&mut self) -> R<()> {
+        if self.current() == Some('*') {
+            self.pos += 1;
+        }
+        let _ = self.optional()?;
+        let inner = self.braced()?;
+        let label = self.braced()?;
+        let before = self.scheme.items.len();
+        let (items, moves) = self.nested_items(&inner)?;
+        self.scheme.moves.extend(moves);
+        self.scheme.items.extend(items);
+        match self.scheme.items.get_mut(before) {
+            Some(Item::Compound(c)) => c.name = Some(label),
+            _ => self.compound(Body::Math { tex: String::new() }, Some(label)),
+        }
+        Ok(())
+    }
+
+    fn read_subscheme(&mut self) -> R<()> {
+        let _ = self.optional()?;
+        let body = self.braced()?;
+        let (items, moves) = self.nested_items(&body)?;
+        self.scheme.items.extend(items);
+        self.scheme.moves.extend(moves);
+        Ok(())
+    }
+
+    /// Any other command is math for mathra (`\Delta`, `\text…`), up to the next scheme command.
+    fn read_loose_math(&mut self, start: usize) -> R<()> {
+        self.pos = start;
+        let mut math = String::new();
+        while let Some(m) = self.current() {
+            if m == '\\' && self.starts_scheme_command() && !math.is_empty() {
+                break;
+            }
+            if m == '$' {
+                break;
+            }
+            math.push(m);
+            self.pos += 1;
+            if m == '\\' {
+                while let Some(l) = self.current().filter(char::is_ascii_alphabetic) {
+                    math.push(l);
+                    self.pos += 1;
+                }
+            }
+        }
+        self.compound(Body::Math { tex: math.trim().to_string() }, None);
         Ok(())
     }
 

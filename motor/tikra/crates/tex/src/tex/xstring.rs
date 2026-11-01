@@ -130,105 +130,143 @@ impl Tex {
         let n = counts.first().copied();
         let text = self.xstring_text()?;
         let s = units(&text);
+        if self.xstring_test(name, &s, n)? {
+            return Ok(());
+        }
         let result = match name {
             "StrLen" => string_tokens(&s.len().to_string()),
-            "StrLeft" | "StrRight" | "StrChar" => {
-                let a = self.read_undelimited()?;
-                let n = self.xstring_int(a)?;
-                let k = n.clamp(0, s.len() as i64) as usize;
-                match name {
-                    "StrLeft" => join(&s[..k]),
-                    "StrRight" => join(&s[s.len() - k..]),
-                    _ => usize::try_from(n - 1).ok().and_then(|i| s.get(i)).map(|u| u.to_vec()).unwrap_or_default(),
-                }
-            }
-            "StrMid" => {
-                let (a, b) = (self.read_undelimited()?, self.read_undelimited()?);
-                let a = self.xstring_int(a)?.max(1) as usize;
-                let b = self.xstring_int(b)?.min(s.len() as i64).max(0) as usize;
-                if a <= b {
-                    join(&s[a - 1..b])
-                } else {
-                    Vec::new()
-                }
-            }
-            "StrSubstitute" | "StrDel" => {
-                let from = self.xstring_text()?;
-                let to = if name == "StrSubstitute" { self.xstring_text()? } else { Vec::new() };
-                let p = units(&from);
-                // a count of 0 (the default) replaces them all
-                let n = n.unwrap_or(0);
-                let found = occurrences(&s, &p);
-                let mut out = Vec::new();
-                let mut at = 0;
-                for (k, &i) in found.iter().enumerate() {
-                    if n > 0 && k as i64 >= n {
-                        break;
-                    }
-                    out.extend(join(&s[at..i]));
-                    out.extend(to.iter().cloned());
-                    at = i + p.len();
-                }
-                out.extend(join(&s[at..]));
-                out
-            }
-            "StrBetween" => {
-                let (a, b) = (self.xstring_text()?, self.xstring_text()?);
-                let (pa, pb) = (units(&a), units(&b));
-                // the n1-th A and the n2-th B, both counted from the start
-                let n1 = n.unwrap_or(1);
-                let n2 = counts.get(1).copied().unwrap_or(1);
-                let nth = |found: Vec<usize>, k: i64| usize::try_from(k - 1).ok().and_then(|k| found.get(k).copied());
-                match (nth(occurrences(&s, &pa), n1), nth(occurrences(&s, &pb), n2)) {
-                    (Some(i), Some(j)) if j >= i + pa.len() => join(&s[i + pa.len()..j]),
-                    _ => Vec::new(),
-                }
-            }
+            "StrLeft" | "StrRight" | "StrChar" => self.xstring_ends(name, &s)?,
+            "StrMid" => self.xstring_mid(&s)?,
+            "StrSubstitute" | "StrDel" => self.xstring_replace(name, &s, n)?,
+            "StrBetween" => self.xstring_between(&s, &counts)?,
             "StrCount" => {
                 let p = self.xstring_text()?;
                 string_tokens(&occurrences(&s, &units(&p)).len().to_string())
             }
-            "IfSubStr" | "IfStrEq" | "IfBeginWith" | "IfEndWith" => {
-                let p = self.xstring_text()?;
-                let p = units(&p);
-                let test = match name {
-                    "IfSubStr" => occurrences(&s, &p).len() as i64 >= n.unwrap_or(1),
-                    "IfStrEq" => s == p,
-                    "IfBeginWith" => s.starts_with(&p),
-                    _ => s.ends_with(&p),
-                };
-                let (yes, no) = (self.read_undelimited()?, self.read_undelimited()?);
-                self.push_tokens(if test { yes } else { no });
-                return Ok(());
-            }
-            _ => {
-                // \StrBefore, \StrBehind, \StrCut: around the n-th occurrence
-                let p = self.xstring_text()?;
-                let p = units(&p);
-                let found = occurrences(&s, &p);
-                let k = n.unwrap_or(1);
-                let at = if name == "StrCut" { found.get(k.max(1) as usize - 1) } else { usize::try_from(k - 1).ok().and_then(|k| found.get(k)) };
-                let (before, behind) = match at {
-                    Some(&i) => (join(&s[..i]), join(&s[i + p.len()..])),
-                    None if name == "StrCut" => (text.clone(), Vec::new()),
-                    None => (Vec::new(), Vec::new()),
-                };
-                match name {
-                    "StrBefore" => before,
-                    "StrBehind" => behind,
-                    _ => {
-                        // \StrCut{text}{sep}{\left}{\right}
-                        let (l, r) = (self.read_undelimited()?, self.read_undelimited()?);
-                        for (target, v) in [(l, before), (r, behind)] {
-                            if let Some(m) = target.into_iter().find(|x| !x.is_space()) {
-                                self.define_tokens(&m, v);
-                            }
-                        }
-                        return Ok(());
-                    }
-                }
-            }
+            "StrBefore" | "StrBehind" => self.xstring_beside(name, &s, n)?,
+            "StrCut" => return self.xstring_strcut(&s, &text, n),
+            // a name that is not one of the commands above still stores the two sides
+            _ => return self.xstring_define_sides(&s, n),
         };
         self.xstring_result(result)
+    }
+
+    fn xstring_ends(&mut self, name: &str, s: &[&[Token]]) -> Result<Vec<Token>, Error> {
+        let a = self.read_undelimited()?;
+        let n = self.xstring_int(a)?;
+        let k = n.clamp(0, s.len() as i64) as usize;
+        Ok(match name {
+            "StrLeft" => join(&s[..k]),
+            "StrRight" => join(&s[s.len() - k..]),
+            _ => usize::try_from(n - 1).ok().and_then(|i| s.get(i)).map(|u| u.to_vec()).unwrap_or_default(),
+        })
+    }
+
+    fn xstring_mid(&mut self, s: &[&[Token]]) -> Result<Vec<Token>, Error> {
+        let (a, b) = (self.read_undelimited()?, self.read_undelimited()?);
+        let a = self.xstring_int(a)?.max(1) as usize;
+        let b = self.xstring_int(b)?.min(s.len() as i64).max(0) as usize;
+        Ok(if a <= b { join(&s[a - 1..b]) } else { Vec::new() })
+    }
+
+    fn xstring_replace(&mut self, name: &str, s: &[&[Token]], n: Option<i64>) -> Result<Vec<Token>, Error> {
+        let from = self.xstring_text()?;
+        let to = if name == "StrSubstitute" { self.xstring_text()? } else { Vec::new() };
+        let p = units(&from);
+        // a count of 0 (the default) replaces them all
+        let n = n.unwrap_or(0);
+        let found = occurrences(s, &p);
+        let mut out = Vec::new();
+        let mut at = 0;
+        for (k, &i) in found.iter().enumerate() {
+            if n > 0 && k as i64 >= n {
+                break;
+            }
+            out.extend(join(&s[at..i]));
+            out.extend(to.iter().cloned());
+            at = i + p.len();
+        }
+        out.extend(join(&s[at..]));
+        Ok(out)
+    }
+
+    fn xstring_between(&mut self, s: &[&[Token]], counts: &[i64]) -> Result<Vec<Token>, Error> {
+        let (a, b) = (self.xstring_text()?, self.xstring_text()?);
+        let (pa, pb) = (units(&a), units(&b));
+        // the n1-th A and the n2-th B, both counted from the start
+        let n1 = counts.first().copied().unwrap_or(1);
+        let n2 = counts.get(1).copied().unwrap_or(1);
+        let nth = |found: Vec<usize>, k: i64| usize::try_from(k - 1).ok().and_then(|k| found.get(k).copied());
+        Ok(match (nth(occurrences(s, &pa), n1), nth(occurrences(s, &pb), n2)) {
+            (Some(i), Some(j)) if j >= i + pa.len() => join(&s[i + pa.len()..j]),
+            _ => Vec::new(),
+        })
+    }
+
+    /// `\IfSubStr`, `\IfStrEq`, `\IfBeginWith`, `\IfEndWith`. `Ok(false)` when `name` is none of them.
+    fn xstring_test(&mut self, name: &str, s: &[&[Token]], n: Option<i64>) -> Result<bool, Error> {
+        if !matches!(name, "IfSubStr" | "IfStrEq" | "IfBeginWith" | "IfEndWith") {
+            return Ok(false);
+        }
+        let p = self.xstring_text()?;
+        let p = units(&p);
+        let test = match name {
+            "IfSubStr" => occurrences(s, &p).len() as i64 >= n.unwrap_or(1),
+            "IfStrEq" => s == p,
+            "IfBeginWith" => s.starts_with(&p),
+            _ => s.ends_with(&p),
+        };
+        let (yes, no) = (self.read_undelimited()?, self.read_undelimited()?);
+        self.push_tokens(if test { yes } else { no });
+        Ok(true)
+    }
+
+    /// `\StrBefore` and `\StrBehind`: the text on one side of the n-th occurrence.
+    fn xstring_beside(&mut self, name: &str, s: &[&[Token]], n: Option<i64>) -> Result<Vec<Token>, Error> {
+        let (before, behind) = self.sides_of(s, n)?;
+        Ok(if name == "StrBefore" { before } else { behind })
+    }
+
+    /// `\StrCut`: the two sides of the n-th occurrence, each stored in the macro that follows.
+    /// A miss keeps the whole text on the left and nothing on the right.
+    fn xstring_strcut(&mut self, s: &[&[Token]], text: &[Token], n: Option<i64>) -> Result<(), Error> {
+        let p = self.xstring_text()?;
+        let p = units(&p);
+        let found = occurrences(s, &p);
+        let k = n.unwrap_or(1);
+        let (before, behind) = match found.get(k.max(1) as usize - 1) {
+            Some(&i) => (join(&s[..i]), join(&s[i + p.len()..])),
+            None => (text.to_vec(), Vec::new()),
+        };
+        self.define_pair(before, behind)
+    }
+
+    /// Same storage as `\StrCut`, counting the occurrence as `\StrBefore` does. A miss stores nothing.
+    fn xstring_define_sides(&mut self, s: &[&[Token]], n: Option<i64>) -> Result<(), Error> {
+        let (before, behind) = self.sides_of(s, n)?;
+        self.define_pair(before, behind)
+    }
+
+    /// The text before and after the n-th occurrence of the next argument. A miss is empty on both sides.
+    fn sides_of(&mut self, s: &[&[Token]], n: Option<i64>) -> Result<(Vec<Token>, Vec<Token>), Error> {
+        let p = self.xstring_text()?;
+        let p = units(&p);
+        let found = occurrences(s, &p);
+        let k = n.unwrap_or(1);
+        let at = usize::try_from(k - 1).ok().and_then(|k| found.get(k));
+        Ok(match at {
+            Some(&i) => (join(&s[..i]), join(&s[i + p.len()..])),
+            None => (Vec::new(), Vec::new()),
+        })
+    }
+
+    fn define_pair(&mut self, before: Vec<Token>, behind: Vec<Token>) -> Result<(), Error> {
+        let (l, r) = (self.read_undelimited()?, self.read_undelimited()?);
+        for (target, v) in [(l, before), (r, behind)] {
+            if let Some(m) = target.into_iter().find(|x| !x.is_space()) {
+                self.define_tokens(&m, v);
+            }
+        }
+        Ok(())
     }
 }

@@ -474,167 +474,163 @@ impl Parser<'_> {
                 let end = self.array_end().unwrap_or(self.pos);
                 self.index_array(end)
             }
-            Some('(') | Some('{') => {
-                let close = if self.peek() == Some('(') { ')' } else { '}' };
-                self.pos += 1;
-                let v = self.ternary()?;
-                self.skip_spaces();
-                if self.peek() != Some(close) {
-                    return Err(Error::Expression(format!("missing '{close}'")));
-                }
-                self.pos += 1;
-                Ok(v)
-            }
-            Some(c) if c.is_ascii_digit() || c == '.' => {
-                let start = self.pos;
-                while self.peek().is_some_and(|c| c.is_ascii_digit() || c == '.') {
-                    self.pos += 1;
-                }
-                // pgfmath scientific notation: 1e3, 2.5E-4 (not confused with the em and ex units)
-                if matches!(self.peek(), Some('e' | 'E')) {
-                    let sign = matches!(self.c.get(self.pos + 1), Some('+' | '-')) as usize;
-                    if self.c.get(self.pos + 1 + sign).is_some_and(|c| c.is_ascii_digit()) {
-                        self.pos += 1 + sign;
-                        while self.peek().is_some_and(|c| c.is_ascii_digit()) {
-                            self.pos += 1;
-                        }
-                    }
-                }
-                let n: String = self.c[start..self.pos].iter().collect();
-                let mut v: f64 = n.parse().map_err(|_| Error::Expression(format!("invalid number: {n}")))?;
-                // a unit glued to a number inside an expression: 2cm, 3pt
-                let rest: String = self.c[self.pos..].iter().take(2).collect();
-                if let Some(f) = unit_cm_in(&rest, self.vars) {
-                    if !self.c.get(self.pos + 2).is_some_and(|c| c.is_ascii_alphabetic()) {
-                        self.pos += 2;
-                        v *= if self.vars.in_pt { f } else { f / crate::PT };
-                        self.units = true;
-                    }
-                }
-                Ok(v)
-            }
-            Some('\\') => {
-                self.pos += 1;
-                let start = self.pos;
-                while self.peek().is_some_and(|c| c.is_ascii_alphabetic()) {
-                    self.pos += 1;
-                }
-                let name: String = self.c[start..self.pos].iter().collect();
-                match name.as_str() {
-                    "pi" => Ok(std::f64::consts::PI),
-                    _ => self.vars.get(&name).copied().ok_or(Error::Expression(format!("unknown variable: \\{name}"))),
-                }
-            }
-            Some(c) if c.is_ascii_alphabetic() => {
-                let start = self.pos;
-                // digits after the first letter: atan2, log10
-                while self.peek().is_some_and(|c| c.is_ascii_alphanumeric()) {
-                    self.pos += 1;
-                }
-                let name: String = self.c[start..self.pos].iter().collect();
-                if name == "pi" {
-                    return Ok(std::f64::consts::PI);
-                }
-                if name == "e" {
-                    return Ok(std::f64::consts::E);
-                }
-                self.skip_spaces();
-                if self.peek() != Some('(') {
-                    // a variable without a backslash, like the x of pgfplots functions
-                    if let Some(v) = self.vars.get(&name) {
-                        return Ok(*v);
-                    }
-                    // a function without arguments: declared (`declare function={C=4;}`) or pgfmath's
-                    if let Some(body) = self.vars.functions.get(&name).filter(|f| f.0.is_empty()).map(|f| f.1.clone()) {
-                        return self.sub(&body, self.vars);
-                    }
-                    // `sin 30`, `cos \x`: the function of the operand after it, sign included
-                    // (`sin 2*30` is sin(2) times 30, `sin 30^2` is sin(30) squared)
-                    if ONE_ARGUMENT.contains(&name.as_str()) {
-                        let units_before = self.units;
-                        let a = self.unary()?;
-                        return self.call(&name, vec![a], units_before);
-                    }
-                    return match name.as_str() {
-                        "rand" => Ok(pseudo_random_signed()),
-                        "rnd" => Ok(pseudo_random()),
-                        "true" => Ok(1.0),
-                        "false" => Ok(0.0),
-                        // the fpu's special numbers (pgfplots' `nan` point meta, `unbounded coords`)
-                        "nan" | "NaN" => Ok(f64::NAN),
-                        "inf" | "Inf" => Ok(f64::INFINITY),
-                        _ => Err(Error::Expression(format!("function without parentheses: {name}"))),
-                    };
-                }
-                self.pos += 1;
-                let units_before = self.units;
-                self.skip_spaces();
-                let mut args = Vec::new();
-                // `random()` has no argument
-                if !(name == "random" && self.peek() == Some(')')) {
-                    args.push(self.ternary()?);
-                    self.skip_spaces();
-                }
-                while self.peek() == Some(',') {
-                    self.pos += 1;
-                    args.push(self.ternary()?);
-                    self.skip_spaces();
-                }
-                if self.peek() != Some(')') {
-                    return Err(Error::Expression(format!("missing ')' in {name}(…)")));
-                }
-                self.pos += 1;
-                self.call(&name, args, units_before)
-            }
+            Some('(') | Some('{') => self.grouped(),
+            Some(c) if c.is_ascii_digit() || c == '.' => self.numeric_literal(),
+            Some('\\') => self.control_atom(),
+            Some(c) if c.is_ascii_alphabetic() => self.named(),
             Some(c) => Err(Error::Expression(format!("unexpected character: '{c}'"))),
             None => Err(Error::Expression("empty expression".into())),
         }
+    }
+
+    fn grouped(&mut self) -> Result<f64, Error> {
+        let close = if self.peek() == Some('(') { ')' } else { '}' };
+        self.pos += 1;
+        let v = self.ternary()?;
+        self.skip_spaces();
+        if self.peek() != Some(close) {
+            return Err(Error::Expression(format!("missing '{close}'")));
+        }
+        self.pos += 1;
+        Ok(v)
+    }
+
+    /// A number, with pgfmath's scientific notation and a unit glued to it (`2cm`, `1e3`).
+    fn numeric_literal(&mut self) -> Result<f64, Error> {
+        let start = self.pos;
+        while self.peek().is_some_and(|c| c.is_ascii_digit() || c == '.') {
+            self.pos += 1;
+        }
+        // pgfmath scientific notation: 1e3, 2.5E-4 (not confused with the em and ex units)
+        if matches!(self.peek(), Some('e' | 'E')) {
+            let sign = matches!(self.c.get(self.pos + 1), Some('+' | '-')) as usize;
+            if self.c.get(self.pos + 1 + sign).is_some_and(|c| c.is_ascii_digit()) {
+                self.pos += 1 + sign;
+                while self.peek().is_some_and(|c| c.is_ascii_digit()) {
+                    self.pos += 1;
+                }
+            }
+        }
+        let n: String = self.c[start..self.pos].iter().collect();
+        let mut v: f64 = n.parse().map_err(|_| Error::Expression(format!("invalid number: {n}")))?;
+        // a unit glued to a number inside an expression: 2cm, 3pt
+        let rest: String = self.c[self.pos..].iter().take(2).collect();
+        if let Some(f) = unit_cm_in(&rest, self.vars) {
+            if !self.c.get(self.pos + 2).is_some_and(|c| c.is_ascii_alphabetic()) {
+                self.pos += 2;
+                v *= if self.vars.in_pt { f } else { f / crate::PT };
+                self.units = true;
+            }
+        }
+        Ok(v)
+    }
+
+    fn control_atom(&mut self) -> Result<f64, Error> {
+        self.pos += 1;
+        let start = self.pos;
+        while self.peek().is_some_and(|c| c.is_ascii_alphabetic()) {
+            self.pos += 1;
+        }
+        let name: String = self.c[start..self.pos].iter().collect();
+        match name.as_str() {
+            "pi" => Ok(std::f64::consts::PI),
+            _ => self.vars.get(&name).copied().ok_or(Error::Expression(format!("unknown variable: \\{name}"))),
+        }
+    }
+
+    /// A name: `pi`, `e`, a variable, or a function call.
+    fn named(&mut self) -> Result<f64, Error> {
+        let start = self.pos;
+        // digits after the first letter: atan2, log10
+        while self.peek().is_some_and(|c| c.is_ascii_alphanumeric()) {
+            self.pos += 1;
+        }
+        let name: String = self.c[start..self.pos].iter().collect();
+        if name == "pi" {
+            return Ok(std::f64::consts::PI);
+        }
+        if name == "e" {
+            return Ok(std::f64::consts::E);
+        }
+        self.skip_spaces();
+        if self.peek() != Some('(') {
+            return self.bare_name(&name);
+        }
+        self.pos += 1;
+        let units_before = self.units;
+        let args = self.call_arguments(&name)?;
+        self.call(&name, args, units_before)
+    }
+
+    /// A name with no parentheses: a variable, a constant, or `sin 30`.
+    fn bare_name(&mut self, name: &str) -> Result<f64, Error> {
+        // a variable without a backslash, like the x of pgfplots functions
+        if let Some(v) = self.vars.get(name) {
+            return Ok(*v);
+        }
+        // a function without arguments: declared (`declare function={C=4;}`) or pgfmath's
+        if let Some(body) = self.vars.functions.get(name).filter(|f| f.0.is_empty()).map(|f| f.1.clone()) {
+            return self.sub(&body, self.vars);
+        }
+        // `sin 30`, `cos \x`: the function of the operand after it, sign included
+        // (`sin 2*30` is sin(2) times 30, `sin 30^2` is sin(30) squared)
+        if ONE_ARGUMENT.contains(&name) {
+            let units_before = self.units;
+            let a = self.unary()?;
+            return self.call(name, vec![a], units_before);
+        }
+        match name {
+            "rand" => Ok(pseudo_random_signed()),
+            "rnd" => Ok(pseudo_random()),
+            "true" => Ok(1.0),
+            "false" => Ok(0.0),
+            // the fpu's special numbers (pgfplots' `nan` point meta, `unbounded coords`)
+            "nan" | "NaN" => Ok(f64::NAN),
+            "inf" | "Inf" => Ok(f64::INFINITY),
+            _ => Err(Error::Expression(format!("function without parentheses: {name}"))),
+        }
+    }
+
+    /// The arguments of `name(…)`, which `random()` is allowed to have none of.
+    fn call_arguments(&mut self, name: &str) -> Result<Vec<f64>, Error> {
+        self.skip_spaces();
+        let mut args = Vec::new();
+        // `random()` has no argument
+        if !(name == "random" && self.peek() == Some(')')) {
+            args.push(self.ternary()?);
+            self.skip_spaces();
+        }
+        while self.peek() == Some(',') {
+            self.pos += 1;
+            args.push(self.ternary()?);
+            self.skip_spaces();
+        }
+        if self.peek() != Some(')') {
+            return Err(Error::Expression(format!("missing ')' in {name}(…)")));
+        }
+        self.pos += 1;
+        Ok(args)
     }
 
     /// The function `name` of `args` (one at least, but for `random()`); `units_before`: whether
     /// units had appeared before its arguments.
     fn call(&mut self, name: &str, args: Vec<f64>, units_before: bool) -> Result<f64, Error> {
         if let Some((params, body)) = self.vars.functions.get(name).cloned() {
-            let mut locals = self.vars.clone();
-            for (p, v) in params.iter().zip(&args) {
-                locals.insert(p.clone(), *v);
-            }
-            return self.sub(&body, &locals);
+            return self.call_declared(&params, &body, &args);
         }
         // pgfmath's random integers, from the generator `rnd` uses: `random(m)` in 1..m,
         // `random(a, b)` in a..b; `random()` is `rnd`
         if name == "random" {
-            return Ok(match args[..] {
-                [] => pseudo_random(),
-                [m] => random_integer(1, m as i64),
-                [a, b, ..] => random_integer(a as i64, b as i64),
-            });
+            return Ok(random_of(&args));
         }
         let rad = self.vars.trig_rad;
         // the argument of a trigonometric function, in degrees; an angle given back
         let deg = |x: f64| if rad { x.to_degrees() } else { x };
-        let angle = |x: f64| if rad { x.to_radians() } else { x };
         let g = |x: f64| deg(x).to_radians();
         let a = args[0];
         if rad {
-            match name {
-                "sin" | "cos" | "sec" | "cosec" => {
-                    return Ok(match name {
-                        "sin" => sin_degrees(deg(a)),
-                        "cos" => cos_degrees(deg(a)),
-                        "sec" => 1.0 / sin_degrees(deg(a) + 90.0),
-                        _ => 1.0 / sin_degrees(deg(a)),
-                    })
-                }
-                "asin" | "acos" | "atan" | "atan2" => {
-                    return Ok(angle(match name {
-                        "asin" => a.asin().to_degrees(),
-                        "acos" => a.acos().to_degrees(),
-                        "atan" => a.atan().to_degrees(),
-                        _ => args.get(1).map_or(0.0, |x| a.atan2(*x).to_degrees()),
-                    }))
-                }
-                _ => {}
+            if let Some(v) = trig_radians(name, a, &args) {
+                return Ok(v);
             }
         }
         Ok(match name {
@@ -699,6 +695,15 @@ impl Parser<'_> {
             other => return Err(Error::Expression(format!("unknown function: {other}"))),
         })
     }
+
+    /// A function the picture declared (`declare function={E(\n) = …}`).
+    fn call_declared(&mut self, params: &[String], body: &str, args: &[f64]) -> Result<f64, Error> {
+        let mut locals = self.vars.clone();
+        for (p, v) in params.iter().zip(args) {
+            locals.insert(p.clone(), *v);
+        }
+        self.sub(body, &locals)
+    }
 }
 
 /// pgfmath's functions of one argument, which may also be written without parentheses (`sin 30`).
@@ -736,6 +741,37 @@ const ONE_ARGUMENT: &[&str] = &[
     "iseven",
     "isodd",
 ];
+
+/// `random()`, `random(m)`, `random(a, b)`.
+fn random_of(args: &[f64]) -> f64 {
+    match args {
+        [] => pseudo_random(),
+        [m] => random_integer(1, *m as i64),
+        [a, b, ..] => random_integer(*a as i64, *b as i64),
+    }
+}
+
+/// Sine, cosine and their inverses when angles are in radians. `None` for any other name.
+fn trig_radians(name: &str, a: f64, args: &[f64]) -> Option<f64> {
+    // the argument of a trigonometric function, in degrees; an angle given back
+    let deg = |x: f64| x.to_degrees();
+    let angle = |x: f64| x.to_radians();
+    match name {
+        "sin" | "cos" | "sec" | "cosec" => Some(match name {
+            "sin" => sin_degrees(deg(a)),
+            "cos" => cos_degrees(deg(a)),
+            "sec" => 1.0 / sin_degrees(deg(a) + 90.0),
+            _ => 1.0 / sin_degrees(deg(a)),
+        }),
+        "asin" | "acos" | "atan" | "atan2" => Some(angle(match name {
+            "asin" => a.asin().to_degrees(),
+            "acos" => a.acos().to_degrees(),
+            "atan" => a.atan().to_degrees(),
+            _ => args.get(1).map_or(0.0, |x| a.atan2(*x).to_degrees()),
+        })),
+        _ => None,
+    }
+}
 
 /// An integer of `a..=b` from pgf's generator: its number modulo the count, from `a`.
 fn random_integer(a: i64, b: i64) -> f64 {

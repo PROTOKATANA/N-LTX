@@ -94,8 +94,49 @@ impl Label {
     }
 }
 
+/// A molecule once its atoms have a place and its labels are typeset.
+struct PlacedMolecule<'a> {
+    molecule: &'a Molecule,
+    labels: &'a [Option<Label>],
+    pos: Vec<P>,
+    centers: Vec<P>,
+}
+
+impl PlacedMolecule<'_> {
+    /// The point of piece `k`, relative to its atom's position (the anchor piece's center).
+    fn offset(&self, atom: AtomId, k: usize) -> f32 {
+        match &self.labels[atom] {
+            Some(l) => l.center(k) - l.center(self.molecule.atoms[atom].anchor),
+            None => 0.0,
+        }
+    }
+
+    fn point(&self, atom: AtomId, k: usize) -> P {
+        (self.pos[atom].0 + self.offset(atom, k), self.pos[atom].1)
+    }
+
+    /// The box a bond stops at: the letters of one piece.
+    fn stop(&self, atom: AtomId, k: usize) -> Option<Rect> {
+        let l = self.labels[atom].as_ref()?;
+        let piece = l.pieces.get(k)?;
+        let left = self.pos[atom].0 - l.center(self.molecule.atoms[atom].anchor) + piece.x;
+        let y = self.pos[atom].1;
+        Some(Rect { x0: left - LABEL_MARGIN, y0: y - LETTER_HALF - LABEL_MARGIN, x1: left + piece.math_box.width + LABEL_MARGIN, y1: y + LETTER_HALF + LABEL_MARGIN })
+    }
+}
+
 pub fn molecule(m: &Molecule, ctx: &mut Ctx, hooks: &mut Hooks) -> R<Drawing> {
-    // the labels, piece by piece, upright as chemfig prints them
+    let labels = atom_labels(m, ctx)?;
+    let placed = place_atoms(m, &labels);
+    let mut d = Drawing::default();
+    draw_bonds(&mut d, &placed);
+    draw_aromatic_rings(&mut d, &placed);
+    draw_atom_marks(&mut d, &placed, hooks);
+    Ok(d)
+}
+
+/// The labels, piece by piece, upright as chemfig prints them.
+fn atom_labels(m: &Molecule, ctx: &mut Ctx) -> R<Vec<Option<Label>>> {
     let mut labels: Vec<Option<Label>> = Vec::with_capacity(m.atoms.len());
     for atom in &m.atoms {
         if atom.pieces.is_empty() {
@@ -112,19 +153,21 @@ pub fn molecule(m: &Molecule, ctx: &mut Ctx, hooks: &mut Hooks) -> R<Drawing> {
         }
         labels.push(Some(Label { pieces }));
     }
-    // the point of each piece, relative to its atom's position (the anchor piece's center)
+    Ok(labels)
+}
+
+/// C-LAY-3: each atom from the bond that first reaches it, and each ring's center.
+fn place_atoms<'a>(m: &'a Molecule, labels: &'a [Option<Label>]) -> PlacedMolecule<'a> {
+    let mut pos: Vec<Option<P>> = vec![None; m.atoms.len()];
+    if !pos.is_empty() {
+        pos[0] = Some((0.0, 0.0));
+    }
     let offset = |atom: AtomId, k: usize| -> f32 {
         match &labels[atom] {
             Some(l) => l.center(k) - l.center(m.atoms[atom].anchor),
             None => 0.0,
         }
     };
-
-    // C-LAY-3: each atom from the bond that first reaches it
-    let mut pos: Vec<Option<P>> = vec![None; m.atoms.len()];
-    if !pos.is_empty() {
-        pos[0] = Some((0.0, 0.0));
-    }
     for b in &m.bonds {
         let (Some(from), None) = (pos[b.from], pos[b.to]) else { continue };
         let start = (from.0 + offset(b.from, b.departure), from.1);
@@ -132,15 +175,6 @@ pub fn molecule(m: &Molecule, ctx: &mut Ctx, hooks: &mut Hooks) -> R<Drawing> {
         pos[b.to] = Some((end.0 - offset(b.to, b.arrival), end.1));
     }
     let pos: Vec<P> = pos.into_iter().map(|p| p.unwrap_or((0.0, 0.0))).collect();
-    let point = |atom: AtomId, k: usize| -> P { (pos[atom].0 + offset(atom, k), pos[atom].1) };
-    // the box a bond stops at: the letters of one piece
-    let stop = |atom: AtomId, k: usize| -> Option<Rect> {
-        let l = labels[atom].as_ref()?;
-        let piece = l.pieces.get(k)?;
-        let left = pos[atom].0 - l.center(m.atoms[atom].anchor) + piece.x;
-        let y = pos[atom].1;
-        Some(Rect { x0: left - LABEL_MARGIN, y0: y - LETTER_HALF - LABEL_MARGIN, x1: left + piece.math_box.width + LABEL_MARGIN, y1: y + LETTER_HALF + LABEL_MARGIN })
-    };
     let centers: Vec<P> = m
         .rings
         .iter()
@@ -150,35 +184,43 @@ pub fn molecule(m: &Molecule, ctx: &mut Ctx, hooks: &mut Hooks) -> R<Drawing> {
             mul(s, 1.0 / n)
         })
         .collect();
+    PlacedMolecule { molecule: m, labels, pos, centers }
+}
 
-    let mut d = Drawing::default();
-    for b in &m.bonds {
-        let (mut a, mut z) = (point(b.from, b.departure), point(b.to, b.arrival));
+fn draw_bonds(d: &mut Drawing, placed: &PlacedMolecule<'_>) {
+    for b in &placed.molecule.bonds {
+        let (mut a, mut z) = (placed.point(b.from, b.departure), placed.point(b.to, b.arrival));
         let dir = unit(sub(z, a));
-        if let Some(r) = stop(b.from, b.departure) {
+        if let Some(r) = placed.stop(b.from, b.departure) {
             a = r.exit(a, dir);
         }
-        if let Some(r) = stop(b.to, b.arrival) {
+        if let Some(r) = placed.stop(b.to, b.arrival) {
             z = r.exit(z, mul(dir, -1.0));
         }
         if length(sub(z, a)) < 1.0 || dir.0 * (z.0 - a.0) + dir.1 * (z.1 - a.1) <= 0.0 {
             continue;
         }
-        bond(&mut d, b, a, z, b.ring.map(|r| centers[r]));
+        bond(d, b, BondSpan { from: a, to: z, ring_center: b.ring.map(|r| placed.centers[r]) });
     }
-    // C-LAY-5: an aromatic ring's circle, at 0.6 of its inner radius
-    for (r, c) in m.rings.iter().zip(&centers) {
+}
+
+/// C-LAY-5: an aromatic ring's circle, at 0.6 of its inner radius.
+fn draw_aromatic_rings(d: &mut Drawing, placed: &PlacedMolecule<'_>) {
+    for (r, c) in placed.molecule.rings.iter().zip(&placed.centers) {
         if r.aromatic && r.atoms.len() >= 3 {
-            let mean = r.atoms.iter().map(|a| length(sub(pos[*a], *c))).sum::<f32>() / r.atoms.len() as f32;
+            let mean = r.atoms.iter().map(|a| length(sub(placed.pos[*a], *c))).sum::<f32>() / r.atoms.len() as f32;
             let inner = mean * (std::f32::consts::PI / r.size as f32).cos();
             d.circle(*c, inner * 0.6, STROKE, false);
         }
     }
+}
+
+fn draw_atom_marks(d: &mut Drawing, placed: &PlacedMolecule<'_>, hooks: &mut Hooks) {
     let half_letter = LETTER_HALF;
-    for (id, atom) in m.atoms.iter().enumerate() {
-        let here = pos[id];
+    for (id, atom) in placed.molecule.atoms.iter().enumerate() {
+        let here = placed.pos[id];
         let mut around = Rect::around(here, 0.12 * EM);
-        if let Some(l) = &labels[id] {
+        if let Some(l) = &placed.labels[id] {
             let left = here.0 - l.center(atom.anchor);
             // C-LAY-4: the letters' middle on the atom's position
             let baseline = here.1 - half_letter + 0.02 * EM;
@@ -189,16 +231,23 @@ pub fn molecule(m: &Molecule, ctx: &mut Ctx, hooks: &mut Hooks) -> R<Drawing> {
             around = Rect { x0: a.0, y0: here.1 - half_letter, x1: a.1, y1: here.1 + half_letter };
         }
         for mark in &atom.lewis {
-            lewis(&mut d, around, *mark);
+            lewis(d, around, *mark);
         }
         if let Some(h) = &atom.hook {
             hooks.points.insert(h.clone(), (here, around));
         }
     }
-    Ok(d)
 }
 
-fn bond(d: &mut Drawing, b: &Bond, a: P, z: P, ring_center: Option<P>) {
+/// Where a bond is drawn: its two ends, and the center of its ring when it has one.
+struct BondSpan {
+    from: P,
+    to: P,
+    ring_center: Option<P>,
+}
+
+fn bond(d: &mut Drawing, b: &Bond, span: BondSpan) {
+    let BondSpan { from: a, to: z, ring_center } = span;
     let dir = unit(sub(z, a));
     let n = left(dir);
     let len = length(sub(z, a));
@@ -282,7 +331,7 @@ fn head(d: &mut Drawing, tip: P, u: P, half: Option<f32>) {
         // a quadratic as a cubic
         let c1 = add(tip, mul(sub(control, tip), 2.0 / 3.0));
         let c2 = add(corner, mul(sub(control, corner), 2.0 / 3.0));
-        d.curve(tip, c1, c2, corner, STROKE);
+        d.curve(Bezier { a: tip, c1, c2, b: corner }, STROKE);
     }
 }
 
@@ -365,7 +414,7 @@ pub fn scheme(s: &Scheme, ctx: &mut Ctx) -> R<Drawing> {
                         let start = add(prev.center(), mul(u, prev.reach(u) + gap));
                         let end = add(start, mul(u, len));
                         reaction_arrow(&mut out, arrow.kind, start, end);
-                        arrow_labels(&mut out, start, end, above, below);
+                        arrow_labels(&mut out, LabeledArrow { from: start, to: end, above, below });
                         let center = add(end, mul(u, gap + b.reach(u)));
                         sub(center, b.center())
                     }
@@ -415,7 +464,7 @@ pub fn scheme(s: &Scheme, ctx: &mut Ctx) -> R<Drawing> {
                     let start = add(prev.center(), mul(u, prev.reach(u) + gap));
                     let end = add(start, mul(u, 2.6 * EM * arrow.length));
                     reaction_arrow(&mut out, arrow.kind, start, end);
-                    arrow_labels(&mut out, start, end, &ab, &be);
+                    arrow_labels(&mut out, LabeledArrow { from: start, to: end, above: &ab, below: &be });
                     last = Some(Rect::around(end, 0.0));
                 }
                 pending = Some((a, above, below));
@@ -427,7 +476,7 @@ pub fn scheme(s: &Scheme, ctx: &mut Ctx) -> R<Drawing> {
         let start = add(prev.center(), mul(u, prev.reach(u) + gap));
         let end = add(start, mul(u, (2.6 * EM).max(above.bounds().width() + EM) * arrow.length));
         reaction_arrow(&mut out, arrow.kind, start, end);
-        arrow_labels(&mut out, start, end, &above, &below);
+        arrow_labels(&mut out, LabeledArrow { from: start, to: end, above: &above, below: &below });
     }
     for m in &s.moves {
         electron_move(&mut out, m, &hooks)?;
@@ -455,8 +504,17 @@ fn compound(c: &Compound, ctx: &mut Ctx, hooks: &mut Hooks) -> R<Placed> {
     Ok(Placed { drawing })
 }
 
+/// The shaft of a reaction arrow and the two drawings set on its sides.
+struct LabeledArrow<'a> {
+    from: P,
+    to: P,
+    above: &'a Drawing,
+    below: &'a Drawing,
+}
+
 /// The label above an arrow goes on its left side, the one below on its right (C-SCH-3).
-fn arrow_labels(out: &mut Drawing, a: P, b: P, above: &Drawing, below: &Drawing) {
+fn arrow_labels(out: &mut Drawing, labels: LabeledArrow<'_>) {
+    let LabeledArrow { from: a, to: b, above, below } = labels;
     let u = unit(sub(b, a));
     let n = left(u);
     let middle = mul(add(a, b), 0.5);
@@ -487,7 +545,7 @@ fn electron_move(out: &mut Drawing, m: &ElectronMove, hooks: &Hooks) -> R<()> {
     let end = add(*p3, mul(in_dir, r3.reach(in_dir) + 0.12 * EM));
     let c1 = add(start, mul(out_dir, r1));
     let c2 = add(end, mul(in_dir, r2));
-    out.curve(start, c1, c2, end, STROKE);
+    out.curve(Bezier { a: start, c1, c2, b: end }, STROKE);
     let tangent = unit(sub(end, c2));
     head(out, end, tangent, if m.single { Some(1.0) } else { None });
     Ok(())

@@ -188,11 +188,12 @@ impl Drawing {
         self.shapes.push(Shape::Circle { center, radius, width, fill });
     }
 
-    pub fn curve(&mut self, a: P, c1: P, c2: P, b: P, width: f32) {
+    pub fn curve(&mut self, bezier: Bezier, width: f32) {
         // the curve stays inside the hull of its four points; sampling gives a tighter box
         for i in 0..=16 {
-            self.grow(Rect::around(cubic(a, c1, c2, b, i as f32 / 16.0), width));
+            self.grow(Rect::around(cubic(bezier, i as f32 / 16.0), width));
         }
+        let Bezier { a, c1, c2, b } = bezier;
         self.shapes.push(Shape::Curve { a, c1, c2, b, width });
     }
 
@@ -235,7 +236,17 @@ impl Drawing {
     }
 }
 
-pub fn cubic(a: P, c1: P, c2: P, b: P, t: f32) -> P {
+/// The four control points of a cubic Bézier, from the start to the end.
+#[derive(Clone, Copy)]
+pub struct Bezier {
+    pub a: P,
+    pub c1: P,
+    pub c2: P,
+    pub b: P,
+}
+
+pub fn cubic(bezier: Bezier, t: f32) -> P {
+    let Bezier { a, c1, c2, b } = bezier;
     let u = 1.0 - t;
     let w = [u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t];
     (w[0] * a.0 + w[1] * c1.0 + w[2] * c2.0 + w[3] * b.0, w[0] * a.1 + w[1] * c1.1 + w[2] * c2.1 + w[3] * b.1)
@@ -304,9 +315,10 @@ impl Drawing {
                     items.push(MathItem::Ellipse { cx: c.0, cy: c.1, rx: radius / 2.0, ry: radius / 2.0, thickness: *radius, color: None });
                 }
                 Shape::Curve { a, c1, c2, b, width } => {
+                    let bezier = Bezier { a: *a, c1: *c1, c2: *c2, b: *b };
                     let mut prev = *a;
                     for k in 1..=CURVE_STEPS {
-                        let p = cubic(*a, *c1, *c2, *b, k as f32 / CURVE_STEPS as f32);
+                        let p = cubic(bezier, k as f32 / CURVE_STEPS as f32);
                         line(&mut items, at(prev), at(p), *width);
                         prev = p;
                     }
