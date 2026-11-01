@@ -67,12 +67,23 @@ pub fn normal(f: &Frame, a: usize) -> Point {
 
 /// An arc of the plane of the unit circle (center, radius, angles in degrees), as Bézier pieces
 /// of at most 90°, mapped to the canvas.
-fn arc(f: &Frame, c: (f64, f64), r: f64, a0: f64, a1: f64, segs: &mut Vec<Segment>) {
+/// An arc in the plane of the unit circle: center, radius and the two angles, in degrees.
+struct PlaneArc {
+    center_u: f64,
+    center_v: f64,
+    radius: f64,
+    from_deg: f64,
+    to_deg: f64,
+}
+
+fn arc(f: &Frame, arc: &PlaneArc, segs: &mut Vec<Segment>) {
+    let (cu, cv, r) = (arc.center_u, arc.center_v, arc.radius);
+    let (a0, a1) = (arc.from_deg, arc.to_deg);
     let n = ((a1 - a0).abs() / 90.0).ceil().max(1.0) as usize;
     let step = (a1 - a0) / n as f64;
     let at = |t: f64| {
         let (s, co) = t.to_radians().sin_cos();
-        (c.0 + r * co, c.1 + r * s)
+        (cu + r * co, cv + r * s)
     };
     let p = at(a0);
     segs.push(Segment::MoveTo(canvas(f, p.0, p.1)));
@@ -80,8 +91,8 @@ fn arc(f: &Frame, c: (f64, f64), r: f64, a0: f64, a1: f64, segs: &mut Vec<Segmen
         let (t0, t1) = (a0 + step * i as f64, a0 + step * (i + 1) as f64);
         let k = 4.0 / 3.0 * ((t1 - t0).to_radians() / 4.0).tan();
         let ((s0, c0), (s1, c1)) = (t0.to_radians().sin_cos(), t1.to_radians().sin_cos());
-        let p1 = (c.0 + r * (c0 - k * s0), c.1 + r * (s0 + k * c0));
-        let p2 = (c.0 + r * (c1 + k * s1), c.1 + r * (s1 - k * c1));
+        let p1 = (cu + r * (c0 - k * s0), cv + r * (s0 + k * c0));
+        let p2 = (cu + r * (c1 + k * s1), cv + r * (s1 - k * c1));
         let q = at(t1);
         segs.push(Segment::CurveTo(canvas(f, p1.0, p1.1), canvas(f, p2.0, p2.1), canvas(f, q.0, q.1)));
     }
@@ -109,7 +120,7 @@ fn x_circle(f: &Frame, x: f64, stop: Option<f64>, segs: &mut Vec<Segment>) {
             (a.min(360.0 - a), a.max(360.0 - a))
         }
     };
-    arc(f, c, r, a0, a1, segs);
+    arc(f, &PlaneArc { center_u: c.0, center_v: c.1, radius: r, from_deg: a0, to_deg: a1 }, segs);
 }
 
 /// The arc of constant y, from the outer circle to (1, 0) or to the circle x = `stop`.
@@ -133,7 +144,7 @@ fn y_arc(f: &Frame, y: f64, stop: Option<f64>, segs: &mut Vec<Segment>) {
         }
         Some(s) => angle(gamma(s, y), c, r),
     };
-    arc(f, c, r, a0, a1, segs);
+    arc(f, &PlaneArc { center_u: c.0, center_v: c.1, radius: r, from_deg: a0, to_deg: a1 }, segs);
 }
 
 /// `xgrid each nth passes y` entries: a line of the other kind, which lines pass it (each nth by
@@ -180,6 +191,13 @@ fn key(v: f64) -> i64 {
     (v * 100.0).round() as i64
 }
 
+/// The numbered grid lines of one axis, and the other axis' values the stops are read against.
+struct NumberedTicks<'a> {
+    major: &'a [(usize, f64)],
+    minor: &'a [(usize, f64)],
+    other: &'a [f64],
+}
+
 /// The grid lines of one axis and what their stops depend on.
 struct Lines {
     /// (tick number, value): the major lines, then the minor ones
@@ -194,18 +212,18 @@ struct Lines {
 }
 
 impl Lines {
-    fn new(e: &mut Engine, a: usize, major: &[(usize, f64)], minor: &[(usize, f64)], other: &[f64]) -> Lines {
-        let c = axis_char(a);
-        let o = axis_char(1 - a);
+    fn new(e: &mut Engine, axis: usize, ticks: NumberedTicks<'_>) -> Lines {
+        let c = axis_char(axis);
+        let o = axis_char(1 - axis);
         let mut lines: Vec<(usize, f64)> = Vec::new();
         if keys::flag(e, &format!("/pgfplots/{c}majorgrids")) {
-            lines.extend(major.iter().copied());
+            lines.extend(ticks.major.iter().copied());
         }
         if keys::flag(e, &format!("/pgfplots/{c}minorgrids")) {
-            lines.extend(minor.iter().copied());
+            lines.extend(ticks.minor.iter().copied());
         }
         let text = keys::value(e, &format!("/pgfplots/{c}grid each nth passes {o}"));
-        let rules = rules(e, &text, other);
+        let rules = rules(e, &text, ticks.other);
         // the places by magnitude: equal magnitudes share one, zero always has the first
         let mut order = HashMap::new();
         if !rules.is_empty() {
@@ -231,7 +249,7 @@ impl Lines {
             if let Some((v, s)) = entry.split_once(':') {
                 if let (Ok(v), Ok(s)) = (e.number(v.trim()), e.number(s.trim())) {
                     stops.insert(key(v), s);
-                    if a == 1 {
+                    if axis == 1 {
                         stops.entry(key(-v)).or_insert(s);
                     }
                 }
@@ -305,7 +323,7 @@ fn minor_numbers(e: &mut Engine, s: &Setup, a: usize, minor: &[f64]) -> Vec<(usi
 /// The clip path: the chart's circle.
 pub fn clip_path(f: &Frame) -> Vec<Segment> {
     let mut segs = Vec::new();
-    arc(f, (0.0, 0.0), 1.0, 0.0, 360.0, &mut segs);
+    arc(f, &PlaneArc { center_u: 0.0, center_v: 0.0, radius: 1.0, from_deg: 0.0, to_deg: 360.0 }, &mut segs);
     segs.push(Segment::Close);
     segs
 }
@@ -321,43 +339,71 @@ pub fn size_style(width: f64) -> &'static str {
     }
 }
 
-/// The chart: grid lines, ticks, the axis lines and the tick labels.
-pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
-    let f = s.frame.clone();
-    let major_n: [Vec<(usize, f64)>; 2] = [0, 1].map(|a| if s.hide[a] { Vec::new() } else { visible(&f, a, &s.ticks[a]) });
+/// The numbered major and minor ticks of both smith axes.
+struct SmithTicks {
+    major_n: [Vec<(usize, f64)>; 2],
+    major: [Vec<f64>; 2],
+    minor: [Vec<f64>; 2],
+    minor_n: [Vec<(usize, f64)>; 2],
+}
+
+/// Grid lines of both axes once their stops are known.
+struct SmithGrid {
+    x: Lines,
+    y: Lines,
+}
+
+fn smith_ticks(e: &mut Engine, s: &Setup) -> SmithTicks {
+    let f = &s.frame;
+    let major_n: [Vec<(usize, f64)>; 2] = [0, 1].map(|a| if s.hide[a] { Vec::new() } else { visible(f, a, &s.ticks[a]) });
     let major: [Vec<f64>; 2] = [0, 1].map(|a| major_n[a].iter().map(|(_, t)| *t).collect());
     let minor: [Vec<f64>; 2] = [minor_ticks(e, s, 0, &s.ticks[0]), minor_ticks(e, s, 1, &s.ticks[1])];
     let minor_n = [minor_numbers(e, s, 0, &minor[0]), minor_numbers(e, s, 1, &minor[1])];
-    // the stops: x lines first without, then y lines, then x lines with the constraints
-    let all = |a: usize| -> Vec<f64> { major[a].iter().chain(minor[a].iter()).copied().collect() };
-    let mut lx = Lines::new(e, 0, &major_n[0], &minor_n[0], &all(1));
-    let mut ly = Lines::new(e, 1, &major_n[1], &minor_n[1], &all(0));
-    lx.compute(0, false, None);
-    ly.compute(1, true, Some(&lx.last));
-    lx.compute(0, true, Some(&ly.last));
-    for (a, lines) in [(0usize, &lx), (1usize, &ly)] {
+    SmithTicks { major_n, major, minor, minor_n }
+}
+
+fn smith_grid(e: &mut Engine, ticks: &SmithTicks) -> SmithGrid {
+    let all = |a: usize| -> Vec<f64> { ticks.major[a].iter().chain(ticks.minor[a].iter()).copied().collect() };
+    let mut x = Lines::new(e, 0, NumberedTicks { major: &ticks.major_n[0], minor: &ticks.minor_n[0], other: &all(1) });
+    let mut y = Lines::new(e, 1, NumberedTicks { major: &ticks.major_n[1], minor: &ticks.minor_n[1], other: &all(0) });
+    x.compute(0, false, None);
+    y.compute(1, true, Some(&x.last));
+    x.compute(0, true, Some(&y.last));
+    SmithGrid { x, y }
+}
+
+struct SmithLines<'a> {
+    ticks: &'a SmithTicks,
+    grid: &'a SmithGrid,
+}
+
+fn draw_smith_grid(e: &mut Engine, f: &Frame, lines: &SmithLines<'_>) -> Result<(), Error> {
+    for (a, grid_lines) in [(0usize, &lines.grid.x), (1usize, &lines.grid.y)] {
         let c = axis_char(a);
-        for (kind, list) in [("minor", &minor[a]), ("major", &major[a])] {
+        for (kind, list) in [("minor", &lines.ticks.minor[a]), ("major", &lines.ticks.major[a])] {
             if !keys::flag(e, &format!("/pgfplots/{c}{kind}grids")) || list.is_empty() {
                 continue;
             }
             let mut segs = Vec::new();
             for t in list {
-                let stop = lines.stops.get(&key(*t)).copied();
+                let stop = grid_lines.stops.get(&key(*t)).copied();
                 if a == 0 {
-                    x_circle(&f, *t, stop, &mut segs);
+                    x_circle(f, *t, stop, &mut segs);
                 } else {
-                    y_arc(&f, *t, stop, &mut segs);
+                    y_arc(f, *t, stop, &mut segs);
                 }
             }
             super::draw::draw_with(e, &format!("/pgfplots/every axis grid,/pgfplots/every {kind} grid,/pgfplots/every axis {c} grid,/pgfplots/every {kind} {c} grid"), segs)?;
         }
     }
-    // ticks: across the diameter and across the circle
+    Ok(())
+}
+
+fn draw_smith_tick_marks(e: &mut Engine, f: &Frame, ticks: &SmithTicks) -> Result<(), Error> {
     for a in 0..2 {
         let c = axis_char(a);
         let align = super::draw::pv(e, &format!("{c}tick align"));
-        for (kind, list) in [("minor", &minor[a]), ("major", &major[a])] {
+        for (kind, list) in [("minor", &ticks.minor[a]), ("major", &ticks.major[a])] {
             if !keys::flag(e, &format!("/pgfplots/{c}{kind}ticks")) || list.is_empty() {
                 continue;
             }
@@ -371,10 +417,10 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
             for t in list {
                 let (p, n) = if a == 0 {
                     let (u, v) = gamma(*t, 0.0);
-                    (canvas(&f, u, v), Point::new(0.0, 1.0))
+                    (canvas(f, u, v), Point::new(0.0, 1.0))
                 } else {
                     let (u, v) = gamma(0.0, *t);
-                    (canvas(&f, u, v), normal_at(&f, *t))
+                    (canvas(f, u, v), normal_at(f, *t))
                 };
                 segs.push(Segment::MoveTo(p.plus(n.scale(from))));
                 segs.push(Segment::LineTo(p.plus(n.scale(to))));
@@ -382,36 +428,46 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
             super::draw::draw_with(e, &format!("/pgfplots/every tick,/pgfplots/every {kind} tick,/pgfplots/every {c} tick,/pgfplots/every {kind} {c} tick"), segs)?;
         }
     }
-    // the axis lines: the diameter and the outer circle
+    Ok(())
+}
+
+fn draw_smith_axis_lines(e: &mut Engine, s: &Setup, f: &Frame) -> Result<(), Error> {
     if !s.hide[0] {
-        let segs = vec![Segment::MoveTo(canvas(&f, -1.0, 0.0)), Segment::LineTo(canvas(&f, 1.0, 0.0))];
+        let segs = vec![Segment::MoveTo(canvas(f, -1.0, 0.0)), Segment::LineTo(canvas(f, 1.0, 0.0))];
         super::draw::draw_with(e, "/pgfplots/every inner x axis line", segs)?;
     }
     if !s.hide[1] {
         let mut segs = Vec::new();
-        x_circle(&f, 0.0, None, &mut segs);
+        x_circle(f, 0.0, None, &mut segs);
         super::draw::draw_with(e, "/pgfplots/every outer y axis line", segs)?;
     }
-    // tick labels: above the diameter, around the circle
+    Ok(())
+}
+
+fn draw_smith_x_labels(e: &mut Engine, s: &Setup, f: &Frame) -> Result<(), Error> {
     if !s.hide[0] && keys::flag(e, "/pgfplots/xmajorticks") {
         let off = tick_offset(e, 0) + keys::length(e, "/pgfplots/xticklabel shift").unwrap_or(0.0);
-        let g = f.clone();
-        let base = move |t: f64| {
+        let base = |t: f64| {
             let (u, v) = gamma(t, 0.0);
-            canvas(&g, u, v)
+            canvas(f, u, v)
         };
         tick_labels_at(e, s, 0, &s.ticks[0], false, &base, Point::new(0.0, off), off)?;
     }
+    Ok(())
+}
+
+fn draw_smith_y_labels(e: &mut Engine, s: &Setup, major_y: &[f64]) -> Result<(), Error> {
+    let f = &s.frame;
     if !s.hide[1] && keys::flag(e, "/pgfplots/ymajorticks") {
         let off = tick_offset(e, 1) + keys::length(e, "/pgfplots/yticklabel shift").unwrap_or(0.0);
         let styles = "/pgfplots/every tick label,/pgfplots/every y tick label";
         for (k, t) in s.ticks[1].iter().enumerate() {
-            if !major[1].contains(t) {
+            if !major_y.contains(t) {
                 continue;
             }
             let (u, v) = gamma(0.0, *t);
-            let n = normal_at(&f, *t);
-            let at = canvas(&f, u, v).plus(n.scale(off));
+            let n = normal_at(f, *t);
+            let at = canvas(f, u, v).plus(n.scale(off));
             // `sloped like y axis` follows the circle here
             f.slope.set(Some(Point::new(-n.y, n.x)));
             f.upside_down.replace(None);
@@ -433,6 +489,19 @@ pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
             e.canvas.items.extend(items?);
         }
     }
+    Ok(())
+}
+
+/// The chart: grid lines, ticks, the axis lines and the tick labels.
+pub(super) fn draw_axis(e: &mut Engine, s: &Setup) -> Result<(), Error> {
+    let f = s.frame.clone();
+    let ticks = smith_ticks(e, s);
+    let grid = smith_grid(e, &ticks);
+    draw_smith_grid(e, &f, &SmithLines { ticks: &ticks, grid: &grid })?;
+    draw_smith_tick_marks(e, &f, &ticks)?;
+    draw_smith_axis_lines(e, s, &f)?;
+    draw_smith_x_labels(e, s, &f)?;
+    draw_smith_y_labels(e, s, &ticks.major[1])?;
     Ok(())
 }
 

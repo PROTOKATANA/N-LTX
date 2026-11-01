@@ -481,12 +481,114 @@ impl Ctx<'_> {
         e.end_group();
         r
     }
+    /// The faces of one fixed axis: lower and upper limit, or the zero of a centered line.
+    fn faces(&self, k: usize) -> Vec<(f64, u8)> {
+        let f = self.f();
+        if self.nums[k] == 2 {
+            vec![(f.zero[k], b'2')]
+        } else {
+            vec![(f.min[k], b'0'), (f.max[k], b'1')]
+        }
+    }
+
+    /// Whether that face is in front (`3d box=complete`'s second pass).
+    fn in_front(&self, k: usize, sym: u8) -> bool {
+        let mut p = [b'v'; 3];
+        p[k] = sym;
+        is_fg(&self.f().fg, p)
+    }
+
+    /// z fixed: x and y in turn (`\pgfplots@draw@axis@insurface@symmetric xyz`).
+    fn draw_z_fixed(&self, e: &mut Engine) -> Result<(), Error> {
+        let hide = self.s.hide;
+        let ticks = &self.s.ticks;
+        for (value, sym) in self.faces(2) {
+            if self.post && !self.in_front(2, sym) {
+                continue;
+            }
+            let sx = Surf { a: 0, b: 1, n: 2, value, sym };
+            let sy = Surf { a: 1, b: 0, n: 2, value, sym };
+            for (surf, a) in [(&sx, 0), (&sy, 1)] {
+                if !hide[a] {
+                    self.grid(e, surf, &ticks[a], false)?;
+                }
+            }
+            for (surf, a) in [(&sx, 0), (&sy, 1)] {
+                if !hide[a] {
+                    self.ticks(e, surf, &ticks[a], false)?;
+                }
+            }
+            for (surf, a) in [(&sx, 0), (&sy, 1)] {
+                if !hide[a] {
+                    self.lines(e, surf)?;
+                }
+            }
+            for (surf, a) in [(&sx, 0), (&sy, 1)] {
+                if !hide[a] {
+                    self.labels(e, surf, &ticks[a], false)?;
+                }
+            }
+            for (surf, a) in [(&sx, 0), (&sy, 1)] {
+                if !hide[a] {
+                    self.extra(e, surf, true)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// x fixed: y's ticks and grid along z, then all of z along y.
+    fn draw_x_fixed(&self, e: &mut Engine) -> Result<(), Error> {
+        let hide = self.s.hide;
+        let ticks = &self.s.ticks;
+        for (value, sym) in self.faces(0) {
+            if self.post && !self.in_front(0, sym) {
+                continue;
+            }
+            let sy = Surf { a: 1, b: 2, n: 0, value, sym };
+            if !hide[1] {
+                self.grid(e, &sy, &ticks[1], false)?;
+                self.ticks(e, &sy, &ticks[1], false)?;
+                self.extra(e, &sy, false)?;
+            }
+            let sz = Surf { a: 2, b: 1, n: 0, value, sym };
+            if !hide[2] {
+                self.grid(e, &sz, &ticks[2], false)?;
+                self.ticks(e, &sz, &ticks[2], false)?;
+                self.lines(e, &sz)?;
+                self.labels(e, &sz, &ticks[2], false)?;
+                self.extra(e, &sz, true)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// y fixed: x's and z's ticks and grid, without their labels.
+    fn draw_y_fixed(&self, e: &mut Engine) -> Result<(), Error> {
+        let hide = self.s.hide;
+        let ticks = &self.s.ticks;
+        for (value, sym) in self.faces(1) {
+            if self.post && !self.in_front(1, sym) {
+                continue;
+            }
+            for (a, b) in [(0, 2), (2, 0)] {
+                let surf = Surf { a, b, n: 1, value, sym };
+                if !hide[a] {
+                    self.grid(e, &surf, &ticks[a], false)?;
+                    self.ticks(e, &surf, &ticks[a], false)?;
+                    self.extra(e, &surf, false)?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 /// The 3d axis box: its lines, grid lines, ticks and tick labels. With `post`, the pass of
 /// `3d box=complete` over the faces in front (`\pgfplots@draw@axis@post`).
+/// The 3d axis box: its lines, grid lines, ticks and tick labels. With `post`, the pass of
+/// `3d box=complete` over the faces in front (`\pgfplots@draw@axis@post`).
 pub(super) fn draw(e: &mut Engine, s: &Setup, post: bool) -> Result<(), Error> {
-    let f = s.frame.clone();
     let nums = s.line.clone().map(|l| lines_num(&l));
     let tickpos = [0, 1, 2].map(|a| tick_pos_num(&super::draw::pv(e, &format!("{}tick pos", axis_char(a)))));
     let dir = [super::draw::pv(e, "x dir") == "reverse", super::draw::pv(e, "y dir") == "reverse", super::draw::pv(e, "z dir") == "reverse"];
@@ -495,94 +597,15 @@ pub(super) fn draw(e: &mut Engine, s: &Setup, post: bool) -> Result<(), Error> {
         return Ok(());
     }
     let ctx = Ctx { s, post, post_grid: choice == "complete*", nums, tickpos, dir };
-    let hide = s.hide;
-    let ticks = &s.ticks;
-    // the faces of each fixed axis: lower and upper limit, or the zero of a centered line
-    let faces = |k: usize| -> Vec<(f64, u8)> {
-        if nums[k] == 2 {
-            vec![(f.zero[k], b'2')]
-        } else {
-            vec![(f.min[k], b'0'), (f.max[k], b'1')]
-        }
-    };
-    let in_front = |k: usize, sym: u8| -> bool {
-        let mut p = [b'v'; 3];
-        p[k] = sym;
-        is_fg(&f.fg, p)
-    };
     if post {
         e.begin_group();
         e.st.key_path = "/pgfplots".into();
         keys::run(e, "every 3d box foreground")?;
     }
     let r = (|| -> Result<(), Error> {
-        // z fixed: x and y in turn (`\pgfplots@draw@axis@insurface@symmetric xyz`)
-        for (value, sym) in faces(2) {
-            if post && !in_front(2, sym) {
-                continue;
-            }
-            let sx = Surf { a: 0, b: 1, n: 2, value, sym };
-            let sy = Surf { a: 1, b: 0, n: 2, value, sym };
-            for (surf, a) in [(&sx, 0), (&sy, 1)] {
-                if !hide[a] {
-                    ctx.grid(e, surf, &ticks[a], false)?;
-                }
-            }
-            for (surf, a) in [(&sx, 0), (&sy, 1)] {
-                if !hide[a] {
-                    ctx.ticks(e, surf, &ticks[a], false)?;
-                }
-            }
-            for (surf, a) in [(&sx, 0), (&sy, 1)] {
-                if !hide[a] {
-                    ctx.lines(e, surf)?;
-                }
-            }
-            for (surf, a) in [(&sx, 0), (&sy, 1)] {
-                if !hide[a] {
-                    ctx.labels(e, surf, &ticks[a], false)?;
-                }
-            }
-            for (surf, a) in [(&sx, 0), (&sy, 1)] {
-                if !hide[a] {
-                    ctx.extra(e, surf, true)?;
-                }
-            }
-        }
-        // x fixed: y's ticks and grid along z, then all of z along y
-        for (value, sym) in faces(0) {
-            if post && !in_front(0, sym) {
-                continue;
-            }
-            let sy = Surf { a: 1, b: 2, n: 0, value, sym };
-            if !hide[1] {
-                ctx.grid(e, &sy, &ticks[1], false)?;
-                ctx.ticks(e, &sy, &ticks[1], false)?;
-                ctx.extra(e, &sy, false)?;
-            }
-            let sz = Surf { a: 2, b: 1, n: 0, value, sym };
-            if !hide[2] {
-                ctx.grid(e, &sz, &ticks[2], false)?;
-                ctx.ticks(e, &sz, &ticks[2], false)?;
-                ctx.lines(e, &sz)?;
-                ctx.labels(e, &sz, &ticks[2], false)?;
-                ctx.extra(e, &sz, true)?;
-            }
-        }
-        // y fixed: x's and z's ticks and grid
-        for (value, sym) in faces(1) {
-            if post && !in_front(1, sym) {
-                continue;
-            }
-            for (a, b) in [(0, 2), (2, 0)] {
-                let surf = Surf { a, b, n: 1, value, sym };
-                if !hide[a] {
-                    ctx.grid(e, &surf, &ticks[a], false)?;
-                    ctx.ticks(e, &surf, &ticks[a], false)?;
-                    ctx.extra(e, &surf, false)?;
-                }
-            }
-        }
+        ctx.draw_z_fixed(e)?;
+        ctx.draw_x_fixed(e)?;
+        ctx.draw_y_fixed(e)?;
         Ok(())
     })();
     if post {
