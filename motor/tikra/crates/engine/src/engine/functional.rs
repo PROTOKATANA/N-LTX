@@ -108,147 +108,176 @@ fn parse(text: &str) -> Vec<Op> {
     out
 }
 
+/// A number off the stack: a boolean is 1 or 0, a procedure is not a number.
+fn num(stack: &mut Vec<Value>) -> Option<f64> {
+    match stack.pop()? {
+        Value::Num(v) => Some(v),
+        Value::Bool(b) => Some(f64::from(u8::from(b))),
+        Value::Proc(_) => None,
+    }
+}
+
+/// A boolean off the stack: a number is true when it is not zero.
+fn boolean(stack: &mut Vec<Value>) -> Option<bool> {
+    match stack.pop()? {
+        Value::Bool(b) => Some(b),
+        Value::Num(v) => Some(v != 0.0),
+        Value::Proc(_) => None,
+    }
+}
+
+fn unary(stack: &mut Vec<Value>, f: fn(f64) -> f64) -> Option<()> {
+    let a = num(stack)?;
+    stack.push(Value::Num(f(a)));
+    Some(())
+}
+
+fn binary(stack: &mut Vec<Value>, f: fn(f64, f64) -> f64) -> Option<()> {
+    let b = num(stack)?;
+    let a = num(stack)?;
+    stack.push(Value::Num(f(a, b)));
+    Some(())
+}
+
+fn compare(stack: &mut Vec<Value>, f: fn(f64, f64) -> bool) -> Option<()> {
+    let b = num(stack)?;
+    let a = num(stack)?;
+    stack.push(Value::Bool(f(a, b)));
+    Some(())
+}
+
+/// `and`, `or` and `xor` of the two booleans on top.
+fn logic_bits(stack: &mut Vec<Value>, name: &str) -> Option<()> {
+    let b = boolean(stack)?;
+    let a = boolean(stack)?;
+    stack.push(Value::Bool(match name {
+        "and" => a && b,
+        "or" => a || b,
+        _ => a != b,
+    }));
+    Some(())
+}
+
+/// `copy`: the top `k` values, duplicated above themselves.
+fn copy_top(stack: &mut Vec<Value>) -> Option<()> {
+    let k = num(stack)? as usize;
+    let n = stack.len();
+    if k > n {
+        return None;
+    }
+    stack.extend_from_within(n - k..);
+    Some(())
+}
+
+/// `index`: a copy of the value `k` down.
+fn index_stack(stack: &mut Vec<Value>) -> Option<()> {
+    let k = num(stack)? as usize;
+    let n = stack.len();
+    if k >= n {
+        return None;
+    }
+    stack.push(stack[n - 1 - k].clone());
+    Some(())
+}
+
+/// `roll`: rotate the top `k` values by `j`.
+fn roll_stack(stack: &mut Vec<Value>) -> Option<()> {
+    let j = num(stack)? as i64;
+    let k = num(stack)? as usize;
+    let n = stack.len();
+    if k > n {
+        return None;
+    }
+    if k > 0 {
+        let part = &mut stack[n - k..];
+        let j = j.rem_euclid(k as i64) as usize;
+        part.rotate_right(j);
+    }
+    Some(())
+}
+
+/// `if`: run the procedure when the boolean under it is true.
+fn run_if(stack: &mut Vec<Value>, budget: &mut usize) -> Option<()> {
+    let Value::Proc(p) = stack.pop()? else { return None };
+    if boolean(stack)? {
+        run(&p, stack, budget)?;
+    }
+    Some(())
+}
+
+/// `ifelse`: run one of the two procedures.
+fn run_ifelse(stack: &mut Vec<Value>, budget: &mut usize) -> Option<()> {
+    let Value::Proc(no) = stack.pop()? else { return None };
+    let Value::Proc(yes) = stack.pop()? else { return None };
+    let p = if boolean(stack)? { yes } else { no };
+    run(&p, stack, budget)?;
+    Some(())
+}
+
 /// Runs the operations on the stack; `None` when the code does something it cannot.
 fn run(ops: &[Op], stack: &mut Vec<Value>, budget: &mut usize) -> Option<()> {
-    fn num(stack: &mut Vec<Value>) -> Option<f64> {
-        match stack.pop()? {
-            Value::Num(v) => Some(v),
-            Value::Bool(b) => Some(f64::from(u8::from(b))),
-            Value::Proc(_) => None,
-        }
-    }
-    fn boolean(stack: &mut Vec<Value>) -> Option<bool> {
-        match stack.pop()? {
-            Value::Bool(b) => Some(b),
-            Value::Num(v) => Some(v != 0.0),
-            Value::Proc(_) => None,
-        }
-    }
     for op in ops {
         *budget = budget.checked_sub(1)?;
         match op {
             Op::Num(v) => stack.push(Value::Num(*v)),
             Op::Proc(p) => stack.push(Value::Proc(p.clone())),
-            Op::Name(name) => {
-                let unary = |stack: &mut Vec<Value>, f: fn(f64) -> f64| -> Option<()> {
-                    let a = num(stack)?;
-                    stack.push(Value::Num(f(a)));
-                    Some(())
-                };
-                let binary = |stack: &mut Vec<Value>, f: fn(f64, f64) -> f64| -> Option<()> {
-                    let b = num(stack)?;
-                    let a = num(stack)?;
-                    stack.push(Value::Num(f(a, b)));
-                    Some(())
-                };
-                let compare = |stack: &mut Vec<Value>, f: fn(f64, f64) -> bool| -> Option<()> {
-                    let b = num(stack)?;
-                    let a = num(stack)?;
-                    stack.push(Value::Bool(f(a, b)));
-                    Some(())
-                };
-                match name.as_str() {
-                    "add" => binary(stack, |a, b| a + b)?,
-                    "sub" => binary(stack, |a, b| a - b)?,
-                    "mul" => binary(stack, |a, b| a * b)?,
-                    "div" => binary(stack, |a, b| a / b)?,
-                    "idiv" => binary(stack, |a, b| (a.trunc() / b.trunc()).trunc())?,
-                    "mod" => binary(stack, |a, b| a.trunc() % b.trunc())?,
-                    // base exponent exp
-                    "exp" => binary(stack, f64::powf)?,
-                    // num den atan: the angle of (den, num), from 0 to 360 degrees
-                    "atan" => binary(stack, |n, d| n.atan2(d).to_degrees().rem_euclid(360.0))?,
-                    "neg" => unary(stack, |a| -a)?,
-                    "abs" => unary(stack, f64::abs)?,
-                    "sqrt" => unary(stack, |a| a.max(0.0).sqrt())?,
-                    "sin" => unary(stack, |a| a.to_radians().sin())?,
-                    "cos" => unary(stack, |a| a.to_radians().cos())?,
-                    "ln" => unary(stack, f64::ln)?,
-                    "log" => unary(stack, f64::log10)?,
-                    "floor" => unary(stack, f64::floor)?,
-                    "ceiling" => unary(stack, f64::ceil)?,
-                    "round" => unary(stack, |a| (a + 0.5).floor())?,
-                    "truncate" | "cvi" => unary(stack, f64::trunc)?,
-                    "cvr" => unary(stack, |a| a)?,
-                    "eq" => compare(stack, |a, b| a == b)?,
-                    "ne" => compare(stack, |a, b| a != b)?,
-                    "gt" => compare(stack, |a, b| a > b)?,
-                    "ge" => compare(stack, |a, b| a >= b)?,
-                    "lt" => compare(stack, |a, b| a < b)?,
-                    "le" => compare(stack, |a, b| a <= b)?,
-                    "true" => stack.push(Value::Bool(true)),
-                    "false" => stack.push(Value::Bool(false)),
-                    "and" | "or" | "xor" => {
-                        let b = boolean(stack)?;
-                        let a = boolean(stack)?;
-                        stack.push(Value::Bool(match name.as_str() {
-                            "and" => a && b,
-                            "or" => a || b,
-                            _ => a != b,
-                        }));
-                    }
-                    "not" => {
-                        let a = boolean(stack)?;
-                        stack.push(Value::Bool(!a));
-                    }
-                    "dup" => {
-                        let a = stack.last()?.clone();
-                        stack.push(a);
-                    }
-                    "exch" => {
-                        let n = stack.len();
-                        if n < 2 {
-                            return None;
-                        }
-                        stack.swap(n - 1, n - 2);
-                    }
-                    "pop" => {
-                        stack.pop()?;
-                    }
-                    "copy" => {
-                        let k = num(stack)? as usize;
-                        let n = stack.len();
-                        if k > n {
-                            return None;
-                        }
-                        stack.extend_from_within(n - k..);
-                    }
-                    "index" => {
-                        let k = num(stack)? as usize;
-                        let n = stack.len();
-                        if k >= n {
-                            return None;
-                        }
-                        stack.push(stack[n - 1 - k].clone());
-                    }
-                    "roll" => {
-                        let j = num(stack)? as i64;
-                        let k = num(stack)? as usize;
-                        let n = stack.len();
-                        if k > n {
-                            return None;
-                        }
-                        if k > 0 {
-                            let part = &mut stack[n - k..];
-                            let j = j.rem_euclid(k as i64) as usize;
-                            part.rotate_right(j);
-                        }
-                    }
-                    "if" => {
-                        let Value::Proc(p) = stack.pop()? else { return None };
-                        if boolean(stack)? {
-                            run(&p, stack, budget)?;
-                        }
-                    }
-                    "ifelse" => {
-                        let Value::Proc(no) = stack.pop()? else { return None };
-                        let Value::Proc(yes) = stack.pop()? else { return None };
-                        let p = if boolean(stack)? { yes } else { no };
-                        run(&p, stack, budget)?;
-                    }
-                    _ => return None,
+            Op::Name(name) => match name.as_str() {
+                "add" => binary(stack, |a, b| a + b)?,
+                "sub" => binary(stack, |a, b| a - b)?,
+                "mul" => binary(stack, |a, b| a * b)?,
+                "div" => binary(stack, |a, b| a / b)?,
+                "idiv" => binary(stack, |a, b| (a.trunc() / b.trunc()).trunc())?,
+                "mod" => binary(stack, |a, b| a.trunc() % b.trunc())?,
+                // base exponent exp
+                "exp" => binary(stack, f64::powf)?,
+                // num den atan: the angle of (den, num), from 0 to 360 degrees
+                "atan" => binary(stack, |n, d| n.atan2(d).to_degrees().rem_euclid(360.0))?,
+                "neg" => unary(stack, |a| -a)?,
+                "abs" => unary(stack, f64::abs)?,
+                "sqrt" => unary(stack, |a| a.max(0.0).sqrt())?,
+                "sin" => unary(stack, |a| a.to_radians().sin())?,
+                "cos" => unary(stack, |a| a.to_radians().cos())?,
+                "ln" => unary(stack, f64::ln)?,
+                "log" => unary(stack, f64::log10)?,
+                "floor" => unary(stack, f64::floor)?,
+                "ceiling" => unary(stack, f64::ceil)?,
+                "round" => unary(stack, |a| (a + 0.5).floor())?,
+                "truncate" | "cvi" => unary(stack, f64::trunc)?,
+                "cvr" => unary(stack, |a| a)?,
+                "eq" => compare(stack, |a, b| a == b)?,
+                "ne" => compare(stack, |a, b| a != b)?,
+                "gt" => compare(stack, |a, b| a > b)?,
+                "ge" => compare(stack, |a, b| a >= b)?,
+                "lt" => compare(stack, |a, b| a < b)?,
+                "le" => compare(stack, |a, b| a <= b)?,
+                "true" => stack.push(Value::Bool(true)),
+                "false" => stack.push(Value::Bool(false)),
+                "and" | "or" | "xor" => logic_bits(stack, name)?,
+                "not" => {
+                    let a = boolean(stack)?;
+                    stack.push(Value::Bool(!a));
                 }
-            }
+                "dup" => {
+                    let a = stack.last()?.clone();
+                    stack.push(a);
+                }
+                "exch" => {
+                    let n = stack.len();
+                    if n < 2 {
+                        return None;
+                    }
+                    stack.swap(n - 1, n - 2);
+                }
+                "pop" => {
+                    stack.pop()?;
+                }
+                "copy" => copy_top(stack)?,
+                "index" => index_stack(stack)?,
+                "roll" => roll_stack(stack)?,
+                "if" => run_if(stack, budget)?,
+                "ifelse" => run_ifelse(stack, budget)?,
+                _ => return None,
+            },
         }
     }
     Some(())
@@ -432,7 +461,9 @@ impl Engine {
         let color = self.argument_string()?;
         let target = self.argument()?;
         let c = self.color(&color).unwrap_or(Color::BLACK);
-        let Some(Token::Cs(name)) = target.into_iter().find(|t| matches!(t, Token::Cs(_))) else { return Ok(()) };
+        let Some(Token::Cs(name)) = target.into_iter().find(|t| matches!(t, Token::Cs(_))) else {
+            return Ok(());
+        };
         let number = |v: f64| format!("{} ", super::pgf_number(v));
         let define = |e: &mut Engine, n: &str, text: String| e.tex.set_meaning(&Token::cs(n), super::macro_tokens(super::tikra_tokens(&text)), false);
         define(self, &name, format!("{}{}{}", number(c.r), number(c.g), number(c.b)));
@@ -452,7 +483,7 @@ impl Engine {
                     ll: square.0,
                     ur: square.1,
                     kind: Kind::Wheel { white_center: name.ends_with("white center"), black_center: name.ends_with("black center") },
-                })
+                });
             }
             "Mandelbrot set" if !self.functional_shadings.contains_key(name) => return Some(Prepared { ll: square.0, ur: square.1, kind: Kind::Mandelbrot }),
             "bilinear interpolation" if !self.functional_shadings.contains_key(name) => {

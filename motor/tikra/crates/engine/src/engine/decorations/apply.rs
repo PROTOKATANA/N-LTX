@@ -314,7 +314,7 @@ impl Engine {
             let stroke = self.stroke();
             let d = Point::new(if reversed { -1.0 } else { 1.0 }, 0.0);
             let mut tips = Vec::new();
-            super::super::arrows::tip_items(&spec, Point::default(), d, &stroke, &mut tips);
+            super::super::arrows::tip_items(&super::super::arrows::TipMark { spec: &spec, at: Point::default(), direction: d, stroke: &stroke }, &mut tips);
             let t = self.st.transform;
             for item in tips {
                 if let Item::Path { segments, fill, stroke } = item {

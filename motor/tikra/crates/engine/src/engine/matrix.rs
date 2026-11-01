@@ -42,6 +42,47 @@ struct Sep {
     distance: f64,
     origins: bool,
 }
+
+/// The matrix once its options are read: the body, the cell settings and the node it will be.
+struct MatrixJob {
+    options: Vec<Token>,
+    name: Option<String>,
+    at: Point,
+    rows: Vec<Vec<Vec<Token>>>,
+    cell_seps: Vec<Vec<Vec<Token>>>,
+    row_seps: Vec<Vec<Token>>,
+    settings: MatrixSettings,
+    /// `matrix anchor=node.anchor`, when the matrix is placed on a cell's node.
+    inner: Option<(String, String)>,
+    every_node: Token,
+    outer_every_node: Meaning,
+}
+
+/// What the first pass found: each cell's extent, and where the inner anchor sat.
+struct Measured {
+    extents: Vec<Vec<Extent>>,
+    inner_at: Option<(usize, usize, Point)>,
+}
+
+/// Column and row origins, and the box around them.
+struct MatrixGrid {
+    xs: Vec<f64>,
+    ys: Vec<f64>,
+    width: f64,
+    height: f64,
+    depth: f64,
+}
+
+/// One cell to draw: which matrix, which row and column, its text and where its origin goes.
+struct CellDraw<'a> {
+    matrix: Option<&'a str>,
+    settings: &'a MatrixSettings,
+    row: usize,
+    column: usize,
+    cell: &'a [Token],
+    place: Transform,
+}
+
 impl Engine {
     /// The body split at `&` (or what `ampersand replacement` or `\pgfmatrixnextcell` stand for)
     /// and at `\\` (`\pgfmatrixendrow`).
@@ -204,9 +245,16 @@ impl Engine {
     }
 
     fn matrix_in_group(&mut self, options: Vec<Token>, name: Option<String>, at: Option<Point>, body: Vec<Token>) -> Result<(), Error> {
-        // the matrix's own options are read once to know the cells' settings; the node reads them again
-        // `every node` as it is outside: the matrix's own node takes it before its options, as
-        // any node does, and not the one its options set for the cells
+        let mut job = self.open_matrix(options, name, at, body)?;
+        let measured = self.measure_cells(&job)?;
+        let grid = self.cell_grid(&job, &measured);
+        self.draw_matrix(&mut job, measured.inner_at, grid)
+    }
+
+    /// Reads the matrix options once, for the cells, and splits the body. The node reads the
+    /// options again. `every node` stays as it is outside: the matrix's own node takes that one,
+    /// not the one its options set for the cells.
+    fn open_matrix(&mut self, options: Vec<Token>, name: Option<String>, at: Option<Point>, body: Vec<Token>) -> Result<MatrixJob, Error> {
         let every_node = Token::cs(&crate::keys::macro_name("/tikz/every node/.@cmd"));
         let outer_every_node = self.tex.meaning(&every_node);
         // what the surroundings set stays (`ampersand replacement`, the separations)
@@ -234,33 +282,35 @@ impl Engine {
         let name = name.or_else(|| self.st.node.name.clone());
         let at = at.or(self.st.node.at).unwrap_or_else(|| self.st.transform.apply(Point::default()));
         let Body { rows, cell_seps, row_seps } = self.split_body(&body, settings.ampersand.as_deref());
-        let nrows = rows.len();
-        let ncols = rows.iter().map(Vec::len).max().unwrap_or(0);
-
         // `matrix anchor=inner node.south` (or `anchor=…`): a cell's node is where the matrix goes
         let anchor = self.key_text("/tikz/anchor");
         let inner = settings.anchor.as_deref().or(Some(anchor.as_str())).and_then(|a| a.split_once('.')).map(|(n, a)| (n.trim().to_string(), a.trim().to_string()));
         if let Some((n, _)) = &inner {
             self.nodes.remove(n);
         }
-        // the cell of that node and its anchor there
+        Ok(MatrixJob { options, name, at, rows, cell_seps, row_seps, settings, inner, every_node, outer_every_node })
+    }
+
+    /// First pass: every cell drawn alone, so its extent from the origin is known.
+    fn measure_cells(&mut self, job: &MatrixJob) -> Result<Measured, Error> {
+        let nrows = job.rows.len();
+        let ncols = job.rows.iter().map(Vec::len).max().unwrap_or(0);
         let mut inner_at: Option<(usize, usize, Point)> = None;
-        // first pass: measure every cell alone
         let mut extents = vec![vec![Extent { empty: true, ..Default::default() }; ncols]; nrows];
-        for (r, row) in rows.iter().enumerate() {
+        for (r, row) in job.rows.iter().enumerate() {
             for (c, cell) in row.iter().enumerate() {
                 let saved = std::mem::take(&mut self.canvas);
                 let frozen = self.canvas_frozen;
                 self.canvas_frozen = false;
                 let clipped: Vec<bool> = self.scopes.iter_mut().map(|s| std::mem::take(&mut s.clipped)).collect();
-                let res = self.draw_cell(name.as_deref(), &settings, r + 1, c + 1, cell, Transform::default());
+                let res = self.draw_cell(&CellDraw { matrix: job.name.as_deref(), settings: &job.settings, row: r + 1, column: c + 1, cell, place: Transform::default() });
                 let drawn = std::mem::replace(&mut self.canvas, saved);
                 self.canvas_frozen = frozen;
-                for (s, c) in self.scopes.iter_mut().zip(clipped) {
-                    s.clipped = c;
+                for (s, clipped) in self.scopes.iter_mut().zip(clipped) {
+                    s.clipped = clipped;
                 }
                 res?;
-                if let (Some((n, a)), None) = (&inner, inner_at) {
+                if let (Some((n, a)), None) = (&job.inner, inner_at) {
                     if let Some(p) = self.nodes.get(n).and_then(|i| i.anchor(a)) {
                         inner_at = Some((r, c, p));
                     }
@@ -270,11 +320,19 @@ impl Engine {
                 }
             }
         }
+        Ok(Measured { extents, inner_at })
+    }
+
+    /// Column origins from the left and row origins from the top, then shifted so the last row's
+    /// baseline is the matrix's, as a `\vbox`'s is.
+    fn cell_grid(&mut self, job: &MatrixJob, measured: &Measured) -> MatrixGrid {
+        let extents = &measured.extents;
+        let nrows = job.rows.len();
+        let ncols = job.rows.iter().map(Vec::len).max().unwrap_or(0);
         let left: Vec<f64> = (0..ncols).map(|c| extents.iter().map(|row| if row[c].empty { 0.0 } else { row[c].left }).fold(0.0, f64::max)).collect();
         let right: Vec<f64> = (0..ncols).map(|c| extents.iter().map(|row| if row[c].empty { 0.0 } else { row[c].right }).fold(0.0, f64::max)).collect();
         let up: Vec<f64> = extents.iter().map(|row| row.iter().filter(|e| !e.empty).map(|e| e.up).fold(0.0, f64::max)).collect();
         let down: Vec<f64> = extents.iter().map(|row| row.iter().filter(|e| !e.empty).map(|e| e.down).fold(0.0, f64::max)).collect();
-        // origins: columns from the left, rows from the top (the first row's baseline at y = 0)
         let mut xs = Vec::with_capacity(ncols);
         for c in 0..ncols {
             if c == 0 {
@@ -283,8 +341,8 @@ impl Engine {
             }
             // what the first row to reach this column asks for (pgf sets a column's separation
             // when a row makes the column): between borders, or between origins
-            let extra = rows.iter().zip(&cell_seps).find(|(row, _)| row.len() > c).and_then(|(_, seps)| seps.get(c).cloned()).unwrap_or_default();
-            let sep = self.sep(&settings.column_sep, &extra);
+            let extra = job.rows.iter().zip(&job.cell_seps).find(|(row, _)| row.len() > c).and_then(|(_, seps)| seps.get(c).cloned()).unwrap_or_default();
+            let sep = self.sep(&job.settings.column_sep, &extra);
             let step = if sep.origins { sep.distance } else { right[c - 1] + sep.distance + left[c] };
             xs.push(xs[c - 1] + step);
         }
@@ -294,11 +352,10 @@ impl Engine {
                 ys.push(0.0);
                 continue;
             }
-            let sep = self.sep(&settings.row_sep, &row_seps[r - 1]);
+            let sep = self.sep(&job.settings.row_sep, &job.row_seps[r - 1]);
             let step = if sep.origins { sep.distance } else { down[r - 1] + sep.distance + up[r] };
             ys.push(ys[r - 1] - step);
         }
-        // the matrix's baseline is its last row's, as a \vbox's
         if let Some(&last) = ys.last() {
             for y in &mut ys {
                 *y -= last;
@@ -307,33 +364,38 @@ impl Engine {
         let width = if ncols == 0 { 0.0 } else { xs[ncols - 1] + right[ncols - 1] };
         let height = up.first().map_or(0.0, |u| u + ys[0]);
         let depth = down.last().copied().unwrap_or(0.0);
+        MatrixGrid { xs, ys, width, height, depth }
+    }
 
-        // the matrix is a node around the cells
+    /// The matrix node, then the cells in place, then what was appended after the node.
+    fn draw_matrix(&mut self, job: &mut MatrixJob, inner_at: Option<(usize, usize, Point)>, grid: MatrixGrid) -> Result<(), Error> {
+        let MatrixGrid { xs, ys, width, height, depth } = grid;
         self.forced_box = Some((width, height, depth));
-        let cells_every_node = self.tex.meaning(&every_node);
-        self.tex.set_meaning(&every_node, outer_every_node.clone(), false);
-        let mut options = options;
-        let mut at = at;
-        match (&settings.anchor, inner_at) {
-            (_, Some((r, c, p))) if inner.is_some() => {
+        let cells_every_node = self.tex.meaning(&job.every_node);
+        let outer_every_node = std::mem::replace(&mut job.outer_every_node, Meaning::Undefined);
+        self.tex.set_meaning(&job.every_node, outer_every_node.clone(), false);
+        let mut options = std::mem::take(&mut job.options);
+        let mut at = job.at;
+        match (&job.settings.anchor, inner_at) {
+            (_, Some((r, c, p))) if job.inner.is_some() => {
                 // the matrix's center where it puts that point of the cell at `at` (the box's
                 // center, from its baseline's left end)
                 let center = Point::new(width / 2.0, (height - depth) / 2.0);
                 at = at.plus(center).minus(Point::new(xs[c], ys[r])).minus(p);
                 options.extend(tikra_tokens(",anchor=center"));
             }
-            (Some(a), _) if inner.is_none() => options.extend(tikra_tokens(&format!(",anchor={a}"))),
+            (Some(a), _) if job.inner.is_none() => options.extend(tikra_tokens(&format!(",anchor={a}"))),
             _ => {}
         }
         let items =
-            self.node(NodeSpec { options, name: name.clone(), at: Some(at), text: Vec::new(), place: OnPath::Point(at), point: at, coordinate: false, default_pos: None })?;
+            self.node(NodeSpec { options, name: job.name.clone(), at: Some(at), text: Vec::new(), place: OnPath::Point(at), point: at, coordinate: false, default_pos: None })?;
         self.forced_box = None;
         // what comes after the matrix's node (`append after command`, the delimiters), drawn after the cells
         let after = std::mem::take(&mut self.after_node_path);
         let matrix_node = self.last_node.clone();
-        self.tex.set_meaning(&every_node, cells_every_node, false);
+        self.tex.set_meaning(&job.every_node, cells_every_node, false);
         self.canvas.items.extend(items);
-        let placed = match &name {
+        let placed = match &job.name {
             Some(n) => self.nodes.get(n).map(|i| i.transform),
             None => self.last_node.as_ref().map(|i| i.transform),
         }
@@ -343,7 +405,7 @@ impl Engine {
         // point is where it is in the cell's own coordinates. A point from outside the matrix moves
         // with the cell; one made in another cell is where it was in that cell, moved with this one.
         let mut made_in: HashMap<String, Point> = HashMap::new();
-        for (r, row) in rows.iter().enumerate() {
+        for (r, row) in job.rows.iter().enumerate() {
             for (c, cell) in row.iter().enumerate() {
                 let t = placed.compose(&Transform::translation(xs[c], ys[r]));
                 let origin = t.apply(Point::default());
@@ -353,7 +415,7 @@ impl Engine {
                     moved.insert(n.clone(), (Rc::clone(&info.geometry), info.transform));
                     info.transform = Transform::translation(d.x, d.y).compose(&info.transform);
                 }
-                let res = self.draw_cell(name.as_deref(), &settings, r + 1, c + 1, cell, t);
+                let res = self.draw_cell(&CellDraw { matrix: job.name.as_deref(), settings: &job.settings, row: r + 1, column: c + 1, cell, place: t });
                 // the points from before back where they were; the ones the cell made stay
                 for (n, info) in self.nodes.iter_mut() {
                     match moved.remove(n) {
@@ -367,7 +429,7 @@ impl Engine {
             }
         }
         if !after.is_empty() {
-            let node = match &name {
+            let node = match &job.name {
                 Some(n) => n.clone(),
                 None => {
                     let n = format!("tikra@fig@{}", self.steps);
@@ -379,7 +441,7 @@ impl Engine {
             };
             self.tex.define_string("tikzlastnode", &node, false);
             // the delimiters are nodes of the picture, not cells: `nodes={…}` is not theirs
-            self.tex.set_meaning(&every_node, outer_every_node, false);
+            self.tex.set_meaning(&job.every_node, outer_every_node, false);
             let mut path = tikra_tokens("\\path ");
             path.extend(after);
             path.extend(tikra_tokens(";"));
@@ -413,9 +475,10 @@ impl Engine {
         out
     }
 
-    /// One cell, drawn with its origin at `place`.
-    fn draw_cell(&mut self, matrix: Option<&str>, settings: &MatrixSettings, r: usize, c: usize, cell: &[Token], place: Transform) -> Result<(), Error> {
-        let mut cell = crate::keys::trim(cell).to_vec();
+    /// One cell, drawn with its origin at `draw.place`.
+    fn draw_cell(&mut self, draw: &CellDraw<'_>) -> Result<(), Error> {
+        let (matrix, settings, r, c, place) = (draw.matrix, draw.settings, draw.row, draw.column, draw.place);
+        let mut cell = crate::keys::trim(draw.cell).to_vec();
         let empty = cell.is_empty();
         let empty_node = empty && settings.of_nodes && settings.nodes_in_empty_cells && settings.at_empty_cell.is_empty();
         if empty && !empty_node {
@@ -516,7 +579,9 @@ fn cell_options(cell: &[Token]) -> (Vec<Token>, Vec<Token>) {
                     i += 1;
                     continue;
                 };
-                let Some(len) = closing(&inner[i + 1..], close) else { break };
+                let Some(len) = closing(&inner[i + 1..], close) else {
+                    break;
+                };
                 if !options.is_empty() {
                     options.push(Token::other(','));
                 }

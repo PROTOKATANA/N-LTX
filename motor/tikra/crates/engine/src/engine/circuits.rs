@@ -362,15 +362,8 @@ const ANNOTATIONS: &[(&str, f64, Option<(f64, f64)>, &[Stroke])] = &[
     ("adjustable'", 1.5, None, &[Stroke::Line((-1.5, 1.5), (1.5, -1.5))]),
 ];
 
-/// The libraries' styles, made from the tables, and the registers they use.
-pub fn definitions() -> String {
-    let mut s = String::new();
-    s.push_str("\\newdimen\\tikzcircuitssizeunit\\tikzcircuitssizeunit=7pt\\relax\n");
-    s.push_str("\\def\\tikra@circ@onto{0}\\let\\tikra@circ@first\\pgfutil@empty\\def\\tikra@circ@last{-- (\\tikztotarget) \\tikztonodes}\n");
-    s.push_str("\\def\\tikra@circ@reset{\\def\\tikra@circ@onto{1}\\let\\tikra@circ@first\\pgfutil@empty\\def\\tikra@circ@last{-- (\\tikztotarget) \\tikztonodes}}\n");
-    s.push_str("\\def\\pgfsetarrowoptions#1#2{\\pgfkeys{/tikz/circuits/tikra arrow options={{#1}{#2}}}}\n");
-    let mut keys: Vec<String> = Vec::new();
-    // the general part: sizes, looks, directions, labels
+/// Sizes, looks, directions and the `info` labels, in that order.
+fn size_keys(keys: &mut Vec<String>) {
     for (name, pt) in [("huge", 10), ("large", 8), ("medium", 7), ("small", 6), ("tiny", 5)] {
         keys.push(format!("{name} circuit symbols/.style={{circuit symbol unit={pt}pt}}"));
     }
@@ -384,7 +377,10 @@ pub fn definitions() -> String {
     for (suffix, mode) in [("", "a"), (" sloped", "as"), ("'", "b"), ("' sloped", "bs")] {
         keys.push(format!("info{suffix}/.code={{\\pgfkeys{{/tikz/circuits/tikra label={{}}{{}}{{{mode}}}{{#1}}}}}}"));
     }
-    // circuits.logic, with its three styles
+}
+
+/// `circuits.logic` and the gate shapes used outside a circuit.
+fn logic_keys(keys: &mut Vec<String>) {
     keys.push("circuit logic/.style={circuit,inputs/.style={logic gate inputs={##1}},logic gate inverted radius=.25\\tikzcircuitssizeunit,every circuit logic/.try}".into());
     for style in ["US", "IEC"] {
         let mut sets: Vec<String> = GATES.iter().map(|g| format!("set {g} gate graphic={g} gate {style} graphic")).collect();
@@ -406,7 +402,6 @@ pub fn definitions() -> String {
     for g in ["and", "nand"] {
         keys.push(format!("{g} gate CDH graphic/.style={{{}}}", us.replace("##1", &format!("{g} gate CDH"))));
     }
-    // the shapes.gates.logic libraries: the gates as shapes of one style, outside circuits
     for style in ["US", "IEC", "CDH"] {
         let mut styles: Vec<String> = GATES
             .iter()
@@ -422,7 +417,40 @@ pub fn definitions() -> String {
         }
         keys.push(format!("use {style} style logic gates/.code={{\\tikzset{{{}}}}}", styles.join(",")));
     }
-    // circuits.ee and its IEC graphics
+}
+
+/// One row of [`EE_GRAPHICS`]: name, look, size, shape, the mark a generic shape draws, and the rest.
+struct EeGraphic<'a> {
+    name: &'a str,
+    look: Look,
+    width: f64,
+    height: f64,
+    shape: &'a str,
+    mark: &'a str,
+    more: &'a str,
+}
+
+/// One IEC graphic: the look, the size, the shape and, for a generic shape, the mark it draws.
+fn graphic_key(g: &EeGraphic<'_>) -> String {
+    let mark = if g.shape.starts_with("generic") {
+        let kind = g.shape.trim_start_matches("generic ");
+        format!(",/pgf/generic {kind}/before background=,/pgf/generic {kind}/tikra mark={{{mark}}}", mark = g.mark)
+    } else {
+        String::new()
+    };
+    format!(
+        "{name} graphic/.style={{{},circuit symbol size=width {w} height {h},shape={shape}{mark},{more}}}",
+        g.look.style(),
+        name = g.name,
+        w = g.width,
+        h = g.height,
+        shape = g.shape,
+        more = g.more
+    )
+}
+
+/// `circuits.ee`: the symbols, their units, the IEC graphics and the library style.
+fn ee_keys(keys: &mut Vec<String>) {
     keys.push("circuit ee/.style={circuit,every circuit ee/.try}".into());
     for sym in EE_SYMBOLS {
         keys.push(format!("circuit declare symbol={sym}"));
@@ -434,14 +462,8 @@ pub fn definitions() -> String {
     for (unit, symbol) in UNITS {
         keys.push(format!("circuit declare unit={{{unit}}}{{{symbol}}}"));
     }
-    for (name, look, w, h, shape, mark, more) in EE_GRAPHICS {
-        let mark = if shape.starts_with("generic") {
-            let kind = shape.trim_start_matches("generic ");
-            format!(",/pgf/generic {kind}/before background=,/pgf/generic {kind}/tikra mark={{{mark}}}")
-        } else {
-            String::new()
-        };
-        keys.push(format!("{name} graphic/.style={{{},circuit symbol size=width {w} height {h},shape={shape}{mark},{more}}}", look.style()));
+    for &(name, look, w, h, shape, mark, more) in EE_GRAPHICS {
+        keys.push(graphic_key(&EeGraphic { name, look, width: w, height: h, shape, mark, more }));
     }
     for d in FILLED_DIODES {
         keys.push(format!("var {d} IEC graphic/.style={{{d} IEC graphic,circuit symbol filled}}"));
@@ -452,27 +474,54 @@ pub fn definitions() -> String {
         ee[i] = format!("set {m} graphic={m} graphic");
     }
     keys.push(format!("circuit ee IEC/.style={{circuit ee,{}}}", ee.join(",")));
-    let u = |x: f64| format!("{x}\\tikzcircuitssizeunit");
+}
+
+/// A length in symbol units, as the annotation paths write it.
+fn symbol_units(x: f64) -> String {
+    format!("{x}\\tikzcircuitssizeunit")
+}
+
+/// The annotations of `circuits.ee`, each a path in symbol units.
+fn annotation_keys(keys: &mut Vec<String>) {
     for (name, distance, shift, strokes) in ANNOTATIONS {
         let mut path = match shift {
             None => "[shift=(\\tikzlastnode.center)]".to_string(),
             Some((_, l)) if *l == 0.0 => String::new(),
-            Some((a, l)) => format!("[shift=({a}:{})]", u(*l)),
+            Some((a, l)) => format!("[shift=({a}:{})]", symbol_units(*l)),
         };
         for st in strokes.iter() {
             path.push_str(&match st {
-                Stroke::Line(a, b) => format!(" ({},{}) edge[line to] ({},{})", u(a.0), u(a.1), u(b.0), u(b.1)),
-                Stroke::Ray(a, angle, l) => format!(" ({},{}) edge[line to] ++({angle}:{})", u(a.0), u(a.1), u(*l)),
+                Stroke::Line(a, b) => format!(" ({},{}) edge[line to] ({},{})", symbol_units(a.0), symbol_units(a.1), symbol_units(b.0), symbol_units(b.1)),
+                Stroke::Ray(a, angle, l) => format!(" ({},{}) edge[line to] ++({angle}:{})", symbol_units(a.0), symbol_units(a.1), symbol_units(*l)),
             });
         }
-        keys.push(format!("circuit declare annotation={{{name}}}{{{}}}{{{path}}}", u(*distance)));
+        keys.push(format!("circuit declare annotation={{{name}}}{{{}}}{{{path}}}", symbol_units(*distance)));
     }
-    s.push_str("\\tikzset{\n");
+}
+
+fn tikzset(keys: &[String]) -> String {
+    let mut s = String::from("\\tikzset{\n");
     for k in keys {
         s.push_str("  ");
-        s.push_str(&k);
+        s.push_str(k);
         s.push_str(",\n");
     }
     s.push_str("}\n");
+    s
+}
+
+/// The libraries' styles, made from the tables, and the registers they use.
+pub fn definitions() -> String {
+    let mut s = String::new();
+    s.push_str("\\newdimen\\tikzcircuitssizeunit\\tikzcircuitssizeunit=7pt\\relax\n");
+    s.push_str("\\def\\tikra@circ@onto{0}\\let\\tikra@circ@first\\pgfutil@empty\\def\\tikra@circ@last{-- (\\tikztotarget) \\tikztonodes}\n");
+    s.push_str("\\def\\tikra@circ@reset{\\def\\tikra@circ@onto{1}\\let\\tikra@circ@first\\pgfutil@empty\\def\\tikra@circ@last{-- (\\tikztotarget) \\tikztonodes}}\n");
+    s.push_str("\\def\\pgfsetarrowoptions#1#2{\\pgfkeys{/tikz/circuits/tikra arrow options={{#1}{#2}}}}\n");
+    let mut keys = Vec::new();
+    size_keys(&mut keys);
+    logic_keys(&mut keys);
+    ee_keys(&mut keys);
+    annotation_keys(&mut keys);
+    s.push_str(&tikzset(&keys));
     s
 }

@@ -6,7 +6,7 @@ use crate::scene::{Point, Segment};
 use crate::tex::Token;
 use crate::Error;
 
-use super::arrows::{Curvilinear, EndTips, TipsMode, Widths};
+use super::arrows::{Curvilinear, EndTips, TipEnd, TipQuery, TipsMode, Widths};
 use super::path::{valid_segment, MAX_COORDINATE};
 use super::Engine;
 use crate::PT;
@@ -327,8 +327,8 @@ impl Engine {
         let mut warn = Vec::new();
         let (end_spec, start_spec) = (self.st.pen.end_arrow.clone().unwrap_or_default(), self.st.pen.start_arrow.clone().unwrap_or_default());
         let (shorten_end, shorten_start) = (self.st.pen.shorten_end / PT, self.st.pen.shorten_start / PT);
-        let end = EndTips::new(self, &end_spec, false, &user, widths, shorten_end, &mut warn);
-        let start = EndTips::new(self, &start_spec, true, &user, widths, shorten_start, &mut warn);
+        let end = EndTips::new(self, &TipQuery { spec: &end_spec, start: false, user: &user, widths, shorten: shorten_end }, &mut warn);
+        let start = EndTips::new(self, &TipQuery { spec: &start_spec, start: true, user: &user, widths, shorten: shorten_start }, &mut warn);
         for w in warn {
             self.warn(w);
         }
@@ -388,7 +388,7 @@ impl Engine {
         let fill_opacity = self.st.paint.fill_opacity;
         for (tips, at) in [(&start, at_start), (&end, at_end)] {
             let hull = match at {
-                Some(Along::Line(p, from)) => tips.draw(p, from, &stroke, fill_opacity, &mut out.items),
+                Some(Along::Line(p, from)) => tips.draw(&TipEnd { at: p, from, stroke: &stroke, fill_opacity }, &mut out.items),
                 Some(Along::Curve(c)) => tips.draw_on_curve(&c, &stroke, fill_opacity, &mut out.items),
                 None => continue,
             };
