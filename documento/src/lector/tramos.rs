@@ -17,6 +17,20 @@ impl<'a> Lector<'a> {
         tramos
     }
 
+    /// Consume un elemento de texto y anota de qué bytes de la fuente sale lo que ha escrito.
+    pub(super) fn uno_anotado(&mut self, estilo: Estilo, tramos: &mut Vec<Tramo>) {
+        let inicio = self.i;
+        let (cuantos, largo) = (tramos.len(), tramos.last().map_or(0, Tramo::largo));
+        self.uno(estilo, tramos);
+        let Some(rango) = self.origen(inicio) else { return };
+        if let Some(cadena) = cuantos.checked_sub(1).and_then(|n| tramos[n].cadena_mut()) {
+            cadena.anotar(largo, rango);
+        }
+        for cadena in tramos[cuantos..].iter_mut().filter_map(Tramo::cadena_mut) {
+            cadena.anotar(0, rango);
+        }
+    }
+
     /// Consume un elemento de texto.
     pub(super) fn uno(&mut self, estilo: Estilo, tramos: &mut Vec<Tramo>) {
         let Some(c) = self.mira() else { return };
@@ -72,7 +86,7 @@ impl<'a> Lector<'a> {
         let t = self.resto();
         let fin = dolar_de_cierre(t).unwrap_or(t.len());
         self.salta(fin + 1);
-        tramos.push(Tramo::Formula(t[..fin].to_string()));
+        tramos.push(Tramo::Formula(t[..fin].into()));
     }
 
     pub(super) fn orden(&mut self, estilo: Estilo, tramos: &mut Vec<Tramo>) {
@@ -88,14 +102,14 @@ impl<'a> Lector<'a> {
                 self.opcional();
                 self.argumento();
             }
-            tramos.push(Tramo::Formula(self.t[inicio..self.i].to_string()));
+            tramos.push(Tramo::Formula(self.t[inicio..self.i].into()));
             return;
         }
         if nombre == "schemestart" {
             let t = self.resto();
             let fin = t.find("\\schemestop").map_or(t.len(), |n| n + "\\schemestop".len());
             self.salta(fin);
-            tramos.push(Tramo::Formula(t[..fin].to_string()));
+            tramos.push(Tramo::Formula(t[..fin].into()));
             return;
         }
         self.salta(1 + nombre.len());
@@ -278,7 +292,7 @@ impl<'a> Lector<'a> {
                 let t = self.resto();
                 let fin = t.find("\\)").unwrap_or(t.len());
                 self.salta(fin + 2);
-                tramos.push(Tramo::Formula(t[..fin].to_string()));
+                tramos.push(Tramo::Formula(t[..fin].into()));
             }
             ' ' | ',' | ';' | ':' | '!' => empujar(tramos, " ", estilo),
             '\'' | '`' | '^' | '~' | '"' => {

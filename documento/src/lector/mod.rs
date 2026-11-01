@@ -5,10 +5,13 @@
 //! entiende nunca se pierde en silencio: se conserva su texto y se avisa.
 
 mod bloques;
+mod cadena;
 mod cursor;
 mod tablas;
 mod texto;
 mod tramos;
+
+pub use cadena::Cadena;
 
 use crate::tema::Opciones;
 use crate::{ColorDefinido, extensiones};
@@ -33,10 +36,26 @@ pub struct Estilo {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Tramo {
-    Texto(String, Estilo),
+    Texto(Cadena, Estilo),
     /// Fórmula en línea, con la fuente que entiende el compositor de fórmulas.
-    Formula(String),
+    Formula(Cadena),
     Salto,
+}
+
+impl Tramo {
+    fn largo(&self) -> usize {
+        match self {
+            Tramo::Texto(t, _) | Tramo::Formula(t) => t.len(),
+            Tramo::Salto => 0,
+        }
+    }
+
+    fn cadena_mut(&mut self) -> Option<&mut Cadena> {
+        match self {
+            Tramo::Texto(t, _) | Tramo::Formula(t) => Some(t),
+            Tramo::Salto => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -60,10 +79,17 @@ pub enum Bloque {
     },
     Formula(String),
     Figura(String),
+    /// `\\includegraphics`: lo que diga su archivo lo resuelve quien sabe leerlo.
+    Imagen {
+        ruta: String,
+        opciones: Opciones,
+    },
     /// `\\begin{animacion}…`, entero: lo interpreta quien lo reproduce.
     Animacion(String),
     Tabla(Tabla),
     Regla,
+    /// El bloque que sigue, si es indivisible, sale de estos bytes de la fuente.
+    Origen(u32, u32),
 }
 
 /// El resultado de leer una fuente.
@@ -157,7 +183,8 @@ const ORDENES_MACRO: [&str; 6] = [
     "providecommand*",
 ];
 /// Órdenes que no dejan rastro en flujo continuo. El número es cuántos argumentos llevan.
-const ORDENES_IGNORADAS: [(&str, usize); 27] = [
+const ORDENES_IGNORADAS: [(&str, usize); 28] = [
+    ("graphicspath", 1),
     ("thispagestyle", 1),
     ("raggedright", 0),
     ("raggedleft", 0),
@@ -209,6 +236,7 @@ enum Parada {
 pub fn leer(fuente: &str) -> Lectura {
     let (preambulo, cuerpo) = separar(fuente);
     let mut l = Lector::nuevo(cuerpo);
+    l.fuente = fuente;
     l.salida.preambulo.push_str(preambulo);
     let mut pre = Lector::nuevo(preambulo);
     pre.definiciones();
@@ -222,7 +250,7 @@ pub fn leer(fuente: &str) -> Lectura {
     if !l.notas.is_empty() {
         salida.bloques.push(Bloque::Regla);
         for (n, nota) in l.notas.into_iter().enumerate() {
-            let mut tramos = vec![Tramo::Texto(format!("{}. ", n + 1), Estilo::default())];
+            let mut tramos = vec![Tramo::Texto(format!("{}. ", n + 1).into(), Estilo::default())];
             tramos.extend(nota);
             salida.bloques.push(Bloque::Leyenda(tramos));
         }
@@ -242,6 +270,8 @@ fn separar(fuente: &str) -> (&str, &str) {
 }
 
 struct Lector<'a> {
+    /// El documento entero, para saber de dónde sale cada cosa. Vacío si se lee algo generado.
+    fuente: &'a str,
     t: &'a str,
     i: usize,
     profundidad: usize,
@@ -261,8 +291,22 @@ mod tests {
         Tramo::Texto(t.into(), Estilo::default())
     }
 
+    /// Los bloques sin las marcas de su origen, también los de dentro.
+    fn sin_origenes(bloques: Vec<Bloque>) -> Vec<Bloque> {
+        let dentro = |b| match b {
+            Bloque::Lista { ordenada, items } => Bloque::Lista {
+                ordenada,
+                items: items.into_iter().map(sin_origenes).collect(),
+            },
+            Bloque::Cita(b) => Bloque::Cita(sin_origenes(b)),
+            otro => otro,
+        };
+        let propios = bloques.into_iter().filter(|b| !matches!(b, Bloque::Origen(..)));
+        propios.map(dentro).collect()
+    }
+
     fn solo_bloques(fuente: &str) -> Vec<Bloque> {
-        leer(fuente).bloques
+        sin_origenes(leer(fuente).bloques)
     }
 
     fn figuras(fuente: &str) -> Vec<String> {
@@ -488,7 +532,7 @@ mod tests {
     }
 
     fn tabla(fuente: &str) -> Tabla {
-        match leer(fuente).bloques.into_iter().next() {
+        match solo_bloques(fuente).into_iter().next() {
             Some(Bloque::Tabla(t)) => t,
             otro => panic!("{otro:?}"),
         }
@@ -558,7 +602,7 @@ mod tests {
         let [Tramo::Texto(a, e), Tramo::Texto(b, f)] = &t.filas[0].celdas[0].tramos[..] else {
             panic!("{:?}", t.filas[0].celdas[0].tramos);
         };
-        assert_eq!((a.as_str(), e.escala, b.as_str(), f.escala), ("a", Some(50), "b", None));
+        assert_eq!((&**a, e.escala, &**b, f.escala), ("a", Some(50), "b", None));
     }
 
     #[test]
@@ -614,7 +658,8 @@ mod tests {
     fn un_bloque_guarda_sus_opciones_y_el_documento_las_de_todos() {
         let l = leer(r"\estilocodigo{tema=Nord}\begin{lstlisting}[title=a.rs,numbers=none]x\end{lstlisting}");
         assert_eq!(l.codigo, [("tema".to_string(), "Nord".to_string())]);
-        let Some(Bloque::Codigo { opciones, .. }) = l.bloques.first() else {
+        let codigo = l.bloques.iter().find(|b| !matches!(b, Bloque::Origen(..)));
+        let Some(Bloque::Codigo { opciones, .. }) = codigo else {
             panic!("{:?}", l.bloques);
         };
         assert_eq!(opciones.len(), 2);

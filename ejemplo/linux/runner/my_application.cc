@@ -60,7 +60,7 @@ static void my_application_activate(GApplication* application) {
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   // Skia, no Impeller: en esta GPU, Impeller no suaviza los recortes ni los
-  // trazados complejos (visto en CORTEX, 2026-10-26).
+  // trazados complejos (visto el 2026-10-26).
   fl_dart_project_set_enable_impeller(project, FALSE);
   fl_dart_project_set_dart_entrypoint_arguments(
       project, self->dart_entrypoint_arguments);

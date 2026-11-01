@@ -57,12 +57,6 @@ pkg_check_modules(EPOXY REQUIRED IMPORTED_TARGET epoxy)
 
 # Lo que genera cxx para el pintor: lo deja ahí el build.rs de pintor.
 set(NLTX_CXX "${CMAKE_CURRENT_SOURCE_DIR}/../../pintor/cxx")
-# La base GPU de CORTEX (ver pintor/README.md).
-if(DEFINED ENV{NLTX_CNX})
-  set(NLTX_CNX "$ENV{NLTX_CNX}")
-else()
-  set(NLTX_CNX "${CMAKE_CURRENT_SOURCE_DIR}/../../../CORTEX/N-CNX")
-endif()
 
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
@@ -89,7 +83,7 @@ include(flutter/generated_plugins.cmake)
 if(NOT TARGET ${BINARY_NAME}_cargokit)
   message(FATAL_ERROR "Falta ${BINARY_NAME}_cargokit, el objetivo con que cargokit compila el hub")
 endif()
-add_dependencies(cnx_ltx ${BINARY_NAME}_cargokit)
+add_dependencies(ltx_pintor ${BINARY_NAME}_cargokit)
 
 
 # === Installation ===

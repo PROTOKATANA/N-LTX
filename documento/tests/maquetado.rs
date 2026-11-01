@@ -1,11 +1,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use std::sync::Arc;
+
 use documento::{
-    Apartado, ColorDefinido, Colores, ColoresEditor, Documento, EstiloTabla, Formato, Fragmento, Incrustados, Piezas,
-    Resaltador, Tema,
+    Apartado, ColorDefinido, Colores, ColoresEditor, Documento, EstiloTabla, Formato, Fragmento, Imagen, Imagenes,
+    Incrustados, Piezas, Resaltador, Tema,
 };
 use primitivas::{
-    Caja, Capa, Color, Composicion, Compositor, ErrorComposicion, Escena, Pintura, Primitiva, Relleno, Segmento,
+    Caja, Capa, Color, Composicion, Compositor, ErrorComposicion, Escena, MapaDeBits, Pintura, Primitiva, Relleno,
+    Segmento,
 };
 
 /// Compositor de mentira: una fórmula es una caja del ancho de su fuente.
@@ -90,11 +93,30 @@ impl Incrustados for Falsos {
     }
 }
 
+impl Imagenes for Falsos {
+    fn imagen(&self, ruta: &str) -> Result<Imagen, String> {
+        let mapa = MapaDeBits {
+            id: 7,
+            ancho: 2,
+            alto: 1,
+            rgba: vec![255; 8],
+        };
+        (ruta == "foto.png")
+            .then(|| Imagen {
+                mapa: Arc::new(mapa),
+                ancho: 100.0,
+                alto: 50.0,
+            })
+            .ok_or_else(|| format!("no se encuentra la imagen {ruta}"))
+    }
+}
+
 fn falsos() -> Piezas {
     Piezas {
         incrustados: Box::new(Falsos),
         colores: Box::new(Falsos),
         resaltador: Box::new(Falsos),
+        imagenes: Box::new(Falsos),
     }
 }
 
@@ -775,4 +797,180 @@ fn una_animacion_reserva_su_sitio_en_el_flujo() {
 fn una_escena_de_texto_cruza_hilos() {
     fn es_send<T: Send + Sync>() {}
     es_send::<Documento>();
+}
+
+fn imagenes_de(c: &Composicion) -> Vec<&primitivas::Matriz> {
+    c.escena
+        .primitivas
+        .iter()
+        .filter_map(|p| match p {
+            Primitiva::Imagen { matriz, .. } => Some(matriz),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn una_imagen_se_centra_y_ocupa_su_sitio() {
+    let c = documento(400.0).componer(r"\includegraphics{foto.png}").unwrap();
+    assert!(c.avisos.is_empty(), "{:?}", c.avisos);
+    let [m] = imagenes_de(&c)[..] else {
+        panic!("{:?}", c.escena.primitivas)
+    };
+    assert_eq!((m.a, m.d), (100.0, 50.0));
+    assert_eq!(m.e, 150.0, "centrada");
+    assert!(c.escena.caja.alto >= m.f + m.d, "cabe en la escena");
+}
+
+#[test]
+fn una_figura_con_su_imagen_y_su_leyenda() {
+    let fuente = r"\begin{figure}\centering\includegraphics[width=0.5\textwidth]{foto.png}\caption{Hola}\end{figure}";
+    let c = documento(400.0).componer(fuente).unwrap();
+    assert!(c.avisos.is_empty(), "{:?}", c.avisos);
+    let [m] = imagenes_de(&c)[..] else {
+        panic!("{:?}", c.escena.primitivas)
+    };
+    assert_eq!((m.a, m.d), (200.0, 100.0));
+}
+
+#[test]
+fn una_imagen_que_no_esta_se_ve_como_fuente_y_se_avisa() {
+    let c = documento(400.0).componer(r"\includegraphics{no.png}").unwrap();
+    assert!(imagenes_de(&c).is_empty());
+    assert!(c.avisos.iter().any(|a| a.contains("no.png")), "{:?}", c.avisos);
+    assert!(!c.escena.primitivas.is_empty(), "su fuente se ve");
+}
+
+/// Lo que se copia al seleccionar de la ancla `desde` a la `hasta`.
+fn copiado(c: &Composicion, fuente: &str, desde: usize, hasta: usize) -> String {
+    documento::seleccion::fuente_de(&[fuente], &c.escena.anclas, desde, hasta)
+}
+
+/// La ancla de la primera letra de `trozo`, que debe estar literal en la fuente.
+fn ancla_de(c: &Composicion, fuente: &str, trozo: &str) -> usize {
+    let byte = fuente.find(trozo).unwrap() as u32;
+    c.escena
+        .anclas
+        .iter()
+        .position(|a| a.desde <= byte && byte < a.hasta)
+        .unwrap()
+}
+
+#[test]
+fn seleccionar_palabras_de_un_parrafo_copia_esos_bytes() {
+    let fuente = "Hola mundo\ncruel y feliz.";
+    let c = documento(600.0).componer(fuente).unwrap();
+    let (a, b) = (ancla_de(&c, fuente, "mundo"), ancla_de(&c, fuente, "y feliz"));
+    assert_eq!(copiado(&c, fuente, a, b), "mundo\ncruel ");
+}
+
+#[test]
+fn todo_lo_seleccionado_da_la_fuente_en_bruto_con_sus_ordenes() {
+    let fuente = r"Sea \textbf{una fuerza} $F=ma$ y \'agua~sin \ce{H2O}. Fin.";
+    let c = documento(600.0).componer(fuente).unwrap();
+    assert_eq!(copiado(&c, fuente, 0, c.escena.anclas.len()), fuente);
+}
+
+#[test]
+fn tocar_un_trozo_de_una_orden_copia_la_orden_entera() {
+    let fuente = r"Sea \textbf{una fuerza} final.";
+    let c = documento(600.0).componer(fuente).unwrap();
+    let dentro = ancla_de(&c, fuente, "fuerza");
+    assert_eq!(copiado(&c, fuente, dentro, dentro + 1), r"\textbf{una fuerza}");
+}
+
+#[test]
+fn una_formula_en_linea_se_copia_entera_con_sus_dolares() {
+    let fuente = r"Sea $F=ma$ ya.";
+    let c = documento(600.0).componer(fuente).unwrap();
+    let f = ancla_de(&c, fuente, "F=ma");
+    assert_eq!(copiado(&c, fuente, f, f + 1), r"$F=ma$");
+}
+
+#[test]
+fn un_titulo_se_copia_con_su_orden() {
+    let fuente = r"\section{Uno dos}";
+    let c = documento(600.0).componer(fuente).unwrap();
+    assert_eq!(copiado(&c, fuente, 1, 2), fuente);
+}
+
+#[test]
+fn un_texto_y_una_animacion_se_copian_juntos_en_bruto() {
+    let animacion = "\\begin{animacion}[t=0:1]\n\\begin{tikzpicture}\\draw (0,0);\\end{tikzpicture}\n\\end{animacion}";
+    let fuente = format!("Antes de ella.\n\n{animacion}\n\nDespués.");
+    let c = documento(600.0).componer(&fuente).unwrap();
+    let (a, b) = (ancla_de(&c, &fuente, "de ella"), ancla_de(&c, &fuente, "Después"));
+    let esperado = format!("de ella.\n\n{animacion}\n\n");
+    assert_eq!(copiado(&c, &fuente, a, b), esperado.trim_end());
+}
+
+#[test]
+fn una_formula_en_bloque_y_una_figura_son_una_sola_ancla() {
+    let fuente = "\\[ x^2 \\]\n\n\\begin{tikzpicture}\\draw (0,0);\\end{tikzpicture}";
+    let c = documento(600.0).componer(fuente).unwrap();
+    assert_eq!(c.escena.anclas.len(), 2, "{:?}", c.escena.anclas);
+    assert_eq!(copiado(&c, fuente, 0, 1), "\\[ x^2 \\]");
+    assert_eq!(
+        copiado(&c, fuente, 1, 2),
+        "\\begin{tikzpicture}\\draw (0,0);\\end{tikzpicture}"
+    );
+}
+
+#[test]
+fn una_tabla_y_una_imagen_se_seleccionan_enteras() {
+    let tabla = r"\begin{tabular}{ll} a & b \\ c & d \end{tabular}";
+    let fuente = format!("{tabla}\n\n\\includegraphics[width=50bp]{{foto.png}}");
+    let c = documento(600.0).componer(&fuente).unwrap();
+    assert_eq!(c.escena.anclas.len(), 2, "{:?}", c.escena.anclas);
+    assert_eq!(copiado(&c, &fuente, 0, 1), tabla);
+    assert_eq!(copiado(&c, &fuente, 1, 2), r"\includegraphics[width=50bp]{foto.png}");
+}
+
+#[test]
+fn los_numeros_de_una_lista_no_se_seleccionan_y_sus_elementos_si() {
+    let fuente = "\\begin{enumerate}\n\\item uno\n\\item dos\n\\end{enumerate}";
+    let c = documento(600.0).componer(fuente).unwrap();
+    assert_eq!(copiado(&c, fuente, 0, 3), "uno");
+    let (a, b) = (ancla_de(&c, fuente, "uno"), c.escena.anclas.len());
+    assert_eq!(copiado(&c, fuente, a, b), "uno\n\\item dos");
+}
+
+#[test]
+fn con_preambulo_los_bytes_siguen_siendo_los_del_documento_entero() {
+    let fuente = "\\usepackage{a}\n\\begin{document}\nHola mundo\n\\end{document}";
+    let c = documento(600.0).componer(fuente).unwrap();
+    let m = ancla_de(&c, fuente, "mundo");
+    assert_eq!(copiado(&c, fuente, m, c.escena.anclas.len()), "mundo");
+}
+
+#[test]
+fn en_una_serie_cada_ancla_sabe_de_que_documento_es() {
+    let (uno, dos) = ("Uno", "Dos");
+    let apartados = [
+        Apartado {
+            titulo: Some("primero"),
+            fuente: uno,
+        },
+        Apartado {
+            titulo: None,
+            fuente: dos,
+        },
+    ];
+    let c = documento(600.0).componer_serie(&apartados, 600.0).unwrap();
+    let copiado = documento::seleccion::fuente_de(&[uno, dos], &c.escena.anclas, 0, c.escena.anclas.len());
+    assert_eq!(copiado, "Uno\n\nDos");
+}
+
+#[test]
+fn las_anclas_caen_donde_esta_el_texto() {
+    let c = documento(600.0).componer("ab").unwrap();
+    let [a, b] = c.escena.anclas[..] else {
+        panic!("{:?}", c.escena.anclas)
+    };
+    assert!(b.caja.x > a.caja.x, "{a:?} {b:?}");
+    assert!(a.caja.ancho > 0.0 && a.caja.alto > 0.0);
+    assert_eq!(
+        documento::seleccion::cursor_en(&c.escena.anclas, primitivas::Punto { x: 0.1, y: 5.0 }),
+        0
+    );
 }

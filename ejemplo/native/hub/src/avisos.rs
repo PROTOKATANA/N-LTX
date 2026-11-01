@@ -20,6 +20,10 @@ impl Avisos for AvisosRinf {
     }
 }
 
+pub fn enviar_copiado(texto: String) {
+    signals::TextoCopiado { texto }.send_signal_to_dart();
+}
+
 pub fn enviar_medidas(m: Medidas) {
     signals::MedidasPintor {
         vertices: m.vertices,

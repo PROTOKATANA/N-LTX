@@ -5,10 +5,10 @@
 
 use std::sync::Arc;
 
-use primitivas::{Escena, Punto};
+use primitivas::{Caja, Color, Escena, Pintura, Primitiva, Punto, Relleno};
 
 use crate::atlas::Atlas;
-use crate::compilador::{Destino, Encuadre, compilar};
+use crate::compilador::{Destino, Encuadre, compilar, rectangulo};
 use crate::geometria::Afin;
 use crate::lista::Lista;
 use crate::puente_lienzo::ffi::{Tinta, Vista};
@@ -20,6 +20,14 @@ pub const MARGEN: f64 = 16.0;
 
 /// Por muy estrecha que sea la vista, el texto no baja de aquí, en bp.
 const MENOR_TEXTO: f64 = 40.0;
+
+/// La marca de lo seleccionado: se pinta encima y deja ver el texto.
+const COLOR_SELECCION: Color = Color {
+    r: 0.21,
+    g: 0.52,
+    b: 0.89,
+};
+const OPACIDAD_SELECCION: f64 = 0.3;
 
 /// El ancho que le queda al texto en una vista de `vista` bp.
 pub fn ancho_de_texto(vista: f64) -> f64 {
@@ -75,6 +83,8 @@ pub struct Lienzo {
     habia_vivos: bool,
     atlas: Atlas,
     rampas: Rampas,
+    /// Lo que hay que marcar, en bp del documento.
+    seleccion: Vec<Caja>,
 }
 
 fn raiz(escena: &Escena, escala: f64) -> Afin {
@@ -87,6 +97,11 @@ impl Lienzo {
         self.escena = escena;
         self.animador = animador;
         self.version += 1;
+    }
+
+    /// Marca `cajas` sobre el documento. Va con las animaciones: cambiarla no recompila la base.
+    pub fn seleccionar(&mut self, cajas: Vec<Caja>) {
+        self.seleccion = cajas;
     }
 
     /// La GPU no tiene nada: el próximo fotograma llevará las texturas enteras.
@@ -136,6 +151,7 @@ impl Lienzo {
         self.rampas.truncar(filas);
         let mut vivos = Lista::tras(&base);
         let animada = self.animar(vista, segundos, &mut vivos);
+        self.marcar(vista, &mut vivos);
         let hay_vivos = !vivos.comandos.is_empty();
         if hay_vivos || self.habia_vivos {
             self.generaciones_vivos += 1;
@@ -157,6 +173,41 @@ impl Lienzo {
             atlas: self.atlas.tomar_sucio(),
             rampas: self.rampas.tomar_sucio(),
         }
+    }
+
+    /// Las marcas de la selección que se ven.
+    fn marcar(&mut self, vista: Vista, vivos: &mut Lista) {
+        if self.seleccion.is_empty() {
+            return;
+        }
+        let m = raiz(&self.escena, vista.escala);
+        let se_ve = |c: &&Caja| {
+            let arriba = m.aplicar(Punto { x: c.x, y: c.y }).y;
+            arriba + c.alto * vista.escala >= vista.y && arriba <= vista.y + f64::from(vista.alto)
+        };
+        let marca = |c: &Caja| Primitiva::Trazado {
+            segmentos: rectangulo(*c).to_vec(),
+            relleno: Some(Relleno {
+                pintura: Pintura::Solida(COLOR_SELECCION),
+                opacidad: OPACIDAD_SELECCION,
+                par_impar: false,
+            }),
+            trazo: None,
+        };
+        let marcas = Escena {
+            primitivas: self.seleccion.iter().filter(se_ve).map(marca).collect(),
+            ..Escena::default()
+        };
+        let encuadre = Encuadre {
+            raiz: m,
+            recortada: false,
+        };
+        let destino = Destino {
+            lista: vivos,
+            atlas: &mut self.atlas,
+            rampas: &mut self.rampas,
+        };
+        compilar(&marcas, encuadre, destino);
     }
 
     /// Compone las animaciones que se ven. Las que no, no gastan nada.
@@ -200,7 +251,7 @@ mod tests {
     use super::*;
     use crate::atlas::LADO_ATLAS;
     use crate::puente_lienzo::ffi::Orden;
-    use primitivas::{Caja, Color, GlifoId, Matriz, Pintura, Primitiva, Relleno, Segmento, Zona};
+    use primitivas::{GlifoId, Matriz, Segmento, Zona};
     use std::collections::BTreeMap;
     use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -400,5 +451,52 @@ mod tests {
             "la máscara ya estaba"
         );
         assert!(!l.preparar(doble(0.0), 0.0).atlas.bytes.is_empty());
+    }
+
+    #[test]
+    fn la_seleccion_se_pinta_encima_sin_recompilar_la_base() {
+        let mut l = Lienzo::default();
+        l.publicar(
+            Escena {
+                primitivas: vec![cuadro()],
+                ..Escena::default()
+            },
+            None,
+        );
+        let antes = l.preparar(vista(0.0), 0.0).hecho;
+        assert!(antes.vivos.comandos.is_empty());
+        let caja = Caja {
+            x: 0.0,
+            y: 0.0,
+            ancho: 10.0,
+            alto: 10.0,
+        };
+        l.seleccionar(vec![caja]);
+        let marcada = l.preparar(vista(0.0), 0.0).hecho;
+        assert_eq!(marcada.generacion_base, antes.generacion_base);
+        assert!(!marcada.vivos.comandos.is_empty());
+        assert!(marcada.generacion_vivos > antes.generacion_vivos);
+        l.seleccionar(Vec::new());
+        let limpia = l.preparar(vista(0.0), 0.0).hecho;
+        assert!(limpia.vivos.comandos.is_empty());
+        assert!(
+            limpia.generacion_vivos > marcada.generacion_vivos,
+            "hay que borrarla de la GPU"
+        );
+    }
+
+    #[test]
+    fn lo_seleccionado_que_no_se_ve_no_gasta() {
+        let mut l = Lienzo::default();
+        l.publicar(Escena::default(), None);
+        let lejos = Caja {
+            x: 0.0,
+            y: 5000.0,
+            ancho: 10.0,
+            alto: 10.0,
+        };
+        l.seleccionar(vec![lejos]);
+        assert!(l.preparar(vista(0.0), 0.0).hecho.vivos.vertices.is_empty());
+        assert!(!l.preparar(vista(5000.0), 0.0).hecho.vivos.vertices.is_empty());
     }
 }

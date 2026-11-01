@@ -10,12 +10,14 @@ animacion = { path = "../animacion" }
 mathra = { path = "../motor/mathra/crates/core", features = ["latin-modern"] }
 tikra = { path = "../motor/tikra/crates/core" }
 voltik = { path = "../motor/voltik/crates/core" }
+png = "0.17"
+resvg = { version = "0.45", default-features = false, features = ["raster-images"] }
 svgtypes = "0.15"
 syntect = { version = "=5.3.0", default-features = false, features = ["parsing", "regex-fancy", "dump-load"] }
 two-face = { version = "=0.5.2", default-features = false, features = ["syntect-fancy"] }
+zune-jpeg = "0.4"
 
 [dev-dependencies]
-resvg = { version = "0.45", default-features = false, features = ["raster-images"] }
 serde_json = "1.0"
 
 [lints]

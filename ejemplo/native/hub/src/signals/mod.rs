@@ -21,6 +21,40 @@ pub struct VerDocumento {
     pub y: f64,
 }
 
+/// Dart → Rust: se ha arrastrado de (`ax`, `ay`) a (`bx`, `by`), en bp desde la esquina del documento.
+#[derive(Clone, Copy, Deserialize, DartSignal)]
+pub struct SeleccionarTexto {
+    pub ax: f64,
+    pub ay: f64,
+    pub bx: f64,
+    pub by: f64,
+}
+
+/// Dart → Rust: doble clic en (`x`, `y`).
+#[derive(Clone, Copy, Deserialize, DartSignal)]
+pub struct SeleccionarPalabra {
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Dart → Rust: seleccionar todo el documento.
+#[derive(Clone, Copy, Deserialize, DartSignal)]
+pub struct SeleccionarTodo;
+
+/// Dart → Rust: quitar la selección.
+#[derive(Clone, Copy, Deserialize, DartSignal)]
+pub struct BorrarSeleccion;
+
+/// Dart → Rust: copiar lo seleccionado.
+#[derive(Clone, Copy, Deserialize, DartSignal)]
+pub struct CopiarSeleccion;
+
+/// Rust → Dart: el LaTeX en bruto de lo seleccionado, para el portapapeles.
+#[derive(Clone, Serialize, RustSignal)]
+pub struct TextoCopiado {
+    pub texto: String,
+}
+
 /// Rust → Dart: lo que hace falta saber para colocar los widgets. `error` vacío si no hubo.
 #[derive(Clone, Serialize, RustSignal)]
 pub struct DocumentoPublicado {

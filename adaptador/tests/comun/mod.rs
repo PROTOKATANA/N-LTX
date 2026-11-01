@@ -311,12 +311,13 @@ fn escribir(primitivas: &[Primitiva], b: &mut String, s: &mut Salida) {
                     hex(*color)
                 );
             }
-            Primitiva::Imagen { png, matriz: m } => {
+            Primitiva::Imagen { mapa, matriz: m } => {
+                let png = png_de(mapa);
                 let _ = write!(
                     b,
                     r#"<image width="1" height="1" preserveAspectRatio="none" image-rendering="optimizeSpeed" transform="{}" href="data:image/png;base64,{}"/>"#,
                     matriz(m),
-                    base64(png)
+                    base64(&png)
                 );
             }
             Primitiva::Abrir(capa) => abrir(capa, b, s),
@@ -354,6 +355,18 @@ fn abrir(capa: &Capa, b: &mut String, s: &mut Salida) {
         }
         Capa::BordesNitidos => write!(b, r#"<g shape-rendering="crispEdges">"#),
     };
+}
+
+/// De vuelta a PNG: `resvg` solo acepta imágenes codificadas.
+fn png_de(mapa: &primitivas::MapaDeBits) -> Vec<u8> {
+    let mut salida = Vec::new();
+    let mut e = png::Encoder::new(&mut salida, mapa.ancho, mapa.alto);
+    e.set_color(png::ColorType::Rgba);
+    e.set_depth(png::BitDepth::Eight);
+    let mut w = e.write_header().unwrap();
+    w.write_image_data(&mapa.rgba).unwrap();
+    w.finish().unwrap();
+    salida
 }
 
 fn base64(bytes: &[u8]) -> String {

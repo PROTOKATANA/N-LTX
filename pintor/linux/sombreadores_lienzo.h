@@ -73,6 +73,23 @@ float4 main(in Entrada i) : SV_TARGET {
   return float4(c.rgb * c.a, c.a);
 })" ;
 
+// Las imágenes llegan con el alfa ya multiplicado : al reducirlas, los mipmaps no
+// oscurecen los bordes
+
+inline constexpr const char * hlsl_imagen_ps = R"(
+Texture2D Imagen;
+SamplerState Imagen_sampler;
+struct Entrada {
+  float4 Position : SV_POSITION;
+  float2 Doc : TEXCOORD0;
+  float2 UV : TEXCOORD1;
+  float4 Color : COLOR0;
+  nointerpolation uint Tinta : TEXCOORD2;
+};
+float4 main(in Entrada i) : SV_TARGET {
+  return Imagen.Sample(Imagen_sampler, i.UV) * i.Color.a;
+})" ;
+
 inline constexpr const char * hlsl_marca_ps = R"(
 float4 main() : SV_TARGET { return float4(0.0, 0.0, 0.0, 0.0); })" ;
 

@@ -74,6 +74,8 @@ pub mod ffi {
         CerrarMascara,
         /// Termina una capa y la compone sobre la anterior.
         CerrarCapa,
+        /// Pinta los índices con la textura de la imagen `imagen`.
+        Imagen,
     }
 
     #[derive(Clone, Copy, Debug, PartialEq)]
@@ -91,6 +93,8 @@ pub mod ffi {
         pub salto: u32,
         pub y0: f32,
         pub y1: f32,
+        /// El `id` de la imagen, en `Orden::Imagen`.
+        pub imagen: u64,
     }
 
     /// Qué se ve del documento, en píxeles físicos.
@@ -147,6 +151,12 @@ pub mod ffi {
         fn parches_rampas(self: &Marco) -> usize;
         fn parche_rampas(self: &Marco, i: usize) -> &[u8];
         fn fila_rampas(self: &Marco, i: usize) -> u32;
+        /// Las imágenes que pinta este fotograma. C++ sube las que no tenga por su `id`.
+        fn imagenes(self: &Marco) -> usize;
+        fn id_imagen(self: &Marco, i: usize) -> u64;
+        fn ancho_imagen(self: &Marco, i: usize) -> u32;
+        fn alto_imagen(self: &Marco, i: usize) -> u32;
+        fn rgba_imagen(self: &Marco, i: usize) -> &[u8];
     }
 }
 

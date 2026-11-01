@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:rinf/rinf.dart';
 
 import 'src/bindings/bindings.dart';
@@ -59,6 +61,20 @@ abstract interface class RepositorioMotor {
 
   void ver(Encuadre encuadre);
 
+  /// Se ha arrastrado de [desde] a [hasta], en bp desde la esquina de la vista del documento.
+  void arrastrar(Offset desde, Offset hasta);
+
+  void seleccionarPalabra(Offset punto);
+
+  void seleccionarTodo();
+
+  void borrarSeleccion();
+
+  /// Pide el LaTeX en bruto de lo seleccionado: llega por [copiados].
+  void copiar();
+
+  Stream<String> get copiados;
+
   Stream<Publicado> get publicados;
 
   Stream<Medidas> get medidas;
@@ -84,6 +100,31 @@ class RepositorioRinf implements RepositorioMotor {
     escala: e.escala,
     y: e.y,
   ).sendSignalToRust();
+
+  @override
+  void arrastrar(Offset desde, Offset hasta) => SeleccionarTexto(
+    ax: desde.dx,
+    ay: desde.dy,
+    bx: hasta.dx,
+    by: hasta.dy,
+  ).sendSignalToRust();
+
+  @override
+  void seleccionarPalabra(Offset punto) =>
+      SeleccionarPalabra(x: punto.dx, y: punto.dy).sendSignalToRust();
+
+  @override
+  void seleccionarTodo() => SeleccionarTodo().sendSignalToRust();
+
+  @override
+  void borrarSeleccion() => BorrarSeleccion().sendSignalToRust();
+
+  @override
+  void copiar() => CopiarSeleccion().sendSignalToRust();
+
+  @override
+  Stream<String> get copiados =>
+      TextoCopiado.rustSignalStream.map((s) => s.message.texto);
 
   @override
   Stream<Publicado> get publicados => DocumentoPublicado.rustSignalStream.map(

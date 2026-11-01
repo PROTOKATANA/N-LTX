@@ -7,9 +7,11 @@
 //! exacta. Un recorte es geometría en el stencil y solo las capas de verdad (grupos, mezclas y
 //! máscaras) cuestan una textura aparte.
 
+use std::sync::Arc;
+
 use primitivas::{
-    Caja, Capa, Color, Degradado, Escena, GlifoId, Matriz, Pintura, Primitiva, Punto, Relleno, Remate, Segmento, Trazo,
-    Union,
+    Caja, Capa, Color, Degradado, Escena, GlifoId, MapaDeBits, Matriz, Pintura, Primitiva, Punto, Relleno, Remate,
+    Segmento, Trazo, Union,
 };
 
 use crate::atlas::Atlas;
@@ -80,7 +82,7 @@ pub fn compilar(escena: &Escena, encuadre: Encuadre, destino: Destino<'_>) {
     }
 }
 
-fn rectangulo(c: Caja) -> [Segmento; 5] {
+pub(crate) fn rectangulo(c: Caja) -> [Segmento; 5] {
     let p = |x, y| Punto { x, y };
     let (x1, y1) = (c.x + c.ancho, c.y + c.alto);
     [
@@ -161,8 +163,7 @@ impl Compilador<'_, '_> {
                     trazo,
                 } => self.trazado(segmentos, relleno.as_ref(), trazo.as_ref()),
                 Primitiva::Glifo { glifo, matriz, color } => self.glifo(*glifo, *matriz, *color),
-                // ya avisado por `carencias`
-                Primitiva::Imagen { .. } => {}
+                Primitiva::Imagen { mapa, matriz } => self.imagen(mapa, *matriz),
                 Primitiva::Abrir(capa) => {
                     let abierta = self.abrir(capa);
                     pila.push(abierta);
@@ -177,6 +178,27 @@ impl Compilador<'_, '_> {
         while let Some(a) = pila.pop() {
             self.cerrar(a);
         }
+    }
+
+    fn imagen(&mut self, mapa: &Arc<MapaDeBits>, matriz: Matriz) {
+        let m = self.ctm.por(matriz.into());
+        let esquina = |x, y| m.aplicar(Punto { x, y });
+        let esquinas = [
+            esquina(0.0, 0.0),
+            esquina(1.0, 0.0),
+            esquina(1.0, 1.0),
+            esquina(0.0, 1.0),
+        ];
+        let r = self.d.lista.anadir_imagen(esquinas, mapa);
+        let nivel = self.nivel;
+        self.d.lista.comandos.push(Comando {
+            orden: Orden::Imagen,
+            inicio: r.inicio,
+            cuenta: r.cuenta,
+            nivel,
+            imagen: mapa.id,
+            ..comando_vacio()
+        });
     }
 
     fn abrir<'p>(&mut self, capa: &'p Capa) -> Abierta<'p> {
@@ -459,6 +481,49 @@ mod tests {
 
     fn p(x: f64, y: f64) -> Punto {
         Punto { x, y }
+    }
+
+    fn mapa(id: u64) -> Arc<MapaDeBits> {
+        Arc::new(MapaDeBits {
+            id,
+            ancho: 1,
+            alto: 1,
+            rgba: vec![255; 4],
+        })
+    }
+
+    #[test]
+    fn una_imagen_es_un_cuadrado_con_su_textura_y_no_se_repite() {
+        let matriz = Matriz {
+            a: 10.0,
+            b: 0.0,
+            c: 0.0,
+            d: 20.0,
+            e: 3.0,
+            f: 4.0,
+        };
+        let imagen = Primitiva::Imagen { mapa: mapa(9), matriz };
+        let escena = Escena {
+            primitivas: vec![imagen.clone(), imagen],
+            ..Escena::default()
+        };
+        let (mut lista, mut atlas, mut rampas) = (Lista::base(), Atlas::default(), Rampas::default());
+        let destino = Destino {
+            lista: &mut lista,
+            atlas: &mut atlas,
+            rampas: &mut rampas,
+        };
+        let encuadre = Encuadre {
+            raiz: Afin::escala(2.0),
+            recortada: false,
+        };
+        compilar(&escena, encuadre, destino);
+        assert_eq!(lista.imagenes.len(), 1);
+        assert_eq!(lista.comandos.len(), 2);
+        assert!(lista.comandos.iter().all(|c| c.orden == Orden::Imagen && c.imagen == 9));
+        let v = &lista.vertices[..4];
+        assert_eq!((v[0].x, v[0].y, v[0].u, v[0].v), (6.0, 8.0, 0.0, 0.0));
+        assert_eq!((v[2].x, v[2].y, v[2].u, v[2].v), (26.0, 48.0, 1.0, 1.0));
     }
 
     fn caja(x: f64, y: f64, ancho: f64, alto: f64) -> Caja {

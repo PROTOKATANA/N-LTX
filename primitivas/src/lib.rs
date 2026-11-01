@@ -11,6 +11,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Punto {
@@ -193,13 +194,35 @@ pub enum Primitiva {
         matriz: Matriz,
         color: Color,
     },
-    /// PNG en el cuadrado unidad; `matriz` lo lleva a la escena.
+    /// Una imagen en el cuadrado unidad, con su primera fila en y = 0; `matriz` la lleva a la escena.
     Imagen {
-        png: Vec<u8>,
+        mapa: Arc<MapaDeBits>,
         matriz: Matriz,
     },
     Abrir(Capa),
     Cerrar,
+}
+
+/// Una imagen decodificada: RGBA de 8 bits por canal, con el alfa ya multiplicado. Quien la pinta
+/// la reconoce por `id`, que depende solo de sus píxeles: republicar no la vuelve a subir.
+#[derive(Clone)]
+pub struct MapaDeBits {
+    pub id: u64,
+    pub ancho: u32,
+    pub alto: u32,
+    pub rgba: Vec<u8>,
+}
+
+impl PartialEq for MapaDeBits {
+    fn eq(&self, otro: &MapaDeBits) -> bool {
+        self.id == otro.id
+    }
+}
+
+impl fmt::Debug for MapaDeBits {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "MapaDeBits({:016x}, {}×{})", self.id, self.ancho, self.alto)
+    }
 }
 
 /// Rectángulo de la escena.
@@ -209,6 +232,16 @@ pub struct Caja {
     pub y: f64,
     pub ancho: f64,
     pub alto: f64,
+}
+
+/// Un trozo de la escena que se puede seleccionar y los bytes de la fuente de los que sale.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Ancla {
+    pub caja: Caja,
+    /// Qué documento de una serie.
+    pub documento: u32,
+    pub desde: u32,
+    pub hasta: u32,
 }
 
 /// Una animación dentro de una escena: el pintor reproduce `fuente` dentro de `caja`.
@@ -230,6 +263,8 @@ pub struct Escena {
     /// dos fotogramas solo coinciden si se restan esto.
     pub origen: Punto,
     pub zonas: Vec<Zona>,
+    /// Lo seleccionable, en orden de lectura.
+    pub anclas: Vec<Ancla>,
 }
 
 /// Una escena y lo que el compositor tuvo que ignorar o aproximar para obtenerla. Sin avisos, la

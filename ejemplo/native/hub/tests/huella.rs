@@ -9,10 +9,10 @@ use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
-use adaptador::{FiguraTikra, piezas_del_motor};
+use adaptador::{FiguraTikra, piezas_con_imagenes};
 use animacion::Reproductor;
 use documento::{Documento, Formato};
-use primitivas::{Color, Compositor};
+use primitivas::{Color, Composicion, Compositor, Escena};
 
 const K1: &str = include_str!("../../../assets/k1.tex");
 const NEGRO: Color = Color { r: 0.0, g: 0.0, b: 0.0 };
@@ -22,7 +22,13 @@ const PILA: usize = 256 << 20;
 const INSTANTES: u32 = 12;
 
 fn sumar(huella: &mut DefaultHasher, valor: &impl Debug) {
-    format!("{valor:?}").hash(huella);
+    format!("{valor:?}").replace(", anclas: []", "").hash(huella);
+}
+
+/// Lo que se ve: las anclas solo dicen de dónde sale cada cosa, y tienen sus propias pruebas.
+fn lo_pintado(mut c: Composicion) -> (Escena, Vec<String>) {
+    c.escena.anclas.clear();
+    (c.escena, c.avisos)
 }
 
 fn documento() -> Documento {
@@ -31,14 +37,15 @@ fn documento() -> Documento {
         color: NEGRO,
         ..Formato::default()
     };
-    Documento::nuevo(formato, piezas_del_motor(NEGRO))
+    let recursos = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets"));
+    Documento::nuevo(formato, piezas_con_imagenes(NEGRO, vec![recursos]))
 }
 
 fn composiciones(huella: &mut DefaultHasher) {
     let d = documento();
     for ancho in [800.0, 430.0] {
         let c = d.componer_a(K1, ancho).unwrap();
-        sumar(huella, &(&c.escena, &c.avisos));
+        sumar(huella, &lo_pintado(c));
     }
     println!("HUELLA k1        {:016x}", huella.finish());
     let Some(carpeta) = std::env::var_os("NLTX_HUELLA") else {
@@ -48,7 +55,7 @@ fn composiciones(huella: &mut DefaultHasher) {
     rutas.sort();
     for ruta in &rutas {
         let c = d.componer_a(&std::fs::read_to_string(ruta).unwrap(), 552.0);
-        sumar(huella, &c.map(|c| (c.escena, c.avisos)));
+        sumar(huella, &c.map(lo_pintado));
     }
     println!("HUELLA muestras  {:016x} ({} archivos)", huella.finish(), rutas.len());
 }
@@ -105,7 +112,7 @@ fn corpus(huella: &mut DefaultHasher) {
     let figura = FiguraTikra::default();
     for ruta in &rutas {
         let c = figura.componer(&std::fs::read_to_string(ruta).unwrap());
-        sumar(huella, &c.map(|c| (c.escena, c.avisos)));
+        sumar(huella, &c.map(lo_pintado));
     }
     println!("HUELLA corpus    {:016x} ({} archivos)", huella.finish(), rutas.len());
 }

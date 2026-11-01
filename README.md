@@ -6,8 +6,8 @@ lista neutra de primitivas (glifos, trazados, recortes, grupos) que un pintor co
 **Estado:** el motor produce la lista para texto, fórmulas, química, física y TikZ, y `ejemplo/` la
 pinta en Flutter sobre Vulkan (`pintor/`), con animaciones por parámetro.
 
-**Requisito que hoy limita compilar la app:** el pintor en C++ se apoya en `N-CNX/gpu`, que aún no es
-público. Los crates de Rust compilan y se prueban sin él; `pintor/linux` y `ejemplo/` lo necesitan.
+La app no depende de otros repositorios: `pintor/linux` lleva su propio código Vulkan sobre DiligentCore,
+que CMake descarga una vez en `pintor/deps`, fijado a un commit.
 
 ```
 primitivas/   el contrato: la lista neutra y el trait `Compositor`. Sin dependencias.

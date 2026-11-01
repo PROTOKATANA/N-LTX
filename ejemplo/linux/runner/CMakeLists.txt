@@ -25,8 +25,6 @@ target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GTK)
 
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
-# La base GPU de CORTEX y el pintor. La biblioteca Rust con la que habla por cxx la
-# enlaza cargokit.
-add_subdirectory("${NLTX_CNX}/gpu/linux" "${CMAKE_BINARY_DIR}/cnx_gpu")
-add_subdirectory("${CMAKE_SOURCE_DIR}/../../pintor/linux" "${CMAKE_BINARY_DIR}/cnx_ltx")
-target_link_libraries(${BINARY_NAME} PRIVATE cnx_ltx)
+# El pintor. La biblioteca Rust con la que habla por cxx la enlaza cargokit.
+add_subdirectory("${CMAKE_SOURCE_DIR}/../../pintor/linux" "${CMAKE_BINARY_DIR}/ltx_pintor")
+target_link_libraries(${BINARY_NAME} PRIVATE ltx_pintor)

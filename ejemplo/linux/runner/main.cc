@@ -9,7 +9,7 @@ int main(int argc, char** argv) {
   // GTK/libepoxy puede cargar GLX perezosamente en su primer draw incluso en
   // Wayland, y el constructor GLX de NVIDIA se interbloquea con el arranque de
   // Vulkan en el hilo raster de Flutter. Resolver GLX antes de arrancar los
-  // hilos de Flutter lo evita (visto en CORTEX).
+  // hilos de Flutter lo evita (visto en pruebas).
   (void)dlopen("libGLX.so.0", RTLD_NOW | RTLD_LOCAL);
 
   MyApplication* app = my_application_new();

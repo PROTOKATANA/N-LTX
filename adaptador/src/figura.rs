@@ -75,6 +75,7 @@ impl Compositor for FiguraTikra {
                 contornos: destino.contornos,
                 origen: lienzo.origin.map_or(Punto::default(), punto),
                 zonas: Vec::new(),
+                anclas: Vec::new(),
             },
             avisos: destino.avisos,
         })

@@ -5,6 +5,7 @@ use super::*;
 impl<'a> Lector<'a> {
     pub(super) fn nuevo(t: &'a str) -> Self {
         Lector {
+            fuente: "",
             t,
             i: 0,
             profundidad: 0,
@@ -13,6 +14,16 @@ impl<'a> Lector<'a> {
             declarado: None,
             salida: Lectura::default(),
         }
+    }
+
+    /// Los bytes de la fuente que van de la posición `inicio` a la actual. `None` si lo que se lee
+    /// no está en ella: una extensión, por ejemplo, lee lo que ella misma ha generado.
+    pub(super) fn origen(&self, inicio: usize) -> Option<(u32, u32)> {
+        let base = self.t.as_ptr() as usize;
+        let cero = self.fuente.as_ptr() as usize;
+        let a = (base + inicio).checked_sub(cero)?;
+        let b = (base + self.i).checked_sub(cero)?;
+        (a <= b && b <= self.fuente.len()).then_some((a as u32, b as u32))
     }
 
     pub(super) fn resto(&self) -> &'a str {

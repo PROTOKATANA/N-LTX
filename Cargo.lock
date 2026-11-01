@@ -9,6 +9,7 @@ dependencies = [
  "animacion",
  "documento",
  "mathra",
+ "png",
  "primitivas",
  "resvg",
  "serde_json",
@@ -17,6 +18,7 @@ dependencies = [
  "tikra",
  "two-face",
  "voltik",
+ "zune-jpeg",
 ]
 
 [[package]]

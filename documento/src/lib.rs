@@ -11,12 +11,13 @@ mod extensiones;
 pub mod lector;
 mod maquetador;
 mod memoria;
+pub mod seleccion;
 mod tema;
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use cosmic_text::{FontSystem, fontdb};
-use primitivas::{Caja, Color, Composicion, Compositor, ErrorComposicion};
+use primitivas::{Caja, Color, Composicion, Compositor, ErrorComposicion, MapaDeBits};
 
 pub use memoria::Memoria;
 pub use tema::{Ajuste, EstiloCodigo, EstiloTabla, Opciones, Reparto, Tema};
@@ -79,11 +80,26 @@ pub trait Resaltador: Send + Sync {
     fn editor(&self, tema: &str) -> Option<ColoresEditor>;
 }
 
+/// Una imagen lista para colocar, con su tamaño natural en bp.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Imagen {
+    pub mapa: Arc<MapaDeBits>,
+    pub ancho: f64,
+    pub alto: f64,
+}
+
+/// Quien lee las imágenes de un documento.
+pub trait Imagenes: Send + Sync {
+    /// La imagen de `ruta`, tal como se escribe en `\\includegraphics`, o por qué no se puede.
+    fn imagen(&self, ruta: &str) -> Result<Imagen, String>;
+}
+
 /// Lo que el documento no sabe hacer solo.
 pub struct Piezas {
     pub incrustados: Box<dyn Incrustados>,
     pub colores: Box<dyn Colores>,
     pub resaltador: Box<dyn Resaltador>,
+    pub imagenes: Box<dyn Imagenes>,
 }
 
 impl Piezas {
@@ -93,7 +109,16 @@ impl Piezas {
             incrustados: Box::new(incrustados),
             colores: Box::new(SinColores),
             resaltador: Box::new(SinResaltado),
+            imagenes: Box::new(SinImagenes),
         }
+    }
+}
+
+struct SinImagenes;
+
+impl Imagenes for SinImagenes {
+    fn imagen(&self, ruta: &str) -> Result<Imagen, String> {
+        Err(format!("no se encuentra la imagen {ruta}"))
     }
 }
 

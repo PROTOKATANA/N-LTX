@@ -1,8 +1,7 @@
 # Pintor GPU
 
-C++ sobre DiligentCore y Vulkan, unido a Rust por `cxx`. Es una familia más de texturas sobre la base
-`N-CNX/gpu` de CORTEX, que ya resuelve el dispositivo, el hilo de render y compartir la imagen con
-Flutter.
+C++ sobre DiligentCore y Vulkan, unido a Rust por `cxx`. `linux/base` resuelve el dispositivo, el hilo de
+render y compartir la imagen con Flutter, y `linux` pinta.
 
 ```
 src/compilador.rs     de `Escena` a una lista de dibujo: recorre y reparte
@@ -16,7 +15,8 @@ src/lienzo.rs         qué se compila en cada fotograma
 src/taller.rs         el hilo que lo hace y lleva el ritmo
 src/almacen.rs        lo hecho, hasta que C++ lo copia
 src/puente_lienzo.rs  la frontera cxx del lienzo
-linux/                los renderizadores en C++, sus recursos y sus familias de texturas
+linux/                el renderizador en C++, sus recursos y su familia de texturas
+linux/base/           la superficie compartida con Flutter, el hilo de render y DiligentCore
 ```
 
 El límite de inglete significa lo mismo que en PDF y SVG, comparado con 1/sen(ángulo/2). lyon lo compara
@@ -46,6 +46,11 @@ de su contenido: solo muestra la textura y dice qué parte se ve.
 - **Glifos:** máscaras de área exacta en un atlas, siempre con cuatro posiciones por píxel: colocarlos
   al píxel entero cambia la forma de los trazos finos. Los que pasan de 256 píxeles, o los que ya no
   caben en el atlas, se pintan como trazados, con lo que vuelven a depender del MSAA.
+- **Imágenes:** un cuadrado con su textura y todos sus mipmaps, para que una foto reducida no salga a
+  dientes. Llegan decodificadas y con el alfa multiplicado, y se reconocen por su `id`: republicar no las
+  vuelve a subir, y al dejar de pintarse se sueltan.
+- **Selección:** cajas translúcidas sobre todo lo demás. Van con las animaciones: cambiarla no recompila
+  la escena, y lo que no se ve no se tesela.
 - **Recortes:** geometría en el stencil, sin texturas aparte.
 - **Relleno y trazo translúcidos:** cada muestra se pinta una sola vez, con el stencil.
 - **Grupos, mezclas y máscaras:** una textura por capa, del tamaño de la vista. Son lo único caro, y las
@@ -57,17 +62,21 @@ La geometría va en píxeles físicos: cambiar la escala recompila la escena y v
 **Redimensionar:** la superficie mide lo que el monitor más grande (`lienzo.h`) y no se recrea: solo
 cambia la parte que se pinta. Flutter la muestra sin reescalar, recortada a la vista.
 
-**Sin soporte todavía**, y por eso se avisa al publicar: las imágenes, los patrones con nombre (salen de
-su color, lisos) y los mosaicos. `Capa::BordesNitidos` se ignora: esos bordes salen suavizados.
+**Sin soporte todavía**, y por eso se avisa al publicar: los patrones con nombre (salen de su color, lisos)
+y los mosaicos. `Capa::BordesNitidos` se ignora: esos bordes salen suavizados.
 
 ## Cómo se compila
 
-La base está en CORTEX: por defecto en `../CORTEX/N-CNX`, u otra ruta con `NLTX_CNX`. Sacarla a su
-propio repositorio está pendiente de decidir.
+DiligentCore v2.5.6 se descarga la primera vez en `pintor/deps`, fijado a un commit y sin versionar, para
+sobrevivir a `flutter clean`. `DILIGENT_CORE_SOURCE_DIR` usa otra copia.
+
+**Diligent solo admite un dispositivo por proceso:** usa punteros globales a Vulkan y rechaza el segundo.
+No importa mientras N-LTX sea la única aplicación. Una aplicación que ya use Diligent y quiera llevar N-LTX
+dentro tendrá que aislarlo en su propia biblioteca, con sus símbolos ocultos, o cambiarlo por Vulkan directo.
 
 El `build.rs` deja lo que genera `cxx` en `pintor/cxx`, que se ignora a sí misma (u otra carpeta con
 `NLTX_CXX`), y el runner lo compila después del hub. `cxx` y `cxx-build` van fijados a una versión
 exacta. El ejecutable enlaza la biblioteca de Rust: C++ la llama directamente, sin `dlopen`.
 
-Se puede medir con `NODOS_BANCO_GPU=1`, pedir otro MSAA con `NLTX_MSAA=2|4|8` y volcar cada fotograma a
-un PPM con `NLTX_VOLCAR_LIENZO=<archivo>`.
+Se puede medir con `NLTX_BANCO_GPU=1`, pedir otro MSAA con `NLTX_MSAA=2|4|8` y volcar cada fotograma a
+un PPM con `NLTX_VOLCAR_LIENZO=<archivo>`. `linux/base/pruebas/probar.sh` prueba las piezas puras.

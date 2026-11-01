@@ -13,6 +13,7 @@ use tikra::scene::{Label, Point, Segment, Transform};
 use crate::caja::{Colocacion, Destino};
 use crate::contorno;
 use crate::figura::BP;
+use crate::imagenes::mapa_de_png;
 
 pub(crate) fn traducir(items: &[Item], esquina: Punto, d: &mut Destino) {
     for item in items {
@@ -55,18 +56,21 @@ pub(crate) fn traducir(items: &[Item], esquina: Punto, d: &mut Destino) {
                 let mascara = aparte(items, esquina, d);
                 d.primitivas.push(Primitiva::Abrir(Capa::MascaraEscena(mascara)));
             }
-            Item::Image { png, place: t } => d.primitivas.push(Primitiva::Imagen {
-                png: png.as_ref().clone(),
-                // el cuadrado unidad con la y hacia arriba, en la escena
-                matriz: Matriz {
-                    a: t.a * BP,
-                    b: -t.b * BP,
-                    c: -t.c * BP,
-                    d: t.d * BP,
-                    e: (t.c + t.e) * BP,
-                    f: -(t.d + t.f) * BP,
-                },
-            }),
+            Item::Image { png, place: t } => match mapa_de_png(png) {
+                Ok(mapa) => d.primitivas.push(Primitiva::Imagen {
+                    mapa,
+                    // el cuadrado unidad con la y hacia arriba, en la escena
+                    matriz: Matriz {
+                        a: t.a * BP,
+                        b: -t.b * BP,
+                        c: -t.c * BP,
+                        d: t.d * BP,
+                        e: (t.c + t.e) * BP,
+                        f: -(t.d + t.f) * BP,
+                    },
+                }),
+                Err(e) => d.avisos.push(format!("imagen de una figura: {e}")),
+            },
             Item::End => d.primitivas.push(Primitiva::Cerrar),
         }
     }

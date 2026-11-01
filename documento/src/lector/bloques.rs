@@ -12,13 +12,17 @@ impl<'a> Lector<'a> {
         self.profundidad += 1;
         let (mut salida, mut tramos) = (Vec::new(), Vec::new());
         while !self.fin() && !self.en_parada(parada) {
+            let inicio = self.i;
             if self.linea_en_blanco() {
                 cerrar_parrafo(&mut tramos, &mut salida);
             } else if let Some(bloques) = self.bloque_propio() {
                 cerrar_parrafo(&mut tramos, &mut salida);
+                if let (false, Some((a, b))) = (bloques.is_empty(), self.origen(inicio)) {
+                    salida.push(Bloque::Origen(a, b));
+                }
                 salida.extend(bloques);
             } else {
-                self.uno(Estilo::default(), &mut tramos);
+                self.uno_anotado(Estilo::default(), &mut tramos);
                 // fuera de un grupo no hay dónde acabaría: una figura no cierra el suyo aquí
                 self.declarado = None;
             }
@@ -56,13 +60,21 @@ impl<'a> Lector<'a> {
                 Some(Vec::new())
             }
             "caption" => {
+                let inicio = self.i;
                 self.salta(1 + nombre.len());
                 let texto = self.argumento();
-                Some(vec![Bloque::Leyenda(self.tramos_de(texto))])
+                let tramos = self.tramos_de(texto);
+                Some(vec![Bloque::Leyenda(self.enteros(tramos, inicio))])
             }
             "hrule" | "rule" => {
                 self.salta(1 + nombre.len());
                 Some(vec![Bloque::Regla])
+            }
+            "includegraphics" | "includegraphics*" => {
+                self.salta(1 + nombre.len());
+                let opciones = self.opcional().map(leer_opciones).unwrap_or_default();
+                let ruta = self.argumento().trim().to_string();
+                Some(vec![Bloque::Imagen { ruta, opciones }])
             }
             n if ORDENES_ENVOLTORIO.iter().any(|(o, _)| *o == n) => Some(self.envoltorio(n)),
             n if extensiones::buscar(n).is_some() => Some(self.extension(n)),
@@ -112,13 +124,25 @@ impl<'a> Lector<'a> {
     }
 
     pub(super) fn titulo(&mut self, nivel: u8, nombre: &str) -> Bloque {
+        let inicio = self.i;
         self.salta(1 + nombre.len());
         self.opcional();
         let texto = self.argumento();
+        let tramos = self.tramos_de(texto);
         Bloque::Titulo {
             nivel,
-            tramos: self.tramos_de(texto),
+            tramos: self.enteros(tramos, inicio),
         }
+    }
+
+    /// Lo que se escribe como argumento de una orden se copia con ella: `\\section{Uno}`, no `Uno`.
+    fn enteros(&self, mut tramos: Vec<Tramo>, inicio: usize) -> Vec<Tramo> {
+        if let Some(rango) = self.origen(inicio) {
+            for cadena in tramos.iter_mut().filter_map(Tramo::cadena_mut) {
+                cadena.abarcar(rango);
+            }
+        }
+        tramos
     }
 
     /// Interpreta un argumento como texto en línea.
@@ -138,7 +162,7 @@ impl<'a> Lector<'a> {
         self.profundidad += 1;
         let mut estilo = estilo;
         while !self.fin() {
-            self.uno(estilo, &mut tramos);
+            self.uno_anotado(estilo, &mut tramos);
             estilo = self.declarado.take().unwrap_or(estilo);
         }
         self.profundidad -= 1;

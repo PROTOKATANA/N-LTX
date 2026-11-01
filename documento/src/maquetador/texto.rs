@@ -5,7 +5,7 @@ use primitivas::{Caja, Color, GlifoId, Matriz, Primitiva, Punto};
 
 use super::{Colocable, Columna, Maquetador, rectangulo};
 use crate::contornos;
-use crate::lector::{Estilo, Tramo};
+use crate::lector::{Cadena, Estilo, Tramo};
 
 const ROMANA: &str = "Latin Modern Roman";
 const MONO: &str = "JetBrains Mono";
@@ -92,10 +92,40 @@ impl Hueco {
     }
 }
 
+/// Una línea ya partida.
+struct Linea {
+    glifos: Vec<cosmic_text::LayoutGlyph>,
+    /// La altura de su base, de su parte de arriba, y lo que ocupa.
+    base: f32,
+    arriba: f32,
+    alto: f32,
+    /// Dónde empieza en el texto entero: cosmic-text cuenta los bytes de cada línea desde cero.
+    inicio: usize,
+}
+
+/// Un tramo dentro del texto entero.
+struct Situado {
+    inicio: usize,
+    fin: usize,
+    cadena: Cadena,
+    /// Una fórmula no se parte.
+    entero: bool,
+}
+
+/// De qué bytes de la fuente salen los bytes `a..b` del texto entero.
+fn origen_de(situados: &[Situado], a: usize, b: usize) -> Option<(u32, u32)> {
+    let n = situados.partition_point(|s| s.fin <= a);
+    let s = situados.get(n).filter(|s| s.inicio <= a)?;
+    if s.entero {
+        return s.cadena.fuente();
+    }
+    s.cadena.fuente_de(a - s.inicio, b.min(s.fin) - s.inicio)
+}
+
 /// Un texto ya partido en líneas, por colocar.
 pub(super) struct Escrito {
-    /// Los glifos de cada línea y la altura de su base.
-    lineas: Vec<(Vec<cosmic_text::LayoutGlyph>, f32)>,
+    lineas: Vec<Linea>,
+    situados: Vec<Situado>,
     formulas: Vec<Option<Colocable>>,
     pub(super) ancho: f64,
     pub(super) alto: f64,
@@ -183,15 +213,23 @@ impl Maquetador<'_> {
     pub(super) fn escribir(&mut self, tramos: &[Tramo], hueco: Hueco, letra: Letra) -> Escrito {
         let (partes, formulas) = self.partes_de(tramos, letra);
         let texto = self.en_lineas(&partes, hueco, letra);
+        let (situados, inicios) = situar(tramos, &partes);
         let (mut ancho, mut alto) = (0.0f64, 0.0f64);
         let mut lineas = Vec::new();
         for run in texto.layout_runs() {
             ancho = ancho.max(f64::from(run.line_w));
             alto = alto.max(f64::from(run.line_top + run.line_height));
-            lineas.push((run.glyphs.to_vec(), run.line_y));
+            lineas.push(Linea {
+                glifos: run.glyphs.to_vec(),
+                base: run.line_y,
+                arriba: run.line_top,
+                alto: run.line_height,
+                inicio: inicios.get(run.line_i).copied().unwrap_or(0),
+            });
         }
         Escrito {
             lineas,
+            situados,
             formulas: formulas.into_iter().map(Some).collect(),
             ancho,
             alto,
@@ -207,7 +245,7 @@ impl Maquetador<'_> {
             match tramo {
                 Tramo::Texto(t, e) => {
                     let estilo = sobre(e, letra.base);
-                    partes.push((t.clone(), self.con_color(atributos(estilo, tam), estilo)));
+                    partes.push((t.to_string(), self.con_color(atributos(estilo, tam), estilo)));
                 }
                 Tramo::Salto => partes.push(("\n".into(), atributos(letra.base, tam))),
                 Tramo::Formula(latex) => partes.push(self.parte_de_formula(latex, letra, &mut formulas)),
@@ -271,11 +309,30 @@ impl Maquetador<'_> {
     /// Pone un texto con su esquina superior izquierda en `origen`.
     pub(super) fn poner(&mut self, escrito: Escrito, origen: Punto) {
         let Escrito {
-            lineas, mut formulas, ..
+            lineas,
+            situados,
+            mut formulas,
+            ..
         } = escrito;
-        for (glifos, base_linea) in lineas {
-            let y = origen.y + f64::from(base_linea);
-            self.linea(&glifos, Punto { x: origen.x, y }, &mut formulas);
+        for linea in &lineas {
+            self.anclar_linea(linea, &situados, origen);
+            let y = origen.y + f64::from(linea.base);
+            self.linea(&linea.glifos, Punto { x: origen.x, y }, &mut formulas);
+        }
+    }
+
+    fn anclar_linea(&mut self, linea: &Linea, situados: &[Situado], origen: Punto) {
+        for g in &linea.glifos {
+            let Some(rango) = origen_de(situados, linea.inicio + g.start, linea.inicio + g.end) else {
+                continue;
+            };
+            let caja = Caja {
+                x: origen.x + f64::from(g.x),
+                y: origen.y + f64::from(linea.arriba),
+                ancho: f64::from(g.w),
+                alto: f64::from(linea.alto),
+            };
+            self.anclar(caja, rango);
         }
     }
 
@@ -346,6 +403,30 @@ impl Maquetador<'_> {
             color,
         });
     }
+}
+
+/// Dónde cae cada tramo en el texto entero, y dónde empieza cada línea de ese texto.
+fn situar(tramos: &[Tramo], partes: &[Parte]) -> (Vec<Situado>, Vec<usize>) {
+    let (mut situados, mut inicios, mut cursor) = (Vec::new(), vec![0], 0);
+    for (tramo, (texto, _)) in tramos.iter().zip(partes) {
+        let fin = cursor + texto.len();
+        let con_origen = match tramo {
+            Tramo::Texto(t, _) => Some((t, false)),
+            Tramo::Formula(t) => Some((t, true)),
+            Tramo::Salto => None,
+        };
+        if let Some((cadena, entero)) = con_origen {
+            situados.push(Situado {
+                inicio: cursor,
+                fin,
+                cadena: cadena.clone(),
+                entero,
+            });
+        }
+        inicios.extend(texto.match_indices('\n').map(|(i, _)| cursor + i + 1));
+        cursor = fin;
+    }
+    (situados, inicios)
 }
 
 /// Un color como lo escribe `\\textcolor[HTML]`.

@@ -6,6 +6,8 @@
 
 # include <string>
 
+# include <unordered_set>
+
 # include "sombreadores_lienzo.h"
 
 using namespace Diligent ;
@@ -132,6 +134,10 @@ struct RecetaLista {
 	bool pinta ;
 
 	STENCIL_OP paso ;
+
+	// La textura propia que cambia en cada dibujo, si la lleva
+
+	const char * textura ;
 
 } ;
 
@@ -330,7 +336,9 @@ bool Recursos :: crear_pasadas_lista(IRenderDevice * device , GError ** error) {
 
 	auto marca = compilar(device , "LTX marca PS" , SHADER_TYPE_PIXEL , hlsl_marca_ps) ;
 
-	if (!vs || !ps || !marca) { return gpu_fallo(error , "No se pudieron compilar los shaders de LTX") ; }
+	auto ps_imagen = compilar(device , "LTX imagen PS" , SHADER_TYPE_PIXEL , hlsl_imagen_ps) ;
+
+	if (!vs || !ps || !marca || !ps_imagen) { return gpu_fallo(error , "No se pudieron compilar los shaders de LTX") ; }
 
 	const auto crear = [&](const RecetaLista & receta , Pasada & pasada) {
 
@@ -396,7 +404,7 @@ bool Recursos :: crear_pasadas_lista(IRenderDevice * device , GError ** error) {
 
 		lineal.AddressU = lineal.AddressV = lineal.AddressW = TEXTURE_ADDRESS_CLAMP ;
 
-		ImmutableSamplerDesc inmutables[] = {
+		ImmutableSamplerDesc de_lista[] = {
 
 			{ SHADER_TYPE_PIXEL , "Atlas" , lineal } ,
 
@@ -404,9 +412,17 @@ bool Recursos :: crear_pasadas_lista(IRenderDevice * device , GError ** error) {
 
 		} ;
 
-		pso.PSODesc.ResourceLayout.ImmutableSamplers = inmutables ;
+		ImmutableSamplerDesc de_imagen[] = { { SHADER_TYPE_PIXEL , "Imagen" , lineal } } ;
 
-		pso.PSODesc.ResourceLayout.NumImmutableSamplers = 2 ;
+		pso.PSODesc.ResourceLayout.ImmutableSamplers = receta.textura ? de_imagen : de_lista ;
+
+		pso.PSODesc.ResourceLayout.NumImmutableSamplers = receta.textura ? 1 : 2 ;
+
+		ShaderResourceVariableDesc variable{ SHADER_TYPE_PIXEL , receta.textura ? receta.textura : "" , SHADER_RESOURCE_VARIABLE_TYPE_DYNAMIC } ;
+
+		pso.PSODesc.ResourceLayout.Variables = &variable ;
+
+		pso.PSODesc.ResourceLayout.NumVariables = receta.textura ? 1 : 0 ;
 
 		pso.pVS = receta.vs ;
 
@@ -434,13 +450,15 @@ bool Recursos :: crear_pasadas_lista(IRenderDevice * device , GError ** error) {
 
 	return
 
-		crear(RecetaLista{ "LTX dibujo" , vs , ps , true , STENCIL_OP_KEEP } , dibujo) &&
+		crear(RecetaLista{ "LTX dibujo" , vs , ps , true , STENCIL_OP_KEEP , nullptr } , dibujo) &&
 
-		crear(RecetaLista{ "LTX unica" , vs , ps , true , STENCIL_OP_INCR_SAT } , unica) &&
+		crear(RecetaLista{ "LTX unica" , vs , ps , true , STENCIL_OP_INCR_SAT , nullptr } , unica) &&
 
-		crear(RecetaLista{ "LTX recorte" , vs , marca , false , STENCIL_OP_INCR_SAT } , recorte) &&
+		crear(RecetaLista{ "LTX recorte" , vs , marca , false , STENCIL_OP_INCR_SAT , nullptr } , recorte) &&
 
-		crear(RecetaLista{ "LTX soltar" , vs , marca , false , STENCIL_OP_DECR_SAT } , soltar) ;
+		crear(RecetaLista{ "LTX soltar" , vs , marca , false , STENCIL_OP_DECR_SAT , nullptr } , soltar) &&
+
+		crear(RecetaLista{ "LTX imagen" , vs , ps_imagen , true , STENCIL_OP_KEEP , "Imagen" } , imagen) ;
 
 }
 
@@ -547,6 +565,74 @@ void Recursos :: acomodar(std :: uint32_t w , std :: uint32_t h) {
 	ancho = std :: max(ancho , salto(w)) ;
 
 	alto = std :: max(alto , salto(h)) ;
+
+}
+
+bool Recursos :: subir_imagenes(const Gpu & gpu , const ltx :: Marco & marco , GError ** error) {
+
+	std :: unordered_set<std :: uint64_t> pintadas ;
+
+	for (std :: size_t i = 0 ; i < marco.imagenes() ; i++) {
+
+		const std :: uint64_t id = marco.id_imagen(i) ;
+
+		pintadas.insert(id) ;
+
+		if (imagenes.count(id) != 0) { continue ; }
+
+		TextureDesc desc ;
+
+		desc.Name = "LTX imagen" ;
+
+		desc.Type = RESOURCE_DIM_TEX_2D ;
+
+		desc.Width = marco.ancho_imagen(i) ;
+
+		desc.Height = marco.alto_imagen(i) ;
+
+		desc.Format = formato_color ;
+
+		// todos sus mipmaps : una foto reducida a la columna no debe salir a dientes
+
+		desc.MipLevels = 0 ;
+
+		desc.BindFlags = BIND_SHADER_RESOURCE | BIND_RENDER_TARGET ;
+
+		desc.MiscFlags = MISC_TEXTURE_FLAG_GENERATE_MIPS ;
+
+		desc.ImmediateContextMask = gpu_mascara() ;
+
+		RefCntAutoPtr<ITexture> textura ;
+
+		gpu.device->CreateTexture(desc , nullptr , &textura) ;
+
+		if (!textura) { return gpu_fallo(error , "No se pudo crear la textura de una imagen de LTX") ; }
+
+		const auto rgba = marco.rgba_imagen(i) ;
+
+		TextureSubResData sub ;
+
+		sub.pData = rgba.data() ;
+
+		sub.Stride = desc.Width * 4 ;
+
+		const Box caja(0 , desc.Width , 0 , desc.Height , 0 , 1) ;
+
+		gpu.ctx->UpdateTexture(textura , 0 , 0 , caja , sub , RESOURCE_STATE_TRANSITION_MODE_NONE , RESOURCE_STATE_TRANSITION_MODE_TRANSITION) ;
+
+		gpu.ctx->GenerateMips(textura->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE)) ;
+
+		imagenes.emplace(id , std :: move(textura)) ;
+
+	}
+
+	for (auto i = imagenes.begin() ; i != imagenes.end() ; ) {
+
+		i = pintadas.count(i->first) != 0 ? std :: next(i) : imagenes.erase(i) ;
+
+	}
+
+	return true ;
 
 }
 

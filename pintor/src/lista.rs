@@ -1,6 +1,8 @@
 //! Lo que pinta la GPU: vértices, índices, tintas y una lista de comandos.
 
-use primitivas::Punto;
+use std::sync::Arc;
+
+use primitivas::{MapaDeBits, Punto};
 
 use crate::atlas::{Entrada, LADO_ATLAS};
 use crate::geometria::Afin;
@@ -19,6 +21,8 @@ pub struct Lista {
     pub comandos: Vec<Comando>,
     /// Cuántas tintas hay por delante de las de esta lista cuando se pinta tras otra.
     pub primera_tinta: u32,
+    /// Las imágenes que usan sus comandos, sin repetir.
+    pub imagenes: Vec<Arc<MapaDeBits>>,
 }
 
 /// Un tramo de `Lista::indices`.
@@ -120,6 +124,30 @@ impl Lista {
         Some(Rango { inicio, cuenta: 6 })
     }
 
+    /// Los cuatro vértices de una imagen, en el orden de su cuadrado unidad.
+    pub fn anadir_imagen(&mut self, esquinas: [Punto; 4], mapa: &Arc<MapaDeBits>) -> Rango {
+        let primero = self.vertices.len() as u32;
+        let inicio = self.indices.len() as u32;
+        for (p, (u, v)) in esquinas
+            .into_iter()
+            .zip([(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)])
+        {
+            self.vertices.push(Vertice {
+                x: p.x as f32,
+                y: p.y as f32,
+                u,
+                v,
+                rgba: u32::MAX,
+                tinta: tintas::SOLIDA,
+            });
+        }
+        self.indices.extend([0, 1, 2, 0, 2, 3].map(|i: u32| i + primero));
+        if !self.imagenes.iter().any(|m| m.id == mapa.id) {
+            self.imagenes.push(Arc::clone(mapa));
+        }
+        Rango { inicio, cuenta: 6 }
+    }
+
     /// El índice de `tinta`, que no se repite si es igual a la anterior. `None` si ya no caben.
     pub fn anadir_tinta(&mut self, tinta: Tinta) -> Option<u32> {
         let primera = self.primera_tinta as usize;
@@ -172,6 +200,7 @@ pub fn comando_vacio() -> Comando {
         salto: 0,
         y0: 0.0,
         y1: 0.0,
+        imagen: 0,
     }
 }
 

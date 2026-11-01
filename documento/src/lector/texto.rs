@@ -70,13 +70,13 @@ pub(super) fn cerrar_parrafo(tramos: &mut Vec<Tramo>, salida: &mut Vec<Bloque>) 
 /// Quita el blanco del principio y del final de un párrafo.
 pub(super) fn limpiar_bordes(tramos: &mut Vec<Tramo>) {
     if let Some(Tramo::Texto(t, _)) = tramos.first_mut() {
-        *t = t.trim_start().to_string();
+        t.sin_blanco_delante();
         if t.is_empty() {
             tramos.remove(0);
         }
     }
     if let Some(Tramo::Texto(t, _)) = tramos.last_mut() {
-        *t = t.trim_end().to_string();
+        t.sin_blanco_detras();
         if t.is_empty() {
             tramos.pop();
         }
@@ -93,7 +93,7 @@ pub(super) fn empujar(tramos: &mut Vec<Tramo>, texto: &str, estilo: Estilo) {
         }
         return;
     }
-    tramos.push(Tramo::Texto(texto.to_string(), estilo));
+    tramos.push(Tramo::Texto(texto.into(), estilo));
 }
 
 /// Añade tramos ya leídos, sin partir el texto contiguo del mismo estilo.

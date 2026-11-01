@@ -4,8 +4,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use cosmic_text::{FontSystem, fontdb};
 use primitivas::{
-    Caja, Capa, Color, Composicion, ErrorComposicion, Escena, GlifoId, Matriz, Pintura, Primitiva, Punto, Relleno,
-    Segmento, Zona,
+    Ancla, Caja, Capa, Color, Composicion, ErrorComposicion, Escena, GlifoId, Matriz, Pintura, Primitiva, Punto,
+    Relleno, Segmento, Zona,
 };
 
 use crate::lector::{Bloque, Estilo, Lectura, Tramo};
@@ -13,6 +13,7 @@ use crate::tema::Opciones;
 use crate::{ColorDefinido, Formato, Piezas};
 
 mod editor;
+mod imagen;
 mod tablas;
 mod texto;
 
@@ -69,6 +70,9 @@ struct Maquetador<'a> {
     contornos: BTreeMap<GlifoId, Vec<Segmento>>,
     fuentes: HashMap<fontdb::ID, u8>,
     zonas: Vec<Zona>,
+    anclas: Vec<Ancla>,
+    /// Qué documento de la serie se está colocando.
+    documento: u32,
     /// Dónde va el siguiente bloque.
     y: f64,
 }
@@ -125,6 +129,8 @@ impl<'a> Maquetador<'a> {
             contornos: BTreeMap::new(),
             fuentes: HashMap::new(),
             zonas: Vec::new(),
+            anclas: Vec::new(),
+            documento: 0,
             y: 0.0,
         }
     }
@@ -168,14 +174,15 @@ impl<'a> Maquetador<'a> {
         }
         let bloques = self.adoptar(entrada.lectura);
         if let Some(titulo) = entrada.titulo {
-            let tramos = vec![Tramo::Texto(titulo.to_string(), Estilo::default())];
+            let tramos = vec![Tramo::Texto(titulo.into(), Estilo::default())];
             self.bloque(&Bloque::Titulo { nivel: 3, tramos }, columna);
         }
         self.bloques(&bloques, columna);
         for aviso in std::mem::take(&mut self.avisos) {
-            let tramos = vec![Tramo::Texto(format!("⚠ {aviso}"), Estilo::default())];
+            let tramos = vec![Tramo::Texto(format!("⚠ {aviso}").into(), Estilo::default())];
             self.bloque(&Bloque::Leyenda(tramos), columna);
         }
+        self.documento += 1;
     }
 
     fn cerrar(self) -> Composicion {
@@ -185,6 +192,7 @@ impl<'a> Maquetador<'a> {
             contornos,
             avisos,
             zonas,
+            anclas,
             y,
             ..
         } = self;
@@ -199,6 +207,7 @@ impl<'a> Maquetador<'a> {
                 primitivas,
                 contornos,
                 zonas,
+                anclas,
                 ..Escena::default()
             },
             avisos,
@@ -226,6 +235,14 @@ fn rectangulo(c: Caja, color: Color) -> Primitiva {
     }
 }
 
+/// Lo que se selecciona entero: su fuente no se puede partir.
+fn indivisible(bloque: &Bloque) -> bool {
+    !matches!(
+        bloque,
+        Bloque::Titulo { .. } | Bloque::Parrafo(_) | Bloque::Leyenda(_) | Bloque::Lista { .. } | Bloque::Cita(_)
+    )
+}
+
 /// Una fórmula o figura ya compuesta, a la espera de su sitio.
 struct Colocable {
     composicion: Composicion,
@@ -233,9 +250,32 @@ struct Colocable {
 
 impl Maquetador<'_> {
     fn bloques(&mut self, bloques: &[Bloque], columna: Columna) {
+        let mut origen = None;
         for bloque in bloques {
+            if let Bloque::Origen(a, b) = bloque {
+                origen = Some((*a, *b));
+                continue;
+            }
+            let (y, anclas) = (self.y, self.anclas.len());
             self.bloque(bloque, columna);
+            match origen.take() {
+                Some(rango) if indivisible(bloque) => {
+                    // una tabla escribe texto, pero se selecciona entera
+                    self.anclas.truncate(anclas);
+                    self.anclar(columna.franja(y, self.y - y), rango);
+                }
+                _ => {}
+            }
         }
+    }
+
+    fn anclar(&mut self, caja: Caja, (desde, hasta): (u32, u32)) {
+        self.anclas.push(Ancla {
+            caja,
+            documento: self.documento,
+            desde,
+            hasta,
+        });
     }
 
     fn separar(&mut self, cuanto: f64) {
@@ -298,6 +338,7 @@ impl Maquetador<'_> {
             }
             Bloque::Formula(latex) => self.formula_en_bloque(latex, c),
             Bloque::Figura(fuente) => self.figura(fuente, c),
+            Bloque::Imagen { ruta, opciones } => self.imagen(ruta, opciones, c),
             Bloque::Animacion(fuente) => self.animacion(fuente, c),
             Bloque::Tabla(tabla) => self.tabla(tabla, c),
             Bloque::Regla => {
@@ -306,6 +347,7 @@ impl Maquetador<'_> {
                 self.primitivas.push(rectangulo(c.franja(self.y, REGLA), color));
                 self.separar(0.6);
             }
+            Bloque::Origen(..) => {}
         }
     }
 
@@ -315,7 +357,7 @@ impl Maquetador<'_> {
         for (n, item) in items.iter().enumerate() {
             let marca = if ordenada { format!("{}.", n + 1) } else { "•".into() };
             let inicio = self.y;
-            let tramos = [Tramo::Texto(marca, Estilo::default())];
+            let tramos = [Tramo::Texto(marca.into(), Estilo::default())];
             let hueco = Columna {
                 x: c.x + tam * 0.4,
                 ancho: sangria,
@@ -346,7 +388,7 @@ impl Maquetador<'_> {
             mono: true,
             ..Estilo::default()
         };
-        let tramos = [Tramo::Texto(fuente.to_string(), mono)];
+        let tramos = [Tramo::Texto(fuente.into(), mono)];
         self.texto(&tramos, c.con_margen(margen), Letra { tam, base: mono });
         self.y += margen;
         // el fondo va debajo de lo que ya se ha escrito

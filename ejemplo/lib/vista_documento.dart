@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -31,11 +32,23 @@ class VistaDocumento extends StatefulWidget {
   State<VistaDocumento> createState() => _VistaDocumentoState();
 }
 
+/// Un arrastre empieza cuando el ratón se ha movido esto, en píxeles lógicos.
+const _umbralArrastre = 3.0;
+
+/// La franja de la derecha donde el ratón es de la barra de desplazamiento.
+const _anchoBarra = 16.0;
+
+/// Cerca de un borde, arrastrar desplaza el documento: la franja y lo que se mueve en cada paso.
+const _bordeArrastre = 24.0;
+const _pasoArrastre = 14.0;
+const _ritmoArrastre = Duration(milliseconds: 16);
+
 class _VistaDocumentoState extends State<VistaDocumento> {
   /// Solo para lo que exige el motor de Flutter: la textura y su tamaño.
   static const _canal = MethodChannel('ltx/lienzo');
 
   final _desplazamiento = ScrollController();
+  final _foco = FocusNode(debugLabel: 'documento');
   int? _textura;
 
   /// El tamaño de la textura, en píxeles físicos. No cambia con la ventana: solo se pinta lo que se
@@ -46,6 +59,14 @@ class _VistaDocumentoState extends State<VistaDocumento> {
   Publicado _publicado = const Publicado(alto: 0, avisos: []);
   String _medidas = '';
   bool _hayQuePublicar = true;
+
+  /// Dónde empezó el arrastre, en bp del documento; nulo si no hay ninguno.
+  Offset? _inicio;
+  Offset _raton = Offset.zero;
+  bool _arrastrando = false;
+  Duration? _ultimoClic;
+  Offset _lugarDelClic = Offset.zero;
+  Timer? _bordes;
 
   /// La primera vez, muchas figuras tardan: que se note que algo está pasando.
   bool _componiendo = false;
@@ -62,6 +83,11 @@ class _VistaDocumentoState extends State<VistaDocumento> {
             _publicado = p;
             _componiendo = false;
           });
+        }),
+      )
+      ..add(
+        widget.motor.copiados.listen((texto) {
+          if (texto.isNotEmpty) Clipboard.setData(ClipboardData(text: texto));
         }),
       )
       ..add(
@@ -134,6 +160,68 @@ class _VistaDocumentoState extends State<VistaDocumento> {
     );
   }
 
+  Offset _enDocumento(Offset local) {
+    final y = _desplazamiento.hasClients ? _desplazamiento.offset : 0.0;
+    return Offset(local.dx, local.dy + y) / widget.zoom;
+  }
+
+  void _alBajar(PointerDownEvent e) {
+    final conRaton = e.kind == PointerDeviceKind.mouse;
+    if (!conRaton || e.buttons != kPrimaryMouseButton) return;
+    if (e.localPosition.dx > _tam.width - _anchoBarra) return;
+    _foco.requestFocus();
+    final punto = _enDocumento(e.localPosition);
+    final ultimo = _ultimoClic;
+    final doble =
+        ultimo != null &&
+        e.timeStamp - ultimo < kDoubleTapTimeout &&
+        (e.localPosition - _lugarDelClic).distance < kDoubleTapSlop;
+    _ultimoClic = doble ? null : e.timeStamp;
+    _lugarDelClic = e.localPosition;
+    if (doble) {
+      widget.motor.seleccionarPalabra(punto);
+      return;
+    }
+    _inicio = punto;
+    _raton = e.localPosition;
+    _arrastrando = false;
+  }
+
+  void _alMover(PointerMoveEvent e) {
+    final inicio = _inicio;
+    if (inicio == null) return;
+    _raton = e.localPosition;
+    if (!_arrastrando) {
+      final movido = (e.localPosition - _lugarDelClic).distance;
+      if (movido < _umbralArrastre) return;
+      _arrastrando = true;
+      _bordes = Timer.periodic(_ritmoArrastre, (_) => _desplazarEnBorde());
+    }
+    widget.motor.arrastrar(inicio, _enDocumento(_raton));
+  }
+
+  /// Fuera de la vista hay más documento: se sigue seleccionando sin mover el ratón.
+  void _desplazarEnBorde() {
+    final inicio = _inicio;
+    if (inicio == null || !_desplazamiento.hasClients) return;
+    final arriba = _raton.dy < _bordeArrastre;
+    final abajo = _raton.dy > _tam.height - _bordeArrastre;
+    if (!arriba && !abajo) return;
+    final p = _desplazamiento.position;
+    final destino = p.pixels + (abajo ? _pasoArrastre : -_pasoArrastre);
+    _desplazamiento.jumpTo(
+      destino.clamp(p.minScrollExtent, p.maxScrollExtent).toDouble(),
+    );
+    widget.motor.arrastrar(inicio, _enDocumento(_raton));
+  }
+
+  void _alSubir(PointerEvent e) {
+    if (_inicio != null && !_arrastrando) widget.motor.borrarSeleccion();
+    _inicio = null;
+    _bordes?.cancel();
+    _bordes = null;
+  }
+
   /// Cada píxel de la textura, en un píxel de la pantalla: reescalarla emborronaría el texto.
   Widget _textura1a1(int textura, double pixeles) {
     final imagen = Texture(
@@ -159,6 +247,8 @@ class _VistaDocumentoState extends State<VistaDocumento> {
     for (final s in _suscripciones) {
       s.cancel();
     }
+    _bordes?.cancel();
+    _foco.dispose();
     _desplazamiento.dispose();
     _canal.invokeMethod<void>('dispose', 0);
     super.dispose();
@@ -176,35 +266,57 @@ class _VistaDocumentoState extends State<VistaDocumento> {
           _hayQuePublicar = false;
           _pedirPublicacion();
         }
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            const ColoredBox(color: Colors.white),
-            if (textura != null) _textura1a1(textura, pixeles),
-            Scrollbar(
-              controller: _desplazamiento,
-              thumbVisibility: true,
-              child: SingleChildScrollView(
-                controller: _desplazamiento,
-                child: SizedBox(
-                  width: double.infinity,
-                  height: _publicado.alto * widget.zoom,
+        return CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.keyC, control: true):
+                widget.motor.copiar,
+            const SingleActivator(LogicalKeyboardKey.keyA, control: true):
+                widget.motor.seleccionarTodo,
+          },
+          child: Focus(
+            focusNode: _foco,
+            autofocus: true,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const ColoredBox(color: Colors.white),
+                if (textura != null) _textura1a1(textura, pixeles),
+                Listener(
+                  behavior: HitTestBehavior.translucent,
+                  onPointerDown: _alBajar,
+                  onPointerMove: _alMover,
+                  onPointerUp: _alSubir,
+                  onPointerCancel: _alSubir,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.text,
+                    child: Scrollbar(
+                      controller: _desplazamiento,
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        controller: _desplazamiento,
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: _publicado.alto * widget.zoom,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            Positioned(
-              left: 12,
-              right: 12,
-              bottom: 8,
-              child: IgnorePointer(
-                child: _Pie(
-                  _publicado,
-                  _componiendo ? 'Componiendo…' : _medidas,
-                  conMuestras: widget.conMuestras,
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 8,
+                  child: IgnorePointer(
+                    child: _Pie(
+                      _publicado,
+                      _componiendo ? 'Componiendo…' : _medidas,
+                      conMuestras: widget.conMuestras,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );

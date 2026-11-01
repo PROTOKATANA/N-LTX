@@ -9,13 +9,19 @@ use rinf::DartSignal;
 
 use crate::avisos;
 use crate::compositor::{Compositor, Encargo};
+use crate::seleccion::Seleccion;
 use crate::signals;
 
 const CADA_MEDIDA: Duration = Duration::from_secs(1);
 
-pub async fn escuchar(compositor: Compositor, taller: Arc<Taller>) {
+pub async fn escuchar(compositor: Compositor, taller: Arc<Taller>, seleccion: Arc<Seleccion>) {
     let publicar = signals::PublicarDocumento::get_dart_signal_receiver();
     let ver = signals::VerDocumento::get_dart_signal_receiver();
+    let arrastrar = signals::SeleccionarTexto::get_dart_signal_receiver();
+    let palabra = signals::SeleccionarPalabra::get_dart_signal_receiver();
+    let todo = signals::SeleccionarTodo::get_dart_signal_receiver();
+    let borrar = signals::BorrarSeleccion::get_dart_signal_receiver();
+    let copiar = signals::CopiarSeleccion::get_dart_signal_receiver();
     let mut reloj = tokio::time::interval(CADA_MEDIDA);
     loop {
         tokio::select! {
@@ -30,6 +36,14 @@ pub async fn escuchar(compositor: Compositor, taller: Arc<Taller>) {
                 escala: s.message.escala,
                 y: s.message.y,
             }),
+            Some(s) = arrastrar.recv() => {
+                let m = s.message;
+                seleccion.arrastrar((m.ax, m.ay), (m.bx, m.by));
+            }
+            Some(s) = palabra.recv() => seleccion.palabra(s.message.x, s.message.y),
+            Some(_) = todo.recv() => seleccion.todo(),
+            Some(_) = borrar.recv() => seleccion.borrar(),
+            Some(_) = copiar.recv() => avisos::enviar_copiado(seleccion.copiar()),
             _ = reloj.tick() => avisos::enviar_medidas(medidas::leer()),
             else => return,
         }

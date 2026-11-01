@@ -22,3 +22,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/k1.tex
+    - assets/julia.png
+    - assets/ondas.jpg
+    - assets/diagrama.svg

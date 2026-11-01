@@ -7,7 +7,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use primitivas::Escena;
+use primitivas::{Caja, Escena};
 
 use crate::almacen::Almacen;
 use crate::hilos;
@@ -21,6 +21,7 @@ const PASO: Duration = Duration::from_millis(16);
 pub(crate) enum Orden {
     Publicar(Escena, Option<Arc<dyn Animador>>),
     Ver(Vista),
+    Seleccionar(Vec<Caja>),
     /// La GPU perdió lo que tenía: hay que volver a mandar las texturas.
     Reenviar,
     Parar,
@@ -58,6 +59,11 @@ impl Taller {
     /// Qué parte del documento se ve.
     pub fn ver(&self, vista: Vista) {
         self.pedir(Orden::Ver(vista));
+    }
+
+    /// Qué partes del documento están seleccionadas, en bp.
+    pub fn seleccionar(&self, cajas: Vec<Caja>) {
+        self.pedir(Orden::Seleccionar(cajas));
     }
 }
 
@@ -131,6 +137,7 @@ impl Trabajo {
         match orden {
             Orden::Publicar(escena, animador) => self.lienzo.publicar(escena, animador),
             Orden::Ver(vista) => self.vista = Some(vista),
+            Orden::Seleccionar(cajas) => self.lienzo.seleccionar(cajas),
             Orden::Reenviar => self.lienzo.reenviar(),
             Orden::Parar => return false,
         }

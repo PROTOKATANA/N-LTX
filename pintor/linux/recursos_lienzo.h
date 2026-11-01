@@ -4,6 +4,8 @@
 
 # include <memory>
 
+# include <unordered_map>
+
 # include <vector>
 
 # include "gpu_surface.h"
@@ -129,6 +131,8 @@ struct Recursos {
 
 	Pasada soltar ;
 
+	Pasada imagen ;
+
 	Pasada capa ;
 
 	Pasada mezcla ;
@@ -149,6 +153,10 @@ struct Recursos {
 
 	Malla vivos ;
 
+	// Las imágenes subidas, por su id : republicar no las vuelve a subir
+
+	std :: unordered_map<std :: uint64_t , Diligent :: RefCntAutoPtr<Diligent :: ITexture>> imagenes ;
+
 	std :: uint64_t generacion_base = 0 ;
 
 	std :: uint64_t generacion_vivos = 0 ;
@@ -163,6 +171,10 @@ struct Recursos {
 	void acomodar(std :: uint32_t w , std :: uint32_t h) ;
 
 	Objetivo * objetivo(Diligent :: IRenderDevice * device , std :: size_t i , GError ** error) ;
+
+	// Sube lo que falte de lo que pinta `marco` y suelta lo que ya no pinta
+
+	bool subir_imagenes(const Gpu & gpu , const ltx :: Marco & marco , GError ** error) ;
 
 private:
 

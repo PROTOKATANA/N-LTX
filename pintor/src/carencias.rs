@@ -12,7 +12,6 @@ pub fn carencias(escena: &Escena) -> Vec<String> {
 fn revisar(primitivas: &[Primitiva], avisos: &mut Vec<String>) {
     for p in primitivas {
         match p {
-            Primitiva::Imagen { .. } => avisar(avisos, "este pintor no dibuja imágenes"),
             Primitiva::Trazado { relleno: Some(r), .. } => match r.pintura {
                 Pintura::Patron { .. } => avisar(avisos, "este pintor aproxima los patrones con su color"),
                 Pintura::Mosaico { .. } => avisar(avisos, "este pintor no dibuja mosaicos"),
@@ -53,22 +52,33 @@ mod tests {
             }),
             trazo: None,
         };
-        let imagen = Primitiva::Imagen {
-            png: Vec::new(),
-            matriz: Matriz {
-                a: 1.0,
-                b: 0.0,
-                c: 0.0,
-                d: 1.0,
-                e: 0.0,
-                f: 0.0,
-            },
+        let mosaico = Primitiva::Trazado {
+            segmentos: Vec::new(),
+            relleno: Some(Relleno {
+                pintura: Pintura::Mosaico {
+                    primitivas: Vec::new(),
+                    origen: Punto::default(),
+                    ancho: 1.0,
+                    alto: 1.0,
+                    matriz: Matriz {
+                        a: 1.0,
+                        b: 0.0,
+                        c: 0.0,
+                        d: 1.0,
+                        e: 0.0,
+                        f: 0.0,
+                    },
+                },
+                opacidad: 1.0,
+                par_impar: false,
+            }),
+            trazo: None,
         };
         let e = Escena {
             primitivas: vec![
                 patron.clone(),
                 patron,
-                Primitiva::Abrir(Capa::MascaraEscena(vec![imagen])),
+                Primitiva::Abrir(Capa::MascaraEscena(vec![mosaico])),
                 Primitiva::Cerrar,
             ],
             ..Escena::default()

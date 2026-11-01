@@ -1,12 +1,14 @@
 //! Lo que el modo texto lleva dentro: fórmulas y figuras compuestas por el motor.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use animacion::Filmoteca;
 use documento::{Incrustados, Memoria, Piezas};
 use primitivas::{Caja, Color, Composicion, Compositor, ErrorComposicion};
 
+use crate::imagenes::ImagenesEnCarpetas;
 use crate::resaltado::ResaltadorSyntect;
 use crate::traduccion::ColoresXcolor;
 use crate::{FiguraTikra, FormulaMathra};
@@ -52,10 +54,16 @@ impl Incrustados for IncrustadosMotor {
 
 /// Las piezas que componen de verdad, sin repetir trabajo: `mathra` y `tikra`, `xcolor` y `syntect`.
 pub fn piezas_del_motor(color: Color) -> Piezas {
+    piezas_con_imagenes(color, Vec::new())
+}
+
+/// Las mismas piezas, con las imágenes de `carpetas`.
+pub fn piezas_con_imagenes(color: Color, carpetas: Vec<PathBuf>) -> Piezas {
     Piezas {
         incrustados: Box::new(Memoria::nueva(IncrustadosMotor { color })),
         colores: Box::new(ColoresXcolor),
         resaltador: Box::new(Memoria::nueva(ResaltadorSyntect)),
+        imagenes: Box::new(ImagenesEnCarpetas::nuevas(carpetas)),
     }
 }
 

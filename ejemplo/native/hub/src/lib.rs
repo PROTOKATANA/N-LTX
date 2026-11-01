@@ -2,6 +2,7 @@
 //! - `senales`: las señales de Dart, traducidas a llamadas.
 //! - `compositor`: compone los documentos en su propio hilo.
 //! - `muestras`: una carpeta de `.tex` para ver seguidos, si `NLTX_MUESTRAS` dice cuál.
+//! - `seleccion`: lo seleccionado en el documento publicado.
 //! - `avisos`: lo que se cuenta a Dart.
 //!
 //! El pintor en C++ lee del almacén de `pintor` por `cxx`: esta biblioteca exporta esos símbolos y
@@ -16,6 +17,7 @@ static ASIGNADOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 mod avisos;
 mod compositor;
 mod muestras;
+mod seleccion;
 mod senales;
 mod signals;
 
@@ -28,6 +30,7 @@ use rinf::{dart_shutdown, write_interface};
 use avisos::AvisosRinf;
 use compositor::Compositor;
 use muestras::Muestras;
+use seleccion::Seleccion;
 
 /// La superficie del lienzo: el ejemplo tiene una sola vista.
 const SUPERFICIE: u32 = 0;
@@ -39,7 +42,8 @@ async fn main() {
     let taller = Arc::new(Taller::abrir(SUPERFICIE, almacen()));
     let carpeta = std::env::var_os("NLTX_MUESTRAS");
     let muestras = carpeta.map_or_else(Muestras::default, |c| Muestras::de_carpeta(Path::new(&c)));
-    let compositor = Compositor::abrir(Arc::clone(&taller), AvisosRinf, muestras);
-    tokio::spawn(senales::escuchar(compositor, taller));
+    let seleccion = Arc::new(Seleccion::nueva(Arc::clone(&taller)));
+    let compositor = Compositor::abrir(Arc::clone(&seleccion), AvisosRinf, muestras);
+    tokio::spawn(senales::escuchar(compositor, taller, seleccion));
     dart_shutdown().await;
 }

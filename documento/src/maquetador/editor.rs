@@ -94,7 +94,7 @@ fn en_lineas(tramos: Vec<Tramo>) -> Vec<Vec<Tramo>> {
                 lineas.push(Vec::new());
             }
             if let (false, Some(linea)) = (trozo.is_empty(), lineas.last_mut()) {
-                linea.push(Tramo::Texto(trozo.to_string(), estilo));
+                linea.push(Tramo::Texto(trozo.into(), estilo));
             }
         }
     }
@@ -144,7 +144,7 @@ fn sangria(linea: &[Tramo]) -> Option<usize> {
     let texto: String = linea
         .iter()
         .filter_map(|t| match t {
-            Tramo::Texto(x, _) => Some(x.as_str()),
+            Tramo::Texto(x, _) => Some(&**x),
             _ => None,
         })
         .collect();
@@ -302,7 +302,7 @@ impl Maquetador<'_> {
             color: Some(self.indice_de_color(colores.texto)),
             ..Estilo::default()
         };
-        let tramos = [Tramo::Texto(nombre.to_string(), mono)];
+        let tramos = [Tramo::Texto(nombre.into(), mono)];
         let escrito = self.escribir(&tramos, Hueco::libre(), Letra { tam, base: mono });
         let margen = tam * MARGEN;
         let pestana = Caja {
@@ -328,7 +328,7 @@ impl Maquetador<'_> {
             if let Some(l) = b.lenguaje {
                 self.avisos.push(format!("no sé resaltar el lenguaje {l}"));
             }
-            return vec![Tramo::Texto(texto, base)];
+            return vec![Tramo::Texto(texto.into(), base)];
         }
         fragmentos
             .into_iter()
@@ -339,14 +339,14 @@ impl Maquetador<'_> {
                     color: Some(self.indice_de_color(f.color)),
                     ..base
                 };
-                Tramo::Texto(f.texto, estilo)
+                Tramo::Texto(f.texto.into(), estilo)
             })
             .collect()
     }
 
     /// Lo que ocupan `cuantos` caracteres de la letra de código.
     fn ancho_de_caracteres(&mut self, cuantos: usize, letra: Letra) -> f64 {
-        let texto = [Tramo::Texto("0".repeat(cuantos), letra.base)];
+        let texto = [Tramo::Texto("0".repeat(cuantos).into(), letra.base)];
         self.escribir(&texto, Hueco::libre(), letra).ancho
     }
 
@@ -421,7 +421,7 @@ impl Maquetador<'_> {
         };
         let y = self.y + aire;
         if let Some(n) = numero {
-            let numero = [Tramo::Texto(n.to_string(), tenue)];
+            let numero = [Tramo::Texto(n.to_string().into(), tenue)];
             let hueco = Hueco::de(d.numeros + 0.5, Some(Align::Right));
             let escrito = self.escribir(&numero, hueco, Letra { tam, base: tenue });
             self.poner(escrito, Punto { x: d.x_numeros, y });
@@ -442,7 +442,7 @@ mod tests {
             .map(|l| {
                 l.iter()
                     .map(|t| match t {
-                        Tramo::Texto(x, _) => x.as_str(),
+                        Tramo::Texto(x, _) => &**x,
                         _ => "",
                     })
                     .collect()
@@ -451,7 +451,7 @@ mod tests {
     }
 
     fn lineas_de(codigo: &str) -> Vec<Vec<Tramo>> {
-        en_lineas(vec![Tramo::Texto(codigo.to_string(), Estilo::default())])
+        en_lineas(vec![Tramo::Texto(codigo.into(), Estilo::default())])
     }
 
     /// Un renglón de alto 1 por línea, ninguno partido.
@@ -563,7 +563,7 @@ mod tests {
     #[test]
     fn los_trozos_se_reparten_por_sus_lineas() {
         let e = Estilo::default();
-        let t = |x: &str| Tramo::Texto(x.to_string(), e);
+        let t = |x: &str| Tramo::Texto(x.into(), e);
         let lineas = en_lineas(vec![t("fn a"), t("() {\n"), t("\n"), t("}")]);
         assert_eq!(textos(&lineas), ["fn a() {", "", "}"]);
     }

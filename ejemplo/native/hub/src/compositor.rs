@@ -2,13 +2,14 @@
 //! bloquearse nunca. Si llegan varios encargos seguidos, solo se hace el último.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, OnceLock};
 use std::thread::JoinHandle;
 
-use adaptador::{filmoteca, piezas_del_motor};
+use adaptador::{filmoteca, piezas_con_imagenes};
 use documento::{Apartado, Documento, Formato};
-use pintor::{Animador, Taller, ancho_de_texto, carencias, hilos};
+use pintor::{Animador, ancho_de_texto, carencias, hilos};
 use primitivas::{Color, Composicion, ErrorComposicion, Escena};
 
 use crate::muestras::Muestras;
@@ -33,15 +34,9 @@ pub trait Avisos: Send + 'static {
     fn publicado(&self, resultado: Resultado);
 }
 
-/// A quién se le entrega la escena compuesta.
+/// A quién se le entrega la escena compuesta y de qué documentos sale.
 pub trait Destino: Send + Sync + 'static {
-    fn publicar(&self, escena: Escena, animador: Arc<dyn Animador>);
-}
-
-impl Destino for Taller {
-    fn publicar(&self, escena: Escena, animador: Arc<dyn Animador>) {
-        Taller::publicar(self, escena, Some(animador));
-    }
+    fn publicar(&self, escena: Escena, animador: Arc<dyn Animador>, fuentes: Vec<String>);
 }
 
 /// Un documento a un ancho de vista, en bp, seguido o no de todas las muestras.
@@ -108,6 +103,22 @@ fn trabajar(encargos: &Receiver<Encargo>, t: &Trabajo<'_>) {
     }
 }
 
+/// De dónde se leen las imágenes: los recursos de la aplicación y las muestras.
+#[cfg(not(test))]
+fn carpetas_de_imagenes() -> Vec<PathBuf> {
+    let recursos = std::env::current_exe()
+        .ok()
+        .and_then(|e| Some(e.parent()?.join("data/flutter_assets/assets")));
+    let muestras = std::env::var_os("NLTX_MUESTRAS").map(PathBuf::from);
+    recursos.into_iter().chain(muestras).collect()
+}
+
+/// Las pruebas no corren desde el paquete de la aplicación.
+#[cfg(test)]
+fn carpetas_de_imagenes() -> Vec<PathBuf> {
+    vec![PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets"))]
+}
+
 /// Cargar las fuentes y componer lo incrustado es lo caro: se hace una vez para toda la aplicación.
 fn documento() -> &'static Documento {
     static DOCUMENTO: OnceLock<Documento> = OnceLock::new();
@@ -117,7 +128,7 @@ fn documento() -> &'static Documento {
             color: NEGRO,
             ..Formato::default()
         };
-        Documento::nuevo(formato, piezas_del_motor(NEGRO))
+        Documento::nuevo(formato, piezas_con_imagenes(NEGRO, carpetas_de_imagenes()))
     })
 }
 
@@ -134,12 +145,23 @@ fn compuesto(encargo: &Encargo, muestras: &Muestras) -> Result<Composicion, Erro
     documento().componer_serie(&apartados, ancho)
 }
 
+/// Los documentos de lo compuesto, en orden.
+fn fuentes_de(encargo: &Encargo, muestras: &Muestras) -> Vec<String> {
+    let propia = std::iter::once(encargo.fuente.clone());
+    if !encargo.con_muestras {
+        return propia.collect();
+    }
+    propia
+        .chain(muestras.apartados().map(|a| a.fuente.to_string()))
+        .collect()
+}
+
 fn componer(encargo: &Encargo, muestras: &Muestras, destino: &dyn Destino) -> Resultado {
     match catch_unwind(AssertUnwindSafe(|| compuesto(encargo, muestras))) {
         Ok(Ok(Composicion { escena, mut avisos })) => {
             let alto = escena.caja.alto + 2.0 * pintor::MARGEN;
             avisos.extend(carencias(&escena));
-            destino.publicar(escena, Arc::new(AnimadorTikra));
+            destino.publicar(escena, Arc::new(AnimadorTikra), fuentes_de(encargo, muestras));
             Resultado {
                 alto,
                 avisos,
@@ -179,7 +201,7 @@ mod tests {
     struct Falso(Mutex<Vec<f64>>);
 
     impl Destino for Falso {
-        fn publicar(&self, escena: Escena, _animador: Arc<dyn Animador>) {
+        fn publicar(&self, escena: Escena, _animador: Arc<dyn Animador>, _fuentes: Vec<String>) {
             self.0.lock().unwrap().push(escena.caja.ancho);
         }
     }

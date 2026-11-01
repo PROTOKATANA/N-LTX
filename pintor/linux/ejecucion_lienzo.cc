@@ -54,6 +54,8 @@ bool Ejecucion :: lista(rust :: Slice<const ltx :: Comando> comandos , Malla & m
 
 			case ltx :: Orden :: Soltar : indices(r_.soltar , c) ; break ;
 
+			case ltx :: Orden :: Imagen : imagen(c) ; break ;
+
 			case ltx :: Orden :: AbrirCapa :
 
 				// lo que no se ve no gasta una textura
@@ -153,6 +155,24 @@ void Ejecucion :: indices(const Pasada & pasada , const ltx :: Comando & c) {
 	draw.FirstIndexLocation = c.inicio ;
 
 	gpu_.ctx->DrawIndexed(draw) ;
+
+}
+
+void Ejecucion :: imagen(const ltx :: Comando & c) {
+
+	const auto subida = r_.imagenes.find(c.imagen) ;
+
+	if (subida == r_.imagenes.end()) { return ; }
+
+	r_.imagen.enlace->GetVariableByName(SHADER_TYPE_PIXEL , "Imagen")->Set(vista_srv(subida->second)) ;
+
+	// el enlace ha cambiado aunque la pasada sea la misma
+
+	actual_ = nullptr ;
+
+	indices(r_.imagen , c) ;
+
+	actual_ = nullptr ;
 
 }
 

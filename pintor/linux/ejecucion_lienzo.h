@@ -42,6 +42,8 @@ private:
 
 	void indices(const Pasada & pasada , const ltx :: Comando & c) ;
 
+	void imagen(const ltx :: Comando & c) ;
+
 	bool abrir_capa(GError ** error) ;
 
 	void resolver(std :: size_t i) ;

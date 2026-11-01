@@ -8,6 +8,8 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Duration;
 
+use primitivas::MapaDeBits;
+
 use crate::lienzo::{Entrega, Hecho};
 use crate::lista::Lista;
 use crate::puente_lienzo::ffi::{Comando, Tinta, Vertice, Vista};
@@ -205,6 +207,37 @@ impl Marco {
 
     pub fn fila_rampas(&self, i: usize) -> u32 {
         self.rampas.get(i).map_or(0, |s| s.y)
+    }
+
+    fn imagen(&self, i: usize) -> Option<&MapaDeBits> {
+        let (base, vivos) = (self.base(), self.vivos());
+        let n = base.imagenes.len();
+        let mapa = if i < n {
+            base.imagenes.get(i)
+        } else {
+            vivos.imagenes.get(i - n)
+        };
+        mapa.map(AsRef::as_ref)
+    }
+
+    pub fn imagenes(&self) -> usize {
+        self.base().imagenes.len() + self.vivos().imagenes.len()
+    }
+
+    pub fn id_imagen(&self, i: usize) -> u64 {
+        self.imagen(i).map_or(0, |m| m.id)
+    }
+
+    pub fn ancho_imagen(&self, i: usize) -> u32 {
+        self.imagen(i).map_or(0, |m| m.ancho)
+    }
+
+    pub fn alto_imagen(&self, i: usize) -> u32 {
+        self.imagen(i).map_or(0, |m| m.alto)
+    }
+
+    pub fn rgba_imagen(&self, i: usize) -> &[u8] {
+        self.imagen(i).map_or(&[], |m| &m.rgba)
     }
 }
 

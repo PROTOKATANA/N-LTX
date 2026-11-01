@@ -64,7 +64,7 @@ struct GpuLienzo :: Impl {
 
 	std :: uint32_t lienzo_alto ;
 
-	// NODOS_BANCO_GPU : mide cada fotograma en CPU y en GPU, esperando a la GPU
+	// NLTX_BANCO_GPU : mide cada fotograma en CPU y en GPU, esperando a la GPU
 
 	std :: unique_ptr<BancoGpu> banco ;
 
@@ -84,7 +84,7 @@ struct GpuLienzo :: Impl {
 
 		lienzo_alto(alto_lienzo ? alto_lienzo : alto_sin_monitor) {
 
-		if (std :: getenv("NODOS_BANCO_GPU")) { banco = std :: make_unique<BancoGpu>("LTX" , std :: vector<std :: string>{ "lienzo" }) ; }
+		if (std :: getenv("NLTX_BANCO_GPU")) { banco = std :: make_unique<BancoGpu>("LTX" , std :: vector<std :: string>{ "lienzo" }) ; }
 
 	}
 
@@ -133,6 +133,8 @@ struct GpuLienzo :: Impl {
 		r.generacion_base = marco.generacion_base() ;
 
 		r.generacion_vivos = marco.generacion_vivos() ;
+
+		if ((base || vivos) && !r.subir_imagenes(gpu , marco , error)) { return false ; }
 
 		const ltx :: Limites limites = ltx :: limites() ;
 

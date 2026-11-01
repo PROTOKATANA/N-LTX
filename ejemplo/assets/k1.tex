@@ -1041,6 +1041,30 @@ Como es una tabla más, también se puede escribir a mano:
 \caption{Diagrama de Gantt.}
 \end{figure}
 
+\section{Imágenes}
+
+Un PNG conserva su transparencia, un JPEG sale opaco y un SVG se pinta con más píxeles que puntos, para que
+se vea nítido al ampliar. Las opciones son las de \texttt{graphicx}: \texttt{width}, \texttt{height},
+\texttt{scale} y \texttt{keepaspectratio}.
+
+\begin{figure}
+\centering
+\includegraphics[width=0.6\textwidth]{julia.png}
+\caption{Un conjunto de Julia en PNG: sus esquinas son transparentes.}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[width=0.45\textwidth]{ondas}
+\caption{Unas ondas en JPEG, reducidas a menos de la mitad: la extensión se puede omitir.}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[scale=1.2]{diagrama.svg}
+\caption{Un diagrama en SVG, un 20~\% mayor que su tamaño natural.}
+\end{figure}
+
 \section{Electrónica}
 
 \begin{figure}
@@ -1411,7 +1435,7 @@ Cada animación es una figura con un parámetro \texttt{t}: el motor la recompon
 \begin{animacion}[t=0.1:50, duracion=8]
 \begin{tikzpicture}
   \begin{axis}[xlabel=NaOH añadido (\si{mL}),ylabel=pH,width=11cm,height=6.5cm,xmin=0,xmax=50,ymin=0,ymax=14,grid=major]
-    \addplot[blue,very thick,domain=0.01:\t,samples=240] {7-sign(2.5-0.1*x)*ln(abs(5e6*(2.5-0.1*x)/(25+x))+sqrt((5e6*(2.5-0.1*x)/(25+x))^2+1))/ln(10)};
+    \addplot[blue,very thick,samples at={0,0.05,...,\t}] {7-sign(2.5-0.1*x)*ln(abs(5e6*(2.5-0.1*x)/(25+x))+sqrt((5e6*(2.5-0.1*x)/(25+x))^2+1))/ln(10)};
     \node[right] at (axis cs:2,12.5) {pH inicial $=1$};
   \end{axis}
 \end{tikzpicture}

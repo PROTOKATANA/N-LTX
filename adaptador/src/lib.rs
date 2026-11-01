@@ -21,10 +21,12 @@ mod caja;
 mod contorno;
 mod figura;
 mod formula;
+mod imagenes;
 mod incrustados;
 mod resaltado;
 mod traduccion;
 
 pub use figura::FiguraTikra;
 pub use formula::FormulaMathra;
-pub use incrustados::{IncrustadosMotor, filmoteca, piezas_del_motor};
+pub use imagenes::{ImagenesEnCarpetas, decodificar};
+pub use incrustados::{IncrustadosMotor, filmoteca, piezas_con_imagenes, piezas_del_motor};

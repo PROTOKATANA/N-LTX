@@ -8,7 +8,7 @@ cd ejemplo
 flutter run -d linux --release
 ```
 
-Necesita `N-CNX`, la base GPU, en `../CORTEX/N-CNX` o donde diga `NLTX_CNX`: ver `pintor/README.md`.
+La primera vez, CMake descarga DiligentCore en `pintor/deps`: ver `pintor/README.md`.
 
 `flutter` compila el hub de Rust (`native/hub`) con `cargokit`, y el ejecutable lo enlaza. Tras cambiar
 una señal de `native/hub/src/signals` se regeneran los bindings de Dart con `rinf gen`.
@@ -16,7 +16,17 @@ una señal de `native/hub/src/signals` se regeneran los bindings de Dart con `ri
 Las fronteras son las de `PUENTES.md`: Flutter habla con Rust por `rinf`, a través de un repositorio
 (`lib/repositorio.dart`), y el canal de método solo se usa para registrar la textura. Todo se pinta con
 Vulkan en una sola superficie: ver `pintor/README.md`. Lo que el pintor no sabe hacer
-se avisa en pantalla: imágenes, patrones (los aproxima con su color) y mosaicos.
+se avisa en pantalla: patrones (los aproxima con su color) y mosaicos.
+
+`\includegraphics` lee PNG, JPEG y SVG de `assets/` y, si la hay, de la carpeta de `NLTX_MUESTRAS`. Una
+fuente puede venir de un modelo de lenguaje: una ruta absoluta, con `..` o que salga de esas carpetas por un
+enlace no se lee. Admite `width`, `height`, `scale` y `keepaspectratio`; lo demás se avisa. Un PDF o EPS se
+ve como fuente, con su aviso, y el texto de un SVG no se pinta: `resvg` va sin su módulo de texto.
+
+Con el ratón se selecciona arrastrando, doble clic marca una palabra, Ctrl+A todo y Ctrl+C copia. Lo copiado
+es la fuente en bruto: un texto y una animación dan el LaTeX de los dos. Fórmulas, figuras, tablas,
+animaciones, imágenes, títulos y órdenes como `\textbf{…}` se copian enteros aunque se toque un trozo, y un
+entorno que quede a medias se completa, para que lo copiado compile.
 
 Con `NLTX_MUESTRAS=<carpeta>`, la pestaña Muestras pone todos los `.tex` de esa carpeta en una sola lista,
 cada uno con su título y sus avisos debajo: sirve para ver cómo se comporta el motor con LaTeX de fuera, por ejemplo con [DaTikZ](https://huggingface.co/datasets/nllg/datikz).
@@ -41,4 +51,4 @@ hilos y los guarda, así que una vuelta que cabe en memoria (256 MiB entre todas
 trabajan las que están en pantalla, y ninguna se lleva más de la mitad de los hilos: si no le alcanza, baja
 de 60 fps. El coste se mide con `cargo test --release -p hub --test banco_animacion -- --ignored --nocapture`.
 
-El runner desactiva Impeller, como en CORTEX: en esta GPU pixela los recortes y los trazados.
+El runner desactiva Impeller: pixela los recortes y los trazados.

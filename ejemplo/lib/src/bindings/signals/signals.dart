@@ -14,8 +14,14 @@ import 'package:rinf/rinf.dart';
 export '../serde/serde.dart';
 
 part 'trait_helpers.dart';
+part 'borrar_seleccion.dart';
+part 'copiar_seleccion.dart';
 part 'documento_publicado.dart';
 part 'medidas_pintor.dart';
 part 'publicar_documento.dart';
+part 'seleccionar_palabra.dart';
+part 'seleccionar_texto.dart';
+part 'seleccionar_todo.dart';
+part 'texto_copiado.dart';
 part 'ver_documento.dart';
 part 'signal_handlers.dart';
