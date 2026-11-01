@@ -108,6 +108,11 @@ impl Lienzo {
         self.version += 1;
     }
 
+    /// Si ya hay algo que pintar.
+    pub fn publicado(&self) -> bool {
+        self.version > 0
+    }
+
     /// Marca `cajas` sobre el documento. Va con las animaciones: cambiarla no recompila la base.
     pub fn seleccionar(&mut self, cajas: Vec<Caja>) {
         self.seleccion = cajas;
@@ -491,14 +496,16 @@ mod tests {
     }
 
     #[test]
-    fn una_gpu_nueva_recibe_el_atlas_entero() {
+    fn una_gpu_nueva_recibe_lo_usado_del_atlas() {
         let mut l = Lienzo::default();
-        l.publicar(escena(Vec::new()), None);
-        l.preparar(vista(0.0), 0.0);
+        l.publicar(con_glifo(), None);
+        let usado = l.preparar(vista(0.0), 0.0).atlas.bytes.len();
+        assert!(usado > 0);
         assert!(l.preparar(vista(0.0), 0.0).atlas.bytes.is_empty(), "ya se subió");
         l.reenviar();
         let nueva = l.preparar(vista(0.0), 0.0);
-        assert_eq!(nueva.atlas.bytes.len(), (LADO_ATLAS * LADO_ATLAS) as usize);
+        assert_eq!(nueva.atlas.bytes.len(), usado);
+        assert!(usado < (LADO_ATLAS * LADO_ATLAS) as usize);
     }
 
     #[test]

@@ -26,6 +26,8 @@ struct Hoja {
     rampas: Vec<Sucio>,
     entregas: u64,
     taller: Option<Sender<Orden>>,
+    /// Alguna GPU se ha llevado parches: lo pendiente ya no basta para otra nueva.
+    recogida: bool,
 }
 
 impl Hoja {
@@ -79,9 +81,12 @@ impl Almacen {
     pub fn tomar(&self, id: u32, nuevos: bool) -> Marco {
         let mut hojas = self.hojas();
         let hoja = hojas.entry(id).or_default();
-        if nuevos {
+        // sin recoger nada aún, lo pendiente es todo lo que hay: tirarlo dejaba el primer fotograma
+        // sin texto, y el texto llegaba de 43 a 75 ms después, con 8 MiB de texturas
+        if nuevos && hoja.recogida {
             hoja.pedir_todo();
         }
+        hoja.recogida = true;
         Marco {
             hecho: hoja.hecho.clone(),
             atlas: std::mem::take(&mut hoja.atlas),
@@ -316,14 +321,28 @@ mod tests {
         assert_eq!(a.tomar(2, false).vista().ancho, 0);
     }
 
+    /// RAYO: si falla, el primer fotograma de un documento vuelve a salir sin texto.
     #[test]
-    fn una_gpu_nueva_pide_todo_al_taller() {
+    fn la_primera_gpu_recoge_lo_pendiente_sin_pedir_nada() {
         let a = Almacen::default();
         let (tx, rx) = channel();
         a.conectar(1, tx);
         a.dejar(1, entrega(1.0, &[1]));
         let m = a.tomar(1, true);
-        assert_eq!(m.parches_atlas(), 0, "lo viejo ya no sirve");
+        assert_eq!(m.parches_atlas(), 1);
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn una_gpu_que_sustituye_a_otra_pide_todo_al_taller() {
+        let a = Almacen::default();
+        let (tx, rx) = channel();
+        a.conectar(1, tx);
+        a.dejar(1, entrega(1.0, &[1]));
+        a.tomar(1, true);
+        a.dejar(1, entrega(1.0, &[2]));
+        let m = a.tomar(1, true);
+        assert_eq!(m.parches_atlas(), 0, "lo que tenía la otra se perdió");
         assert!(matches!(rx.try_recv(), Ok(Orden::Reenviar)));
     }
 

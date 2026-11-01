@@ -157,6 +157,11 @@ impl Trabajo {
         let Some(vista) = self.vista else {
             return;
         };
+        // un fotograma vacío ocupa el relevo hasta que se muestra: el primero con algo esperaría
+        // de 50 a 70 ms, y al abrir, `ver` suele llegar antes que lo compuesto
+        if !self.lienzo.publicado() {
+            return;
+        }
         let segundos = self.inicio.elapsed().as_secs_f64();
         let reloj = Instant::now();
         let Ok(entrega) = catch_unwind(AssertUnwindSafe(|| self.lienzo.preparar(vista, segundos))) else {
@@ -233,6 +238,20 @@ mod tests {
             let n = self.fotogramas.fetch_add(1, Ordering::Relaxed);
             assert!(!(self.romper && n == 1), "a propósito");
             Some(Arc::new(escena(Vec::new())))
+        }
+    }
+
+    /// RAYO: si falla, abrir un documento vuelve a empezar por un fotograma en blanco.
+    #[test]
+    fn sin_nada_publicado_no_se_entrega_ningun_fotograma() {
+        let a = Arc::new(Almacen::default());
+        let t = Taller::abrir(1, Arc::clone(&a));
+        t.ver(vista());
+        assert_eq!(a.esperar(1, 0, Duration::from_millis(30)), 0);
+        t.publicar(escena(Vec::new()), None);
+        let mut vistas = 0;
+        while vistas == 0 {
+            vistas = a.esperar(1, 0, TOPE);
         }
     }
 

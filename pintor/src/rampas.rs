@@ -42,8 +42,11 @@ impl Rampas {
         self.tope = FILAS_RAMPAS - FILAS_VIVAS;
     }
 
+    /// Solo lo usado: el resto no se lee, y subir la textura entera son 4 MiB.
     pub fn marcar_todo(&mut self) {
-        self.sucio.tocar(0, FILAS_RAMPAS);
+        if self.filas > 0 {
+            self.sucio.tocar(0, self.filas);
+        }
     }
 
     pub fn filas(&self) -> u32 {
@@ -160,6 +163,17 @@ pub(crate) fn color_en(paradas: &[Parada], t: f64) -> Color {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn marcar_todo_cubre_solo_lo_usado() {
+        let mut r = Rampas::default();
+        r.marcar_todo();
+        assert_eq!(r.tomar_sucio(), Sucio::default(), "sin nada, nada que subir");
+        r.fila(&[parada(0.0, 0.0), parada(1.0, 1.0)]);
+        r.tomar_sucio();
+        r.marcar_todo();
+        assert_eq!(r.tomar_sucio().bytes.len(), (ANCHO_RAMPA * 4) as usize);
+    }
 
     fn parada(posicion: f64, r: f64) -> Parada {
         Parada {

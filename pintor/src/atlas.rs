@@ -78,8 +78,12 @@ impl Atlas {
         (self.x, self.y, self.alto_fila) = (0, 0, 0);
     }
 
+    /// Solo lo usado: el resto no se lee, y subir el lado entero son 4 MiB.
     pub fn marcar_todo(&mut self) {
-        self.sucio.tocar(0, LADO_ATLAS);
+        let usadas = self.y + self.alto_fila;
+        if usadas > 0 {
+            self.sucio.tocar(0, usadas);
+        }
     }
 
     pub fn buscar(&self, clave: &Clave) -> Option<Entrada> {
@@ -129,6 +133,24 @@ impl Atlas {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// RAYO: reabrir un panel no debe subir el lado entero, 4 MiB, por unas pocas filas.
+    #[test]
+    fn marcar_todo_cubre_solo_lo_usado() {
+        let mut a = Atlas::default();
+        a.marcar_todo();
+        assert_eq!(a.tomar_sucio(), Sucio::default(), "sin nada, nada que subir");
+        let clave = Clave {
+            contorno: 1,
+            matriz: [0; 4],
+            sx: 0,
+            sy: 0,
+        };
+        a.insertar(clave, mascara(&[1; 6], 2, 3));
+        a.tomar_sucio();
+        a.marcar_todo();
+        assert_eq!(a.tomar_sucio().bytes.len(), 3 * LADO_ATLAS as usize);
+    }
 
     fn mascara(pixeles: &[u8], ancho: u32, alto: u32) -> Mascara<'_> {
         Mascara {
