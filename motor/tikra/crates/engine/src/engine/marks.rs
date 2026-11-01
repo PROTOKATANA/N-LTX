@@ -22,7 +22,7 @@ enum Usage {
 
 fn circle(r: f64) -> Vec<Segment> {
     let mut v = vec![Segment::MoveTo(Point::new(r, 0.0))];
-    v.extend(super::path::arc_segments(Point::default(), r, r, 0.0, 360.0, &Transform::default()));
+    v.extend(super::path::arc_segments(super::path::EllipseArc { center: Point::default(), rx: r, ry: r, start: 0.0, end: 360.0 }, &Transform::default()));
     v.push(Segment::Close);
     v
 }
@@ -94,15 +94,15 @@ fn shape(name: &str, r: f64) -> Option<Vec<(Vec<Segment>, Usage)>> {
         "pentagon*" => vec![(polygon(&pentagon), Usage::FillStroke)],
         "halfcircle" => {
             let mut lower = vec![Segment::MoveTo(p(-r, 0.0))];
-            lower.extend(super::path::arc_segments(Point::default(), r, r, 180.0, 360.0, &Transform::default()));
+            lower.extend(super::path::arc_segments(super::path::EllipseArc { center: Point::default(), rx: r, ry: r, start: 180.0, end: 360.0 }, &Transform::default()));
             vec![(lower, Usage::MarkColor), (with(lines(&[(p(-r, 0.0), p(r, 0.0))]), circle(r)), Usage::Stroke)]
         }
         "halfcircle*" => {
             let mut upper = vec![Segment::MoveTo(p(r, 0.0))];
-            upper.extend(super::path::arc_segments(Point::default(), r, r, 0.0, 180.0, &Transform::default()));
+            upper.extend(super::path::arc_segments(super::path::EllipseArc { center: Point::default(), rx: r, ry: r, start: 0.0, end: 180.0 }, &Transform::default()));
             upper.push(Segment::Close);
             let mut lower = vec![Segment::MoveTo(p(-r, 0.0))];
-            lower.extend(super::path::arc_segments(Point::default(), r, r, 180.0, 360.0, &Transform::default()));
+            lower.extend(super::path::arc_segments(super::path::EllipseArc { center: Point::default(), rx: r, ry: r, start: 180.0, end: 360.0 }, &Transform::default()));
             vec![(upper, Usage::Fill), (lower, Usage::MarkColor), (circle(r), Usage::Stroke)]
         }
         "halfdiamond*" => half(&[p(-0.75 * r, 0.0), p(0.0, -r), p(0.75 * r, 0.0)], &[p(0.75 * r, 0.0), p(0.0, r), p(-0.75 * r, 0.0)], outline4(0.75 * r)),

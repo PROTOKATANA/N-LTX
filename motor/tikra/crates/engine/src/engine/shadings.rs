@@ -188,7 +188,7 @@ impl Engine {
         if sh.kind == 'r' {
             // a radial shading paints its outer circle only
             segs = vec![Segment::MoveTo(t.apply(Point::new(w, 0.0)))];
-            segs.extend(super::path::arc_segments(t.apply(Point::default()), w, w, 0.0, 360.0, t));
+            segs.extend(super::path::arc_segments(super::path::EllipseArc { center: t.apply(Point::default()), rx: w, ry: w, start: 0.0, end: 360.0 }, t));
         } else {
             segs.extend(corners[1..].iter().map(|p| Segment::LineTo(*p)));
         }

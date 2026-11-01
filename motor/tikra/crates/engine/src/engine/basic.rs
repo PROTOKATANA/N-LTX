@@ -805,7 +805,7 @@ impl Engine {
                     };
                     let (s0, c0) = a0.to_radians().sin_cos();
                     let center = center_from.minus(Point::new(rx * c0, ry * s0));
-                    let segs = super::path::arc_segments(t.apply(center), rx, ry, a0, a1, &t);
+                    let segs = super::path::arc_segments(super::path::EllipseArc { center: t.apply(center), rx, ry, start: a0, end: a1 }, &t);
                     let (s1, c1) = a1.to_radians().sin_cos();
                     (segs, t.apply(center.plus(Point::new(rx * c1, ry * s1))))
                 } else {
@@ -816,7 +816,10 @@ impl Engine {
                     let (s0, c0) = a0.to_radians().sin_cos();
                     let center = center_from.minus(axes.apply(Point::new(c0, s0)));
                     let full = t.compose(&Transform::translation(center.x, center.y)).compose(&axes);
-                    let segs = super::path::arc_segments(full.apply(Point::default()), 1.0, 1.0, a0, a1, &Transform { e: 0.0, f: 0.0, ..full });
+                    let segs = super::path::arc_segments(
+                        super::path::EllipseArc { center: full.apply(Point::default()), rx: 1.0, ry: 1.0, start: a0, end: a1 },
+                        &Transform { e: 0.0, f: 0.0, ..full },
+                    );
                     let (s1, c1) = a1.to_radians().sin_cos();
                     (segs, full.apply(Point::new(c1, s1)))
                 };
@@ -837,7 +840,10 @@ impl Engine {
                 let axes = Transform { a: a.x, b: a.y, c: b.x, d: b.y, e: 0.0, f: 0.0 };
                 let full = t.compose(&Transform::translation(c.x, c.y)).compose(&axes);
                 self.pgf_add(Segment::MoveTo(full.apply(Point::new(1.0, 0.0))));
-                for s in super::path::arc_segments(full.apply(Point::default()), 1.0, 1.0, 0.0, 360.0, &Transform { e: 0.0, f: 0.0, ..full }) {
+                for s in super::path::arc_segments(
+                    super::path::EllipseArc { center: full.apply(Point::default()), rx: 1.0, ry: 1.0, start: 0.0, end: 360.0 },
+                    &Transform { e: 0.0, f: 0.0, ..full },
+                ) {
                     self.pgf_add(s);
                 }
                 self.pgf_add(Segment::Close);
@@ -1357,7 +1363,10 @@ impl Engine {
                 let (large, ccw) = (self.number_of(large)? != 0.0, self.number_of(ccw)? != 0.0);
                 let to = self.point_arg()?;
                 let from = self.last_local();
-                for s in super::path::svg_arc_segments(from.scale(1.0 / PT), to.scale(1.0 / PT), rx / PT, ry / PT, rot, large, ccw, &t) {
+                for s in super::path::svg_arc_segments(
+                    super::path::SvgArc { from: from.scale(1.0 / PT), to: to.scale(1.0 / PT), rx: rx / PT, ry: ry / PT, phi: rot, large, sweep: ccw },
+                    &t,
+                ) {
                     self.pgf_add(s);
                 }
                 self.pgf_path.last = Some(t.apply(to));
@@ -1531,7 +1540,7 @@ impl Engine {
                 let (rx, ry) = (self.length_of(rx)?, self.length_of(ry)?);
                 let _ = self.argument()?;
                 let _ = self.argument()?;
-                for s in super::path::arc_segments(t.apply(c), rx, ry, a0, a1, &t) {
+                for s in super::path::arc_segments(super::path::EllipseArc { center: t.apply(c), rx, ry, start: a0, end: a1 }, &t) {
                     self.pgf_add(s);
                 }
                 self.pgf_path.last = Some(t.apply(end));
@@ -1564,7 +1573,7 @@ impl Engine {
                 let r = self.argument()?;
                 let r = self.length_of(r)?;
                 self.pgf_add(Segment::MoveTo(Point::new(r, 0.0)));
-                for s in super::path::arc_segments(Point::default(), r, r, 0.0, 360.0, &Transform::default()) {
+                for s in super::path::arc_segments(super::path::EllipseArc { center: Point::default(), rx: r, ry: r, start: 0.0, end: 360.0 }, &Transform::default()) {
                     self.pgf_add(s);
                 }
                 self.pgf_add(Segment::Close);

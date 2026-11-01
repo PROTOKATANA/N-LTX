@@ -241,7 +241,7 @@ impl Engine {
             }
             "Dots" => {
                 let mut segs = vec![Segment::MoveTo(p(r, 0.0))];
-                segs.extend(super::path::arc_segments(Point::default(), r, r, 0.0, 360.0, &Transform::default()));
+                segs.extend(super::path::arc_segments(super::path::EllipseArc { center: Point::default(), rx: r, ry: r, start: 0.0, end: 360.0 }, &Transform::default()));
                 segs.push(Segment::Close);
                 vec![Item::Path { segments: segs, fill: Some(fill), stroke: None }]
             }

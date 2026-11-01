@@ -962,7 +962,7 @@ impl Pen {
         let at = self.current();
         let (s, c) = a0.to_radians().sin_cos();
         let center = Point::new(at.x - rx * c, at.y - ry * s);
-        self.0.extend(super::path::arc_segments(center, rx, ry, a0, a1, &Transform::default()));
+        self.0.extend(super::path::arc_segments(super::path::EllipseArc { center, rx, ry, start: a0, end: a1 }, &Transform::default()));
         self
     }
     /// `\pgfpathellipse` with axes along x and y.

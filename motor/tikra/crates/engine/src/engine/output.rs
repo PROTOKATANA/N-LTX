@@ -11,6 +11,24 @@ use super::path::{valid_segment, MAX_COORDINATE};
 use super::Engine;
 use crate::PT;
 
+/// The fill, the solid under a pattern, and the stroke of one path.
+struct PathInks {
+    fill: Option<Fill>,
+    solid_under: Option<Fill>,
+    stroke: Option<Stroke>,
+}
+
+/// What is pushed once the path's paint is decided. `mode` is the one clone from the state.
+struct PathPaint {
+    mode: super::state::Mode,
+    fill: Option<Fill>,
+    solid_under: Option<Fill>,
+    stroke: Option<Stroke>,
+    fading: Option<Item>,
+    functional: Option<Vec<Item>>,
+    drawn: bool,
+}
+
 impl Engine {
     /// Whether what is drawn now makes the picture larger: not after `use as bounding box`, nor
     /// after a clip in the scope.
@@ -27,8 +45,8 @@ impl Engine {
         self.use_path_here(segments)
     }
 
-    fn use_path_here(&mut self, segments: Vec<Segment>) -> Result<(), Error> {
-        let mut segs = segments;
+    /// The path actually used: a saved one, then nonlinear and rounded corners.
+    fn segments_to_use(&mut self, mut segs: Vec<Segment>) -> Result<Vec<Segment>, Error> {
         // `use path=\p`: the path kept by `save path=\p` instead; `save path` keeps this one
         if let Some(Token::Cs(n)) = self.st.use_saved_path.take() {
             if let Some(saved) = self.saved_paths.get(&*n) {
@@ -44,41 +62,41 @@ impl Engine {
         if self.st.pen.rounded != 0.0 || self.st.pen.rounded_out != 0.0 {
             segs = round_corners(&segs, self.st.pen.rounded, self.st.pen.rounded_out);
         }
-        let mode = self.st.mode.clone();
-        // the bounding box grows as the path is built: before any shortening
-        if mode.bounding_box {
-            self.canvas.include_path(&segs);
+        Ok(segs)
+    }
+
+    /// The bounding box grows as the path is built, before any shortening.
+    fn grow_for_path(&mut self, segs: &[Segment], bounding_box: bool, draw: bool) {
+        if bounding_box {
+            self.canvas.include_path(segs);
             self.canvas_frozen = true;
         } else if self.counts_for_size() {
-            self.canvas.include_path(&segs);
+            self.canvas.include_path(segs);
             // a stroked path adds half its line width around its own box (\pgfusepath)
-            if mode.draw {
+            if draw {
                 let w = match self.st.pen.double {
                     Some(_) => 2.0 * self.st.pen.line_width + self.st.pen.double_distance,
                     None => self.st.pen.line_width,
                 };
                 let mut path = crate::canvas::Canvas::default();
-                path.include_path(&segs);
+                path.include_path(segs);
                 if let (Some(lo), Some(hi)) = (path.min, path.max) {
                     self.canvas.include(Point::new(lo.x - w / 2.0, lo.y - w / 2.0));
                     self.canvas.include(Point::new(hi.x + w / 2.0, hi.y + w / 2.0));
                 }
             }
         }
-        let drawn = segs.iter().any(|s| !matches!(s, Segment::MoveTo(_)));
-        // a functional shading: cells clipped to the path, under its stroke
-        let functional = if mode.shade && drawn && !mode.pattern { self.functional_cells(&segs) } else { None };
-        // a fill without a color of its own fills with the basic layer's fill pattern, if one is set
-        // (`\pgfsetfillpattern{stars}{red}` before `\filldraw`)
-        let pattern = mode.pattern || (mode.fill && self.st.paint.fill_pattern && self.st.paint.fill_color.is_none());
-        let mode = super::state::Mode { shade: mode.shade && functional.is_none(), pattern, ..mode };
+    }
+
+    /// Fill, the solid under a pattern, and the stroke, as the mode asks.
+    fn path_inks(&mut self, segs: &[Segment], mode: &super::state::Mode) -> PathInks {
         let fill = if mode.fill || mode.pattern || mode.shade {
             let paint = if mode.pattern {
                 let name = self.st.paint.pattern_name.clone().unwrap_or_else(|| "north east lines".into());
                 let color = self.st.paint.pattern_color.unwrap_or(crate::color::Color::BLACK);
                 self.pattern_paint(&name, color).unwrap_or(Paint::Pattern { name, color })
             } else if mode.shade {
-                Paint::Shading(self.shading_for(&segs))
+                Paint::Shading(self.shading_for(segs))
             } else {
                 Paint::Solid(self.st.fill_paint_color())
             };
@@ -92,13 +110,41 @@ impl Engine {
         } else {
             None
         };
-        let stroke = mode.draw.then(|| self.stroke());
-        // a path fading masks this path, fitted to it
-        let fading = match self.st.shade.path_fading.clone().filter(|_| mode.fade) {
-            Some(f) if self.picture_fadings.contains_key(&f) => self.picture_fading_for(&f, &segs, self.st.shade.fit_fading),
-            Some(f) => self.fading_for(&f, &segs).map(|mask| Item::Fade { mask }),
+        PathInks { fill, solid_under, stroke: mode.draw.then(|| self.stroke()) }
+    }
+
+    /// A path fading fitted to this path, when the mode fades.
+    fn path_fade(&mut self, segs: &[Segment], fade: bool) -> Option<Item> {
+        match self.st.shade.path_fading.clone().filter(|_| fade) {
+            Some(f) if self.picture_fadings.contains_key(&f) => self.picture_fading_for(&f, segs, self.st.shade.fit_fading),
+            Some(f) => self.fading_for(&f, segs).map(|mask| Item::Fade { mask }),
             None => None,
-        };
+        }
+    }
+
+    /// The stroked path: two lines when `double` or an inner line is set, else one.
+    fn push_stroked(&mut self, segs: &[Segment], fill: Option<Fill>, stroke: Option<Stroke>) {
+        match (self.st.pen.double, &stroke) {
+            (Some(core), Some(s)) => {
+                // two lines: the outer one, then the inner one in the double color
+                let outer = Stroke { width: 2.0 * s.width + self.st.pen.double_distance, ..s.clone() };
+                let inner = Stroke { width: self.st.pen.double_distance, color: core, ..s.clone() };
+                self.canvas.push(Item::Path { segments: segs.to_vec(), fill, stroke: Some(outer) });
+                self.canvas.push(Item::Path { segments: segs.to_vec(), fill: None, stroke: Some(inner) });
+            }
+            (None, Some(s)) if self.st.pen.inner_line.0 > 0.0 => {
+                // the basic layer's inner line, over the stroke
+                let inner = Stroke { width: self.st.pen.inner_line.0, color: self.st.pen.inner_line.1.unwrap_or(crate::color::Color::WHITE), ..s.clone() };
+                self.canvas.push(Item::Path { segments: segs.to_vec(), fill, stroke: Some(s.clone()) });
+                self.canvas.push(Item::Path { segments: segs.to_vec(), fill: None, stroke: Some(inner) });
+            }
+            _ => self.canvas.push(Item::Path { segments: segs.to_vec(), fill, stroke }),
+        }
+    }
+
+    /// Blend, fade, tips, the functional shading, the path, and a clip, in that order.
+    fn paint_path(&mut self, segs: &mut Vec<Segment>, paint: PathPaint) -> Result<(), Error> {
+        let PathPaint { mode, fill, solid_under, stroke, fading, functional, drawn } = paint;
         let faded = drawn && (fill.is_some() || stroke.is_some()) && fading.is_some();
         let blended = drawn && (fill.is_some() || stroke.is_some()) && self.st.paint.blend.is_some();
         if blended {
@@ -110,7 +156,7 @@ impl Engine {
         // `tips=true`/`proper`: tips on a path that is neither filled nor stroked
         let tips_only = stroke.is_none() && fill.is_none() && !mode.clip && matches!(self.st.pen.tips_mode, TipsMode::True | TipsMode::Proper);
         // a clipping path has no tips and is not shortened; a lone point still gets them
-        let tips = if !segs.is_empty() && !mode.clip && (stroke.is_some() || tips_only) { self.arrow_ends(&mut segs) } else { Tips::default() };
+        let tips = if !segs.is_empty() && !mode.clip && (stroke.is_some() || tips_only) { self.arrow_ends(segs) } else { Tips::default() };
         if let Some(cells) = functional {
             self.canvas.push(Item::Clip { segments: segs.clone(), even_odd: self.st.paint.even_odd });
             self.canvas.items.extend(cells);
@@ -120,22 +166,7 @@ impl Engine {
             if let Some(under) = solid_under {
                 self.canvas.push(Item::Path { segments: segs.clone(), fill: Some(under), stroke: None });
             }
-            match (self.st.pen.double, &stroke) {
-                (Some(core), Some(s)) => {
-                    // two lines: the outer one, then the inner one in the double color
-                    let outer = Stroke { width: 2.0 * s.width + self.st.pen.double_distance, ..s.clone() };
-                    let inner = Stroke { width: self.st.pen.double_distance, color: core, ..s.clone() };
-                    self.canvas.push(Item::Path { segments: segs.clone(), fill, stroke: Some(outer) });
-                    self.canvas.push(Item::Path { segments: segs.clone(), fill: None, stroke: Some(inner) });
-                }
-                (None, Some(s)) if self.st.pen.inner_line.0 > 0.0 => {
-                    // the basic layer's inner line, over the stroke
-                    let inner = Stroke { width: self.st.pen.inner_line.0, color: self.st.pen.inner_line.1.unwrap_or(crate::color::Color::WHITE), ..s.clone() };
-                    self.canvas.push(Item::Path { segments: segs.clone(), fill, stroke: Some(s.clone()) });
-                    self.canvas.push(Item::Path { segments: segs.clone(), fill: None, stroke: Some(inner) });
-                }
-                _ => self.canvas.push(Item::Path { segments: segs.clone(), fill, stroke }),
-            }
+            self.push_stroked(segs, fill, stroke);
         }
         self.push_tips(tips);
         if faded {
@@ -145,7 +176,7 @@ impl Engine {
             self.canvas.push(Item::End);
         }
         if mode.clip {
-            self.open_in_scope(Item::Clip { segments: segs, even_odd: self.st.paint.even_odd });
+            self.open_in_scope(Item::Clip { segments: std::mem::take(segs), even_odd: self.st.paint.even_odd });
             // what the scope draws after a clip does not make the picture larger (pgf's
             // \pgf@relevantforpicturesizefalse)
             if let Some(s) = self.scopes.last_mut() {
@@ -153,6 +184,22 @@ impl Engine {
             }
         }
         Ok(())
+    }
+
+    fn use_path_here(&mut self, segments: Vec<Segment>) -> Result<(), Error> {
+        let mut segs = self.segments_to_use(segments)?;
+        let mode = self.st.mode.clone();
+        self.grow_for_path(&segs, mode.bounding_box, mode.draw);
+        let drawn = segs.iter().any(|s| !matches!(s, Segment::MoveTo(_)));
+        // a functional shading: cells clipped to the path, under its stroke
+        let functional = if mode.shade && drawn && !mode.pattern { self.functional_cells(&segs) } else { None };
+        // a fill without a color of its own fills with the basic layer's fill pattern, if one is set
+        // (`\pgfsetfillpattern{stars}{red}` before `\filldraw`)
+        let pattern = mode.pattern || (mode.fill && self.st.paint.fill_pattern && self.st.paint.fill_color.is_none());
+        let mode = super::state::Mode { shade: mode.shade && functional.is_none(), pattern, ..mode };
+        let PathInks { fill, solid_under, stroke } = self.path_inks(&segs, &mode);
+        let fading = self.path_fade(&segs, mode.fade);
+        self.paint_path(&mut segs, PathPaint { mode, fill, solid_under, stroke, fading, functional, drawn })
     }
 
     /// A fading by name, fitted to the path's bounding box (`fit fading`, on by default).
@@ -499,11 +546,22 @@ impl Piece {
     }
 }
 
+/// The joint a rounded corner replaces, and how far the arc starts before it and ends after it.
+#[derive(Clone, Copy)]
+struct CornerJoin {
+    from: Point,
+    vertex: Point,
+    to: Point,
+    r_in: f64,
+    r_out: f64,
+}
+
 /// The arc that replaces corner `v`, coming from `from` and going on to `to`, as pgf rounds it
 /// (`\pgfprocessround`): it starts `r_in` before the corner and ends `r_out` after it, with no regard
 /// for the length of the sides. None when there is no corner: a side of no length, or a joint
 /// where the path goes on straight (inside an arc, where pgf has no corner to round either).
-fn corner_arc(from: Point, v: Point, to: Point, r_in: f64, r_out: f64) -> Option<(Point, Point, Point, Point)> {
+fn corner_arc(join: CornerJoin) -> Option<(Point, Point, Point, Point)> {
+    let CornerJoin { from, vertex: v, to, r_in, r_out } = join;
     let (d1, d2) = (from.minus(v), to.minus(v));
     let (n1, n2) = (d1.norm(), d2.norm());
     if n1 < 1e-9 || n2 < 1e-9 {
@@ -573,7 +631,7 @@ pub fn round_corners(segs: &[Segment], r_in: f64, r_out: f64) -> Vec<Segment> {
             } else {
                 continue;
             };
-            arcs[k] = corner_arc(pieces[k].into_end(begin(k, &pieces)), pieces[k].end(), next.out_of_start(), r_in, r_out);
+            arcs[k] = corner_arc(CornerJoin { from: pieces[k].into_end(begin(k, &pieces)), vertex: pieces[k].end(), to: next.out_of_start(), r_in, r_out });
         }
         let first = if closed { arcs[n - 1].map_or(start, |a| a.3) } else { start };
         out.push(Segment::MoveTo(first));

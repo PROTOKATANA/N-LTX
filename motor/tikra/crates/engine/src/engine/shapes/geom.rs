@@ -139,7 +139,7 @@ pub struct EllipseSpan {
 pub fn arc_to(v: &mut Vec<Segment>, from: Point, span: EllipseSpan) -> Point {
     let EllipseSpan { a0, a1, rx, ry } = span;
     let c = from.minus(Point::new(rx * a0.to_radians().cos(), ry * a0.to_radians().sin()));
-    v.extend(super::super::path::arc_segments(c, rx, ry, a0, a1, &crate::scene::Transform::default()));
+    v.extend(super::super::path::arc_segments(super::super::path::EllipseArc { center: c, rx, ry, start: a0, end: a1 }, &crate::scene::Transform::default()));
     c.plus(Point::new(rx * a1.to_radians().cos(), ry * a1.to_radians().sin()))
 }
 

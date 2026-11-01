@@ -16,7 +16,10 @@ pub fn cap(r: f64, amplitude: f64, angle: f64, t: &Transform) -> Vec<Segment> {
     let a = amplitude;
     let start = polar(angle, r);
     let mut v = vec![Segment::MoveTo(t.apply(start))];
-    v.extend(crate::canvas::transform_segments(&super::path::arc_segments(Point::new(0.0, 0.0), r, r, angle, -angle, &Transform::default()), t));
+    v.extend(crate::canvas::transform_segments(
+        &super::path::arc_segments(super::path::EllipseArc { center: Point::new(0.0, 0.0), rx: r, ry: r, start: angle, end: -angle }, &Transform::default()),
+        t,
+    ));
     let low = polar(-angle, r).plus(polar(90.0 - angle, 0.25 * r));
     v.push(Segment::CurveTo(t.apply(low), t.apply(Point::new(1.25 * r, -0.5 * a)), t.apply(Point::new(1.5 * r, -0.5 * a))));
     v.push(Segment::LineTo(t.apply(Point::new(1.5 * r, 0.5 * a))));

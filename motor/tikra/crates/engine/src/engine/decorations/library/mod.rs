@@ -240,7 +240,7 @@ impl<'a> Run<'a> {
     /// `\pgfpatharc{a0}{a1}{r}` from the current point.
     fn arc(&mut self, t: &Transform, a0: f64, a1: f64, r: f64) {
         let c = self.w.out.last.minus(t.linear(polar(a0, r)));
-        for s in crate::engine::path::arc_segments(c, r, r, a0, a1, t) {
+        for s in crate::engine::path::arc_segments(crate::engine::path::EllipseArc { center: c, rx: r, ry: r, start: a0, end: a1 }, t) {
             if let crate::scene::Segment::CurveTo(a, b, q) = s {
                 self.w.out.curve_to(a, b, q);
             }

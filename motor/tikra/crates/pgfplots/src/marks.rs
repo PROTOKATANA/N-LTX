@@ -21,7 +21,7 @@ fn polar(angle: f64, r: f64) -> Point {
 
 fn circle(r: f64) -> Vec<Segment> {
     let mut v = vec![Segment::MoveTo(Point::new(r, 0.0))];
-    v.extend(arc_segments(Point::default(), r, r, 0.0, 360.0, &Transform::default()));
+    v.extend(arc_segments(tikra_engine::engine::path::EllipseArc { center: Point::default(), rx: r, ry: r, start: 0.0, end: 360.0 }, &Transform::default()));
     v.push(Segment::Close);
     v
 }
@@ -72,7 +72,7 @@ pub fn mark(name: &str, r: f64) -> Option<(Vec<Segment>, Use)> {
         "pentagon" | "pentagon*" => (polygon(&[90.0, 18.0, -54.0, 234.0, 162.0].map(|a| polar(a, r))), if name.ends_with('*') { Use::FillStroke } else { Use::Stroke }),
         "halfcircle" | "halfcircle*" => {
             let mut v = vec![Segment::MoveTo(p(r, 0.0))];
-            v.extend(arc_segments(Point::default(), r, r, 0.0, 180.0, &Transform::default()));
+            v.extend(arc_segments(tikra_engine::engine::path::EllipseArc { center: Point::default(), rx: r, ry: r, start: 0.0, end: 180.0 }, &Transform::default()));
             v.push(Segment::Close);
             (v, if name.ends_with('*') { Use::FillStroke } else { Use::Stroke })
         }

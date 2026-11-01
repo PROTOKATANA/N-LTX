@@ -211,7 +211,10 @@ mod tests {
         // a circle (four curves) and a line through its center: two points, in order along the line
         let c = Point::new(0.0, 0.0);
         let mut circle = vec![Segment::MoveTo(Point::new(1.0, 0.0))];
-        circle.extend(crate::engine::path::arc_segments(c, 1.0, 1.0, 0.0, 360.0, &crate::scene::Transform::default()));
+        circle.extend(crate::engine::path::arc_segments(
+            crate::engine::path::EllipseArc { center: c, rx: 1.0, ry: 1.0, start: 0.0, end: 360.0 },
+            &crate::scene::Transform::default(),
+        ));
         let line = vec![Segment::MoveTo(Point::new(-2.0, 0.5)), Segment::LineTo(Point::new(2.0, 0.5))];
         let p = intersections(&line, &circle);
         assert_eq!(p.len(), 2);
