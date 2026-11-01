@@ -48,6 +48,10 @@ pub type EnvironmentFn = fn(&mut Engine, &str) -> Result<(), Error>;
 /// A decoration a piece does (`soft clip`): from the segments to what replaces them.
 pub type DecorationFn = fn(&mut Engine, &[Segment]) -> Result<Vec<Segment>, Error>;
 
+/// What decorates a path with the current decoration: from its segments, and the point before them
+/// if they do not start with a moveto, to what replaces them. One piece does it.
+pub type DecoratorFn = fn(&mut Engine, &[Segment], Option<Point>) -> Result<Vec<Segment>, Error>;
+
 /// The first id of the commands of the pieces (`Meaning::Native`).
 pub const PIECE_COMMAND_BASE: u16 = 1000;
 
@@ -63,6 +67,7 @@ pub struct Piece {
     /// Name, begin and end.
     pub environments: &'static [(&'static str, EnvironmentFn, EnvironmentFn)],
     pub decorations: &'static [(&'static str, DecorationFn)],
+    pub decorator: Option<DecoratorFn>,
     /// Its commands that read their own input (`\\datavisualization`, data line by line): `\\tikz`
     /// runs them as they come, instead of reading up to the `;` first.
     pub reading_input: &'static [&'static str],
@@ -89,6 +94,7 @@ impl Piece {
         node_text: &[],
         environments: &[],
         decorations: &[],
+        decorator: None,
         reading_input: &[],
         statement_filters: &[],
         node_anchors: &[],
@@ -109,6 +115,7 @@ pub(super) struct Hooks {
     node_text: Vec<(&'static str, NodeTextFn)>,
     environments: Vec<(&'static str, EnvironmentFn, EnvironmentFn)>,
     decorations: Vec<(&'static str, DecorationFn)>,
+    decorator: Option<DecoratorFn>,
     reading_input: Vec<&'static str>,
     statement_filters: Vec<StatementFilterFn>,
     node_anchors: Vec<NodeAnchorFn>,
@@ -168,6 +175,7 @@ impl Engine {
         self.plug.hooks.node_text.extend_from_slice(piece.node_text);
         self.plug.hooks.environments.extend_from_slice(piece.environments);
         self.plug.hooks.decorations.extend_from_slice(piece.decorations);
+        self.plug.hooks.decorator = piece.decorator.or(self.plug.hooks.decorator);
         self.plug.hooks.reading_input.extend_from_slice(piece.reading_input);
         self.plug.hooks.statement_filters.extend_from_slice(piece.statement_filters);
         self.plug.hooks.node_anchors.extend_from_slice(piece.node_anchors);
@@ -204,8 +212,13 @@ impl Engine {
         self.plug.hooks.environments.iter().find(|(n, _, _)| *n == name).map(|(_, begin, end)| (*begin, *end))
     }
 
+    /// What decorates paths, if a piece does.
+    pub fn decorator(&self) -> Option<DecoratorFn> {
+        self.plug.hooks.decorator
+    }
+
     /// The decoration `name` of a piece.
-    pub(super) fn piece_decoration(&self, name: &str) -> Option<DecorationFn> {
+    pub fn piece_decoration(&self, name: &str) -> Option<DecorationFn> {
         self.plug.hooks.decorations.iter().find(|(n, _)| *n == name).map(|(_, decoration)| *decoration)
     }
 
