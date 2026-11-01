@@ -237,8 +237,20 @@ pub fn arrow_box(input: &mut Input) -> Geometry {
         g.anchor_at(name, b[*k]);
     }
     let (m, bp) = (input.mid_point(), input.base_point());
-    let side = |o: Point, ext: f64, d: f64| if ext > 0.0 { ray(o, Point::new(d, 0.0), &b) } else { o.plus(Point::new(d * w, 0.0)) };
-    let tip = |ext: f64, name: &str, fallback: Point, g: &Geometry| if ext > 0.0 { g.anchor(&format!("{name} arrow tip")).unwrap_or(fallback) } else { fallback };
+    let side = |o: Point, ext: f64, d: f64| {
+        if ext > 0.0 {
+            ray(o, Point::new(d, 0.0), &b)
+        } else {
+            o.plus(Point::new(d * w, 0.0))
+        }
+    };
+    let tip = |ext: f64, name: &str, fallback: Point, g: &Geometry| {
+        if ext > 0.0 {
+            g.anchor(&format!("{name} arrow tip")).unwrap_or(fallback)
+        } else {
+            fallback
+        }
+    };
     let anchors = [
         ("center", c),
         ("mid", m),

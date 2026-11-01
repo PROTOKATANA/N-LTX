@@ -4,7 +4,7 @@
 use crate::scene::{Point, Segment};
 
 use super::basic::{box_anchors, rectangle_corners};
-use super::{arc_points, arc_to, cos, cot, miter_offset, polygon_path, ray, sin, tan, Border, Geometry, Input, Layer, Usage};
+use super::{arc_points, arc_to, cos, cot, miter_offset, polygon_path, ray, sin, tan, Border, EllipseSpan, Geometry, Input, Layer, Usage};
 
 /// A rectangle's anchors and border, with nothing in the background: what `cross out` and `strike
 /// out` inherit.
@@ -45,7 +45,39 @@ fn arc_kind(s: &str) -> Arc {
     }
 }
 
-pub fn rounded_rectangle(input: &mut Input) -> Geometry {
+/// The sizes a rounded rectangle reads before it draws: arcs, text, separations and center.
+#[derive(Clone, Copy)]
+struct RoundedMetrics {
+    west: Arc,
+    east: Arc,
+    a: f64,
+    hh: f64,
+    r: f64,
+    arc_w: f64,
+    chord_w: f64,
+    hw: f64,
+    ox: f64,
+    oy: f64,
+    concave_shift: f64,
+    convex_shift: f64,
+    c: Point,
+}
+
+/// Corners, outline and the west/east anchor x, built from the metrics.
+struct RoundedShape {
+    m: RoundedMetrics,
+    ne: Point,
+    se: Point,
+    nw: Point,
+    sw: Point,
+    outline: Vec<Point>,
+    wx: f64,
+    ex: f64,
+    top: f64,
+    bottom: f64,
+}
+
+fn rounded_metrics(input: &mut Input) -> RoundedMetrics {
     let west = arc_kind(&input.keys.text("/pgf/rounded rectangle west arc"));
     let east = arc_kind(&input.keys.text("/pgf/rounded rectangle east arc"));
     let a = input.number("/pgf/rounded rectangle arc length", 180.0) / 2.0;
@@ -72,28 +104,59 @@ pub fn rounded_rectangle(input: &mut Input) -> Geometry {
     let (ox, oy) = (input.outer_xsep, input.outer_ysep);
     let (concave_shift, convex_shift) = if a == 90.0 { (0.0, 0.0) } else { (ox * cot((90.0 - a) / 2.0), ox * cot((90.0 + a) / 2.0)) };
     let c = input.center_point();
-    let p = |dx: f64, dy: f64| c.plus(Point::new(dx, dy));
-    let side_x = |k: Arc| match k {
-        Arc::Concave => hw + arc_w + concave_shift,
-        Arc::Convex => hw + chord_w + ox,
-        Arc::None => hw + ox,
-    };
-    let corner_x = |k: Arc| if k == Arc::Convex { hw + chord_w - arc_w + convex_shift } else { side_x(k) };
-    let (top, bottom) = (hh + oy, -hh - oy);
-    let (ne, se) = (p(corner_x(east), top), p(corner_x(east), bottom));
-    let (nw, sw) = (p(-corner_x(west), top), p(-corner_x(west), bottom));
+    RoundedMetrics { west, east, a, hh, r, arc_w, chord_w, hw, ox, oy, concave_shift, convex_shift, c }
+}
+
+fn side_x(m: &RoundedMetrics, k: Arc) -> f64 {
+    match k {
+        Arc::Concave => m.hw + m.arc_w + m.concave_shift,
+        Arc::Convex => m.hw + m.chord_w + m.ox,
+        Arc::None => m.hw + m.ox,
+    }
+}
+
+fn corner_x(m: &RoundedMetrics, k: Arc) -> f64 {
+    if k == Arc::Convex {
+        m.hw + m.chord_w - m.arc_w + m.convex_shift
+    } else {
+        side_x(m, k)
+    }
+}
+
+fn rounded_border(m: RoundedMetrics) -> RoundedShape {
+    let p = |dx: f64, dy: f64| m.c.plus(Point::new(dx, dy));
+    let (top, bottom) = (m.hh + m.oy, -m.hh - m.oy);
+    let (ne, se) = (p(corner_x(&m, m.east), top), p(corner_x(&m, m.east), bottom));
+    let (nw, sw) = (p(-corner_x(&m, m.west), top), p(-corner_x(&m, m.west), bottom));
     // the border: the sides, and the convex arcs grown by the outer seps
     let mut outline = vec![nw, ne];
-    if east == Arc::Convex {
-        outline.extend(arc_points(p(hw + chord_w - r, 0.0), r + ox, r + oy, a, -a));
+    if m.east == Arc::Convex {
+        outline.extend(arc_points(p(m.hw + m.chord_w - m.r, 0.0), EllipseSpan { a0: m.a, a1: -m.a, rx: m.r + m.ox, ry: m.r + m.oy }));
     }
     outline.push(se);
     outline.push(sw);
-    if west == Arc::Convex {
-        outline.extend(arc_points(p(-hw - chord_w + r, 0.0), r + ox, r + oy, 180.0 + a, 180.0 - a));
+    if m.west == Arc::Convex {
+        outline.extend(arc_points(p(-m.hw - m.chord_w + m.r, 0.0), EllipseSpan { a0: 180.0 + m.a, a1: 180.0 - m.a, rx: m.r + m.ox, ry: m.r + m.oy }));
     }
-    let mut g = Geometry::new(c, Border::Outline(outline));
-    let (wx, ex) = (p(-side_x(west), 0.0).x, p(side_x(east), 0.0).x);
+    let (wx, ex) = (p(-side_x(&m, m.west), 0.0).x, p(side_x(&m, m.east), 0.0).x);
+    RoundedShape { m, ne, se, nw, sw, outline, wx, ex, top, bottom }
+}
+
+pub fn rounded_rectangle(input: &mut Input) -> Geometry {
+    let mut shape = rounded_border(rounded_metrics(input));
+    let outline = std::mem::take(&mut shape.outline);
+    let mut g = Geometry::new(shape.m.c, Border::Outline(outline));
+    place_rounded_anchors(&mut g, input, &shape);
+    rounded_background(&mut g, &shape);
+    g
+}
+
+fn place_rounded_anchors(g: &mut Geometry, input: &Input, shape: &RoundedShape) {
+    let c = shape.m.c;
+    let p = |dx: f64, dy: f64| c.plus(Point::new(dx, dy));
+    let (top, bottom) = (shape.top, shape.bottom);
+    let (wx, ex) = (shape.wx, shape.ex);
+    let (nw, sw, ne, se) = (shape.nw, shape.sw, shape.ne, shape.se);
     let m = 0.5 * input.ex;
     for (name, q) in [
         ("center", c),
@@ -114,42 +177,46 @@ pub fn rounded_rectangle(input: &mut Input) -> Geometry {
     ] {
         g.anchor_at(name, q);
     }
-    let mut v = vec![Segment::MoveTo(p(0.0, hh))];
-    match east {
+}
+
+fn rounded_background(g: &mut Geometry, shape: &RoundedShape) {
+    let m = &shape.m;
+    let p = |dx: f64, dy: f64| m.c.plus(Point::new(dx, dy));
+    let mut v = vec![Segment::MoveTo(p(0.0, m.hh))];
+    match m.east {
         Arc::Concave => {
-            let q = p(hw + arc_w, hh);
+            let q = p(m.hw + m.arc_w, m.hh);
             v.push(Segment::LineTo(q));
-            arc_to(&mut v, q, 180.0 - a, 180.0 + a, r, r);
+            arc_to(&mut v, q, EllipseSpan { a0: 180.0 - m.a, a1: 180.0 + m.a, rx: m.r, ry: m.r });
         }
         Arc::Convex => {
-            let q = p(hw + chord_w - arc_w, hh);
+            let q = p(m.hw + m.chord_w - m.arc_w, m.hh);
             v.push(Segment::LineTo(q));
-            arc_to(&mut v, q, a, -a, r, r);
+            arc_to(&mut v, q, EllipseSpan { a0: m.a, a1: -m.a, rx: m.r, ry: m.r });
         }
         Arc::None => {
-            v.push(Segment::LineTo(p(hw, hh)));
-            v.push(Segment::LineTo(p(hw, -hh)));
+            v.push(Segment::LineTo(p(m.hw, m.hh)));
+            v.push(Segment::LineTo(p(m.hw, -m.hh)));
         }
     }
-    match west {
+    match m.west {
         Arc::Concave => {
-            let q = p(-hw - arc_w, -hh);
+            let q = p(-m.hw - m.arc_w, -m.hh);
             v.push(Segment::LineTo(q));
-            arc_to(&mut v, q, -a, a, r, r);
+            arc_to(&mut v, q, EllipseSpan { a0: -m.a, a1: m.a, rx: m.r, ry: m.r });
         }
         Arc::Convex => {
-            let q = p(-hw - chord_w + arc_w, -hh);
+            let q = p(-m.hw - m.chord_w + m.arc_w, -m.hh);
             v.push(Segment::LineTo(q));
-            arc_to(&mut v, q, 180.0 + a, 180.0 - a, r, r);
+            arc_to(&mut v, q, EllipseSpan { a0: 180.0 + m.a, a1: 180.0 - m.a, rx: m.r, ry: m.r });
         }
         Arc::None => {
-            v.push(Segment::LineTo(p(-hw, -hh)));
-            v.push(Segment::LineTo(p(-hw, hh)));
+            v.push(Segment::LineTo(p(-m.hw, -m.hh)));
+            v.push(Segment::LineTo(p(-m.hw, m.hh)));
         }
     }
     v.push(Segment::Close);
     g.background(v);
-    g
 }
 
 pub fn chamfered_rectangle(input: &mut Input) -> Geometry {
@@ -183,7 +250,13 @@ pub fn chamfered_rectangle(input: &mut Input) -> Geometry {
     }
     let c = input.center_point();
     let p = |dx: f64, dy: f64| c.plus(Point::new(dx, dy));
-    let corner = |chamfered: bool, sx: f64, sy: f64| if chamfered { p(sx * xa, sy * ya) } else { p(sx * (xa + xb), sy * (ya + yb)) };
+    let corner = |chamfered: bool, sx: f64, sy: f64| {
+        if chamfered {
+            p(sx * xa, sy * ya)
+        } else {
+            p(sx * (xa + xb), sy * (ya + yb))
+        }
+    };
     let shape = [
         p(xa + xb, ya - yc),
         corner(ne_c, 1.0, 1.0),

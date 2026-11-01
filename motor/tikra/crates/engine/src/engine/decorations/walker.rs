@@ -103,8 +103,18 @@ pub fn normalised(v: Point) -> Point {
     Point::new(a.cos(), a.sin())
 }
 
+/// The four control points of a cubic Bézier, in path order.
+#[derive(Clone, Copy)]
+pub struct CubicCurve {
+    pub p0: Point,
+    pub p1: Point,
+    pub p2: Point,
+    pub p3: Point,
+}
+
 /// The point at time `t` of a curve, and the tangent pgf derives from de Casteljau's second level.
-pub fn curve_at(t: f64, p0: Point, p1: Point, p2: Point, p3: Point) -> (Point, Point) {
+pub fn curve_at(t: f64, curve: CubicCurve) -> (Point, Point) {
+    let CubicCurve { p0, p1, p2, p3 } = curve;
     let s = t;
     let u = 1.0 - t;
     let l = |a: Point, b: Point| a.scale(u).plus(b.scale(s));
@@ -450,7 +460,7 @@ impl Walker {
 
     fn curve_time_after(&self, d: f64) -> (f64, f64) {
         let s = self.seg;
-        let at = |t: f64| curve_at(t, s.first, s.sa, s.sb, s.last);
+        let at = |t: f64| curve_at(t, CubicCurve { p0: s.first, p1: s.sa, p2: s.sb, p3: s.last });
         let mut prev = at(self.time).0;
         let mut xb = (self.time * 65536.0).round() as i64;
         let mut dt: i64 = if self.section < 128.0 {
@@ -488,7 +498,7 @@ impl Walker {
     pub fn transform(&self) -> Transform {
         let s = self.seg;
         if s.curve {
-            let (p, tangent) = curve_at(self.time, s.first, s.sa, s.sb, s.last);
+            let (p, tangent) = curve_at(self.time, CubicCurve { p0: s.first, p1: s.sa, p2: s.sb, p3: s.last });
             let u = normalised(tangent);
             Transform { a: u.x, b: u.y, c: -u.y, d: u.x, e: p.x, f: p.y }
         } else {

@@ -184,7 +184,42 @@ fn per_part(list: &str, n: usize) -> Vec<String> {
     (0..n).map(|k| items.get(k).or(items.last()).cloned().unwrap_or_default()).collect()
 }
 
-pub fn rectangle_split(input: &mut Input) -> Geometry {
+/// The sizes a rectangle split reads before it places anything. `ignore empty parts` is applied
+/// while the boxes are built; it is not read again.
+struct SplitMeasures {
+    n: usize,
+    horizontal: bool,
+    draw_splits: bool,
+    ex: f64,
+    boxes: Vec<BoxSize>,
+    skipped: Vec<bool>,
+    max_width: f64,
+    max_total: f64,
+    max_ht: f64,
+    max_dp: f64,
+    align: Vec<String>,
+    ix: f64,
+    iy: f64,
+    ox: f64,
+    oy: f64,
+    lw: f64,
+}
+
+/// Where each part's origin goes, the outer corners, and the split anchors.
+struct Placed {
+    origins: Vec<Point>,
+    sw: Point,
+    ne: Point,
+    anchors: Vec<(String, Point)>,
+}
+
+/// The measures together with where the parts were placed.
+struct SplitDrawn {
+    measures: SplitMeasures,
+    placed: Placed,
+}
+
+fn split_measures(input: &mut Input) -> SplitMeasures {
     let n = input.number("/pgf/rectangle split parts", 4.0).trunc().clamp(1.0, 20.0) as usize;
     let horizontal = input.keys.flag("tikra@sh@splithoriz");
     let ignore_empty = input.keys.flag("tikra@sh@splitskipempty");
@@ -212,94 +247,141 @@ pub fn rectangle_split(input: &mut Input) -> Geometry {
     max_width = max_width.max(input.minimum_width - 2.0 * ix);
     max_total = max_total.max(input.minimum_height - 2.0 * iy);
     let align = per_part(&input.keys.text("/pgf/rectangle split part align"), n);
-    let mut origins = vec![Point::new(0.0, 0.0); n];
-    let mut last = 0usize;
-    let (sw, ne);
-    let pt = Point::new;
-    let mut anchors: Vec<(String, Point)> = Vec::new();
-    if horizontal {
-        let (mut x, mut y_offset) = (0.0, 0.0);
-        for k in 0..n {
-            if skipped[k] && k > 0 {
-                origins[k] = origins[last];
-                continue;
-            }
-            let b = boxes[k];
-            let y = match align[k].as_str() {
-                "bottom" => b.dp,
-                "top" => max_total - b.ht,
-                "base" => (max_total - max_ht + max_dp) / 2.0,
-                _ => (max_total - b.ht + b.dp) / 2.0,
-            };
-            if k == 0 {
-                y_offset = y;
-            } else {
-                x += boxes[last].wd + 2.0 * ix + lw;
-                origins[k] = pt(x, y - y_offset);
-            }
-            last = k;
-        }
-        ne = pt(origins[last].x + boxes[last].wd + ix + ox, max_total - y_offset + iy + oy);
-        sw = pt(origins[0].x - ix - ox, -y_offset - iy - oy);
-        let c = sw.lerp(ne, 0.5);
-        for k in 0..n {
-            if skipped[k] {
-                continue;
-            }
-            let name = anchor_name(k + 1);
-            let xa = origins[k].x + boxes[k].wd / 2.0;
-            anchors.push((format!("{name} south"), pt(xa, sw.y)));
-            anchors.push((format!("{name} north"), pt(xa, ne.y)));
-            if k + 1 < n {
-                let xs = xa + boxes[k].wd / 2.0 + ix + lw / 2.0;
-                anchors.push((format!("{name} split south"), pt(xs, sw.y)));
-                anchors.push((format!("{name} split north"), pt(xs, ne.y)));
-                anchors.push((format!("{name} split"), pt(xs, c.y)));
-            }
-        }
+    SplitMeasures { n, horizontal, draw_splits, ex, boxes, skipped, max_width, max_total, max_ht, max_dp, align, ix, iy, ox, oy, lw }
+}
+
+fn layout_split(m: &SplitMeasures) -> Placed {
+    if m.horizontal {
+        place_horizontal(m)
     } else {
-        let (mut y, mut x_offset) = (0.0, 0.0);
-        for k in 0..n {
-            if skipped[k] && k > 0 {
-                origins[k] = origins[last];
-                continue;
-            }
-            let b = boxes[k];
-            let x = match align[k].as_str() {
-                "left" => 0.0,
-                "right" => max_width - b.wd,
-                _ => (max_width - b.wd) / 2.0,
-            };
-            if k == 0 {
-                x_offset = x;
-            } else {
-                y -= boxes[last].dp + 2.0 * iy + lw + b.ht;
-                origins[k] = pt(x - x_offset, y);
-            }
-            last = k;
+        place_vertical(m)
+    }
+}
+
+fn place_horizontal(m: &SplitMeasures) -> Placed {
+    let pt = Point::new;
+    let mut origins = vec![Point::new(0.0, 0.0); m.n];
+    let mut last = 0usize;
+    let (mut x, mut y_offset) = (0.0, 0.0);
+    for k in 0..m.n {
+        if m.skipped[k] && k > 0 {
+            origins[k] = origins[last];
+            continue;
         }
-        ne = pt(max_width - x_offset + ix + ox, boxes[0].ht + iy + oy + lw / 2.0);
-        sw = pt(-x_offset - ix - ox, origins[last].y - boxes[last].dp - iy - oy - lw / 2.0);
-        let c = sw.lerp(ne, 0.5);
-        for k in 0..n {
-            if skipped[k] {
-                continue;
-            }
-            let name = anchor_name(k + 1);
-            let ya = origins[k].y + boxes[k].ht / 2.0 - boxes[k].dp / 2.0;
-            anchors.push((format!("{name} west"), pt(sw.x, ya)));
-            anchors.push((format!("{name} east"), pt(ne.x, ya)));
-            if k + 1 < n {
-                let ys = origins[k].y - boxes[k].dp - iy - lw / 2.0;
-                anchors.push((format!("{name} split west"), pt(sw.x, ys)));
-                anchors.push((format!("{name} split east"), pt(ne.x, ys)));
-                anchors.push((format!("{name} split"), pt(c.x, ys)));
-            }
+        let b = m.boxes[k];
+        let y = match m.align[k].as_str() {
+            "bottom" => b.dp,
+            "top" => m.max_total - b.ht,
+            "base" => (m.max_total - m.max_ht + m.max_dp) / 2.0,
+            _ => (m.max_total - b.ht + b.dp) / 2.0,
+        };
+        if k == 0 {
+            y_offset = y;
+        } else {
+            x += m.boxes[last].wd + 2.0 * m.ix + m.lw;
+            origins[k] = pt(x, y - y_offset);
+        }
+        last = k;
+    }
+    let ne = pt(origins[last].x + m.boxes[last].wd + m.ix + m.ox, m.max_total - y_offset + m.iy + m.oy);
+    let sw = pt(origins[0].x - m.ix - m.ox, -y_offset - m.iy - m.oy);
+    let mut placed = Placed { origins, sw, ne, anchors: Vec::new() };
+    horizontal_split_anchors(m, &mut placed);
+    placed
+}
+
+fn horizontal_split_anchors(m: &SplitMeasures, placed: &mut Placed) {
+    let pt = Point::new;
+    let c = placed.sw.lerp(placed.ne, 0.5);
+    for k in 0..m.n {
+        if m.skipped[k] {
+            continue;
+        }
+        let name = anchor_name(k + 1);
+        let xa = placed.origins[k].x + m.boxes[k].wd / 2.0;
+        placed.anchors.push((format!("{name} south"), pt(xa, placed.sw.y)));
+        placed.anchors.push((format!("{name} north"), pt(xa, placed.ne.y)));
+        if k + 1 < m.n {
+            let xs = xa + m.boxes[k].wd / 2.0 + m.ix + m.lw / 2.0;
+            placed.anchors.push((format!("{name} split south"), pt(xs, placed.sw.y)));
+            placed.anchors.push((format!("{name} split north"), pt(xs, placed.ne.y)));
+            placed.anchors.push((format!("{name} split"), pt(xs, c.y)));
         }
     }
+}
+
+fn place_vertical(m: &SplitMeasures) -> Placed {
+    let pt = Point::new;
+    let mut origins = vec![Point::new(0.0, 0.0); m.n];
+    let mut last = 0usize;
+    let (mut y, mut x_offset) = (0.0, 0.0);
+    for k in 0..m.n {
+        if m.skipped[k] && k > 0 {
+            origins[k] = origins[last];
+            continue;
+        }
+        let b = m.boxes[k];
+        let x = match m.align[k].as_str() {
+            "left" => 0.0,
+            "right" => m.max_width - b.wd,
+            _ => (m.max_width - b.wd) / 2.0,
+        };
+        if k == 0 {
+            x_offset = x;
+        } else {
+            y -= m.boxes[last].dp + 2.0 * m.iy + m.lw + b.ht;
+            origins[k] = pt(x - x_offset, y);
+        }
+        last = k;
+    }
+    let ne = pt(m.max_width - x_offset + m.ix + m.ox, m.boxes[0].ht + m.iy + m.oy + m.lw / 2.0);
+    let sw = pt(-x_offset - m.ix - m.ox, origins[last].y - m.boxes[last].dp - m.iy - m.oy - m.lw / 2.0);
+    let mut placed = Placed { origins, sw, ne, anchors: Vec::new() };
+    vertical_split_anchors(m, &mut placed);
+    placed
+}
+
+fn vertical_split_anchors(m: &SplitMeasures, placed: &mut Placed) {
+    let pt = Point::new;
+    let c = placed.sw.lerp(placed.ne, 0.5);
+    for k in 0..m.n {
+        if m.skipped[k] {
+            continue;
+        }
+        let name = anchor_name(k + 1);
+        let ya = placed.origins[k].y + m.boxes[k].ht / 2.0 - m.boxes[k].dp / 2.0;
+        placed.anchors.push((format!("{name} west"), pt(placed.sw.x, ya)));
+        placed.anchors.push((format!("{name} east"), pt(placed.ne.x, ya)));
+        if k + 1 < m.n {
+            let ys = placed.origins[k].y - m.boxes[k].dp - m.iy - m.lw / 2.0;
+            placed.anchors.push((format!("{name} split west"), pt(placed.sw.x, ys)));
+            placed.anchors.push((format!("{name} split east"), pt(placed.ne.x, ys)));
+            placed.anchors.push((format!("{name} split"), pt(c.x, ys)));
+        }
+    }
+}
+
+pub fn rectangle_split(input: &mut Input) -> Geometry {
+    let measures = split_measures(input);
+    let placed = layout_split(&measures);
+    let mut drawn = SplitDrawn { measures, placed };
+    let mut g = split_frame(input, &drawn);
+    g.anchors.extend(std::mem::take(&mut drawn.placed.anchors));
+    place_part_anchors(&mut g, &drawn);
+    alias_part_anchors(&mut g);
+    fill_split_parts(input, &mut g, &drawn);
+    split_background(&mut g, &drawn);
+    g
+}
+
+fn split_frame(input: &Input, drawn: &SplitDrawn) -> Geometry {
+    let sw = drawn.placed.sw;
+    let ne = drawn.placed.ne;
     let c = sw.lerp(ne, 0.5);
     let mut g = Geometry::new(c, Border::Rectangle(ne.minus(sw).scale(0.5)));
     let wd = input.text().wd;
+    let ex = drawn.measures.ex;
+    let pt = Point::new;
     for (name, q) in [
         ("center", c),
         ("base", pt(wd / 2.0, 0.0)),
@@ -319,13 +401,18 @@ pub fn rectangle_split(input: &mut Input) -> Geometry {
     ] {
         g.anchor_at(name, q);
     }
-    g.anchors.extend(anchors);
-    // the parts' anchors, and the aliases pgf gives them; a missing one falls back to its side
+    g
+}
+
+/// The parts' anchors, and the aliases pgf gives them; a missing one falls back to its side.
+fn place_part_anchors(g: &mut Geometry, drawn: &SplitDrawn) {
+    let n = drawn.measures.n;
+    let c = drawn.placed.sw.lerp(drawn.placed.ne, 0.5);
     g.parts.clear();
     for k in 1..=20 {
         let name = anchor_name(k);
-        let origin = origins[(k - 1).min(n - 1)];
-        let origin = if k <= n { origin } else { origins[0] };
+        let origin = drawn.placed.origins[(k - 1).min(n - 1)];
+        let origin = if k <= n { origin } else { drawn.placed.origins[0] };
         g.anchor_at(name, origin);
         if k <= n {
             g.parts.push((part_name(k).to_string(), origin));
@@ -348,6 +435,9 @@ pub fn rectangle_split(input: &mut Input) -> Geometry {
             }
         }
     }
+}
+
+fn alias_part_anchors(g: &mut Geometry) {
     for (alias, of) in [("text", "one"), ("second", "two"), ("third", "three"), ("fourth", "four")] {
         for suffix in ["", " east", " west", " north", " south", " split", " split east", " split west", " split north", " split south"] {
             if let Some(q) = g.anchor(&format!("{of}{suffix}")) {
@@ -357,51 +447,86 @@ pub fn rectangle_split(input: &mut Input) -> Geometry {
             }
         }
     }
-    // custom fills of the parts
-    if input.keys.flag("tikra@sh@splitfill") {
-        let colors = per_part(&input.keys.text("/pgf/rectangle split part fill"), n);
-        let rect = |a: Point, b: Point| vec![Segment::MoveTo(a), Segment::LineTo(pt(a.x, b.y)), Segment::LineTo(b), Segment::LineTo(pt(b.x, a.y)), Segment::Close];
-        if horizontal {
-            let mut bl = sw;
-            for k in 1..=n {
-                let tr = if k == n { ne } else { g.anchor(&format!("{} split north", anchor_name(k))).unwrap_or(ne) };
-                let bl2 = bl.plus(pt(if k == 1 { ox } else { 0.0 }, oy));
-                let tr2 = tr.plus(pt(if k == n { -ox } else { 0.0 }, -oy));
-                if !skipped[k - 1] && colors[k - 1] != "none" {
-                    g.path(Layer::BehindBackground, rect(bl2, tr2), Usage::Fill(colors[k - 1].clone()));
-                }
-                bl = pt(tr2.x, bl2.y - oy);
-            }
-        } else {
-            let mut tr = ne;
-            for k in 1..=n {
-                let bl = if k == n { sw } else { g.anchor(&format!("{} split west", anchor_name(k))).unwrap_or(sw) };
-                let bl2 = bl.plus(pt(ox, if n == 1 || k == n { oy } else { 0.0 }));
-                let tr2 = tr.plus(pt(-ox, if n == 1 || k == 1 { -oy } else { 0.0 }));
-                if !skipped[k - 1] && colors[k - 1] != "none" {
-                    g.path(Layer::BehindBackground, rect(bl2, tr2), Usage::Fill(colors[k - 1].clone()));
-                }
-                tr = pt(tr2.x + ox, bl2.y);
-            }
-        }
+}
+
+fn split_rect(a: Point, b: Point) -> Vec<Segment> {
+    let pt = Point::new;
+    vec![Segment::MoveTo(a), Segment::LineTo(pt(a.x, b.y)), Segment::LineTo(b), Segment::LineTo(pt(b.x, a.y)), Segment::Close]
+}
+
+/// Custom fills of the parts. The fill key is read here, after the anchors exist.
+fn fill_split_parts(input: &mut Input, g: &mut Geometry, drawn: &SplitDrawn) {
+    if !input.keys.flag("tikra@sh@splitfill") {
+        return;
     }
-    let (a, b) = (sw.plus(pt(ox, oy)), ne.minus(pt(ox, oy)));
-    let mut v = vec![Segment::MoveTo(a), Segment::LineTo(pt(b.x, a.y)), Segment::LineTo(b), Segment::LineTo(pt(a.x, b.y)), Segment::Close];
-    if draw_splits {
-        for k in 1..n {
-            if skipped[k - 1] {
-                continue;
-            }
-            let name = anchor_name(k);
-            let (from, to) = if horizontal {
-                (g.anchor(&format!("{name} split north")).unwrap_or(c).minus(pt(0.0, oy)), g.anchor(&format!("{name} split south")).unwrap_or(c).plus(pt(0.0, oy)))
-            } else {
-                (g.anchor(&format!("{name} split east")).unwrap_or(c).minus(pt(ox, 0.0)), g.anchor(&format!("{name} split west")).unwrap_or(c).plus(pt(ox, 0.0)))
-            };
-            v.push(Segment::MoveTo(from));
-            v.push(Segment::LineTo(to));
+    let colors = per_part(&input.keys.text("/pgf/rectangle split part fill"), drawn.measures.n);
+    if drawn.measures.horizontal {
+        fill_horizontal_parts(g, drawn, &colors);
+    } else {
+        fill_vertical_parts(g, drawn, &colors);
+    }
+}
+
+fn fill_horizontal_parts(g: &mut Geometry, drawn: &SplitDrawn, colors: &[String]) {
+    let m = &drawn.measures;
+    let mut bl = drawn.placed.sw;
+    let ne = drawn.placed.ne;
+    let pt = Point::new;
+    for k in 1..=m.n {
+        let tr = if k == m.n { ne } else { g.anchor(&format!("{} split north", anchor_name(k))).unwrap_or(ne) };
+        let bl2 = bl.plus(pt(if k == 1 { m.ox } else { 0.0 }, m.oy));
+        let tr2 = tr.plus(pt(if k == m.n { -m.ox } else { 0.0 }, -m.oy));
+        if !m.skipped[k - 1] && colors[k - 1] != "none" {
+            g.path(Layer::BehindBackground, split_rect(bl2, tr2), Usage::Fill(colors[k - 1].clone()));
         }
+        bl = pt(tr2.x, bl2.y - m.oy);
+    }
+}
+
+fn fill_vertical_parts(g: &mut Geometry, drawn: &SplitDrawn, colors: &[String]) {
+    let m = &drawn.measures;
+    let mut tr = drawn.placed.ne;
+    let sw = drawn.placed.sw;
+    let pt = Point::new;
+    for k in 1..=m.n {
+        let bl = if k == m.n { sw } else { g.anchor(&format!("{} split west", anchor_name(k))).unwrap_or(sw) };
+        let bl2 = bl.plus(pt(m.ox, if m.n == 1 || k == m.n { m.oy } else { 0.0 }));
+        let tr2 = tr.plus(pt(-m.ox, if m.n == 1 || k == 1 { -m.oy } else { 0.0 }));
+        if !m.skipped[k - 1] && colors[k - 1] != "none" {
+            g.path(Layer::BehindBackground, split_rect(bl2, tr2), Usage::Fill(colors[k - 1].clone()));
+        }
+        tr = pt(tr2.x + m.ox, bl2.y);
+    }
+}
+
+fn split_background(g: &mut Geometry, drawn: &SplitDrawn) {
+    let m = &drawn.measures;
+    let sw = drawn.placed.sw;
+    let ne = drawn.placed.ne;
+    let pt = Point::new;
+    let (a, b) = (sw.plus(pt(m.ox, m.oy)), ne.minus(pt(m.ox, m.oy)));
+    let mut v = vec![Segment::MoveTo(a), Segment::LineTo(pt(b.x, a.y)), Segment::LineTo(b), Segment::LineTo(pt(a.x, b.y)), Segment::Close];
+    if m.draw_splits {
+        add_split_lines(&mut v, g, drawn);
     }
     g.background(v);
-    g
+}
+
+fn add_split_lines(v: &mut Vec<Segment>, g: &Geometry, drawn: &SplitDrawn) {
+    let m = &drawn.measures;
+    let c = drawn.placed.sw.lerp(drawn.placed.ne, 0.5);
+    let pt = Point::new;
+    for k in 1..m.n {
+        if m.skipped[k - 1] {
+            continue;
+        }
+        let name = anchor_name(k);
+        let (from, to) = if m.horizontal {
+            (g.anchor(&format!("{name} split north")).unwrap_or(c).minus(pt(0.0, m.oy)), g.anchor(&format!("{name} split south")).unwrap_or(c).plus(pt(0.0, m.oy)))
+        } else {
+            (g.anchor(&format!("{name} split east")).unwrap_or(c).minus(pt(m.ox, 0.0)), g.anchor(&format!("{name} split west")).unwrap_or(c).plus(pt(m.ox, 0.0)))
+        };
+        v.push(Segment::MoveTo(from));
+        v.push(Segment::LineTo(to));
+    }
 }

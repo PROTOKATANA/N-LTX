@@ -14,7 +14,7 @@ use crate::scene::{Point, Segment, Transform};
 use crate::PT;
 
 use super::basic::{box_anchors, circle, ellipse_path, rectangle, rectangle_corners};
-use super::{arc_to, Border, Geometry, Input, Layer, Usage};
+use super::{arc_to, Border, EllipseSpan, Geometry, Input, Layer, Usage};
 
 /// `input` and `output`: the middle of the left and right sides of the box from `sw` to `ne`.
 fn ends(g: &mut Geometry, sw: Point, ne: Point) {
@@ -173,7 +173,7 @@ pub fn inductor(input: &mut Input) -> Geometry {
         if xa >= xb + 0.1 * PT || yb <= 0.0 {
             break;
         }
-        at = arc_to(&mut v, at, 180.0, 0.0, yb, yb);
+        at = arc_to(&mut v, at, EllipseSpan { a0: 180.0, a1: 0.0, rx: yb, ry: yb });
     }
     v.push(Segment::LineTo(Point::new(xb, 0.0)));
     g.background(v);
@@ -241,10 +241,19 @@ pub fn breakdown_diode(input: &mut Input) -> Geometry {
     g
 }
 
-/// What a generic shape draws in its frame at `origin`, where 1 (1pt for code) is `size`: the lines
-/// of its `tikra mark` (`x,y x,y; …`, or `wave`, the sign of alternating current), then the paths
-/// that the basic-layer code of its `before background` key strokes.
-fn key_code(input: &mut Input, g: &mut Geometry, shape: &str, origin: Point, size: f64) {
+/// The frame a generic shape's key code is drawn in: the shape's name, where 1 sits, and how big
+/// 1 is (1pt of the code is `size`).
+struct KeyFrame<'a> {
+    shape: &'a str,
+    origin: Point,
+    size: f64,
+}
+
+/// What a generic shape draws in `frame`: the lines of its `tikra mark` (`x,y x,y; …`, or `wave`,
+/// the sign of alternating current), then the paths that the basic-layer code of its
+/// `before background` key strokes.
+fn key_code(input: &mut Input, g: &mut Geometry, frame: KeyFrame<'_>) {
+    let KeyFrame { shape, origin, size } = frame;
     let p = |x: f64, y: f64| origin.plus(Point::new(x * size, y * size));
     let mark = input.keys.text(&format!("/pgf/{shape}/tikra mark"));
     let mut v = Vec::new();
@@ -277,7 +286,7 @@ pub fn generic_circle(input: &mut Input) -> Geometry {
     let mut g = circle_ee(input);
     let c = g.center;
     let r = g.anchor("east").expect("circle").x - c.x - input.outer_sep();
-    key_code(input, &mut g, "generic circle IEC", c, r);
+    key_code(input, &mut g, KeyFrame { shape: "generic circle IEC", origin: c, size: r });
     g
 }
 
@@ -290,7 +299,7 @@ pub fn generic_diode(input: &mut Input) -> Geometry {
     let p = Point::new;
     g.background(vec![Segment::MoveTo(p(xa, ya)), Segment::LineTo(p(xa, yb)), Segment::LineTo(p(xb - 0.5 * input.line_width, yc)), Segment::Close]);
     g.path(Layer::BeforeBackground, line((xa, yc), (xb, yc)).to_vec(), Usage::Stroke);
-    key_code(input, &mut g, "generic diode IEC", p(xb, yc), 0.5 * (yb - ya));
+    key_code(input, &mut g, KeyFrame { shape: "generic diode IEC", origin: p(xb, yc), size: 0.5 * (yb - ya) });
     g
 }
 

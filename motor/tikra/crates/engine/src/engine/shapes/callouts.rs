@@ -9,7 +9,7 @@ use std::f64::consts::{FRAC_1_SQRT_2, SQRT_2};
 use crate::scene::{Point, Segment};
 
 use super::basic::ellipse_path;
-use super::{angle_between, angle_between_lines, arc_to, border_ellipse, border_rectangle, polar, sin, symbols, Border, Geometry, Input};
+use super::{angle_between, angle_between_lines, arc_to, border_ellipse, border_rectangle, polar, sin, symbols, Border, EllipseSpan, Geometry, Input};
 
 /// Where the pointer goes, in node coordinates: the absolute pointer if there is one, otherwise
 /// the relative pointer past the border point toward it (`border` gives that point for a
@@ -85,10 +85,10 @@ pub fn ellipse_callout(input: &mut Input) -> Geometry {
     // pgf goes around in two arcs, up to 360° and on from 0°: their pieces start at 0°, so their
     // control points (which count for the picture's size) stay inside the ellipse's box
     if after_angle < before_angle {
-        arc_to(&mut v, after, after_angle, before_angle, xp, yp);
+        arc_to(&mut v, after, EllipseSpan { a0: after_angle, a1: before_angle, rx: xp, ry: yp });
     } else {
-        let east = arc_to(&mut v, after, after_angle, 360.0, xp, yp);
-        arc_to(&mut v, east, 0.0, before_angle, xp, yp);
+        let east = arc_to(&mut v, after, EllipseSpan { a0: after_angle, a1: 360.0, rx: xp, ry: yp });
+        arc_to(&mut v, east, EllipseSpan { a0: 0.0, a1: before_angle, rx: xp, ry: yp });
     }
     v.push(Segment::Close);
     g.background(v);

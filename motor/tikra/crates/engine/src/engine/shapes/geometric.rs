@@ -9,7 +9,7 @@ use std::f64::consts::SQRT_2;
 
 use crate::scene::{Point, Segment, Transform};
 
-use super::{arc_points, arc_to, cos, cot, miter_offset, polar, polygon_path, ray, rotate_around, sin, tan, Border, Geometry, Input, Layer, Usage};
+use super::{arc_points, arc_to, cos, cot, miter_offset, polar, polygon_path, ray, rotate_around, sin, tan, Border, EllipseSpan, Geometry, Input, Layer, RotatedArc, Usage};
 
 /// The eight compass anchors: the border points toward them from the center.
 fn compass(g: &mut Geometry) {
@@ -230,7 +230,7 @@ pub fn semicircle(input: &mut Input) -> Geometry {
     let end_corner = end_border.minus(Point::new(0.0, o));
     let rot = |p: Point| rotate_around(p, c, rotate);
     let arc_center = rot(arc_center);
-    let mut outline = arc_points(arc_center, r, r, rotate, rotate + 180.0);
+    let mut outline = arc_points(arc_center, EllipseSpan { a0: rotate, a1: rotate + 180.0, rx: r, ry: r });
     outline.push(rot(end_corner));
     outline.push(rot(start_corner));
     let mut g = Geometry::new(c, Border::Outline(outline.clone()));
@@ -242,7 +242,7 @@ pub fn semicircle(input: &mut Input) -> Geometry {
     g.anchor_at("arc end", rot(end_corner));
     g.anchor_at("chord center", rot(start_corner).lerp(rot(end_corner), 0.5));
     let mut v = vec![Segment::MoveTo(arc_center.plus(polar(rotate, radius)))];
-    super::arc_to_rotated(&mut v, arc_center.plus(polar(rotate, radius)), 0.0, 180.0, radius, radius, rotate);
+    super::arc_to_rotated(&mut v, RotatedArc { from: arc_center.plus(polar(rotate, radius)), span: EllipseSpan { a0: 0.0, a1: 180.0, rx: radius, ry: radius }, rotate });
     v.push(Segment::Close);
     g.background(v);
     g
@@ -472,7 +472,7 @@ pub fn circular_sector(input: &mut Input) -> Geometry {
     let start_corner = center_border.plus(polar(start, corner_radius));
     let end_corner = center_border.plus(polar(end, corner_radius));
     let mut outline = vec![rot(center_border), rot(start_corner)];
-    outline.extend(arc_points(rot(sector_center), border_radius, border_radius, start + rotate, end + rotate));
+    outline.extend(arc_points(rot(sector_center), EllipseSpan { a0: start + rotate, a1: end + rotate, rx: border_radius, ry: border_radius }));
     outline.push(rot(end_corner));
     let mut g = Geometry::new(c, Border::Outline(outline));
     text_anchors(&mut g, input);
@@ -485,7 +485,7 @@ pub fn circular_sector(input: &mut Input) -> Geometry {
     let sc = rot(sector_center);
     let arc_start = sc.plus(polar(start + rotate, radius));
     let mut v = vec![Segment::MoveTo(sc), Segment::LineTo(arc_start)];
-    arc_to(&mut v, arc_start, start + rotate, end + rotate, radius, radius);
+    arc_to(&mut v, arc_start, EllipseSpan { a0: start + rotate, a1: end + rotate, rx: radius, ry: radius });
     v.push(Segment::Close);
     g.background(v);
     g
@@ -526,8 +526,8 @@ pub fn cylinder(input: &mut Input) -> Geometry {
     let after_bottom_anchor = after_bottom.plus(Point::new(0.0, oy));
     let c = input.center_point();
     let place = |p: Point| rotate_around(c.plus(p), c, rotate);
-    let mut outline: Vec<Point> = arc_points(Point::new(before_top.x, 0.0), xr, yr, -90.0, 90.0).into_iter().map(place).collect();
-    outline.extend(arc_points(Point::new(after_bottom.x, 0.0), xr, yr, 90.0, 270.0).into_iter().map(place));
+    let mut outline: Vec<Point> = arc_points(Point::new(before_top.x, 0.0), EllipseSpan { a0: -90.0, a1: 90.0, rx: xr, ry: yr }).into_iter().map(place).collect();
+    outline.extend(arc_points(Point::new(after_bottom.x, 0.0), EllipseSpan { a0: 90.0, a1: 270.0, rx: xr, ry: yr }).into_iter().map(place));
     let mut g = Geometry::new(c, Border::Outline(outline.clone()));
     text_anchors(&mut g, input);
     side_anchors(&mut g, input, &outline);
@@ -552,17 +552,17 @@ pub fn cylinder(input: &mut Input) -> Geometry {
     if input.keys.flag("pgfcylinderusescustomfill") {
         let body = local(&|v| {
             v.push(Segment::MoveTo(after_bottom));
-            arc_to(v, after_bottom, 90.0, 270.0, rx, ry);
+            arc_to(v, after_bottom, EllipseSpan { a0: 90.0, a1: 270.0, rx, ry });
             let q = Point::new(before_top.x, -before_top.y);
             v.push(Segment::LineTo(q));
-            arc_to(v, q, 270.0, 90.0, rx, ry);
+            arc_to(v, q, EllipseSpan { a0: 270.0, a1: 90.0, rx, ry });
             v.push(Segment::Close);
         });
         let body_fill = input.keys.text("/pgf/cylinder body fill");
         g.path(Layer::BehindBackground, body, Usage::Fill(body_fill));
         let end = local(&|v| {
             v.push(Segment::MoveTo(before_top));
-            arc_to(v, before_top, 90.0, -270.0, rx, ry);
+            arc_to(v, before_top, EllipseSpan { a0: 90.0, a1: -270.0, rx, ry });
             v.push(Segment::Close);
         });
         let end_fill = input.keys.text("/pgf/cylinder end fill");
@@ -570,13 +570,13 @@ pub fn cylinder(input: &mut Input) -> Geometry {
     }
     g.background(local(&|v| {
         v.push(Segment::MoveTo(after_bottom));
-        arc_to(v, after_bottom, 90.0, 270.0, rx, ry);
+        arc_to(v, after_bottom, EllipseSpan { a0: 90.0, a1: 270.0, rx, ry });
         let q = Point::new(before_top.x, -before_top.y);
         v.push(Segment::LineTo(q));
-        arc_to(v, q, -90.0, 90.0, rx, ry);
+        arc_to(v, q, EllipseSpan { a0: -90.0, a1: 90.0, rx, ry });
         v.push(Segment::Close);
         v.push(Segment::MoveTo(before_top));
-        arc_to(v, before_top, 90.0, 270.0, rx, ry);
+        arc_to(v, before_top, EllipseSpan { a0: 90.0, a1: 270.0, rx, ry });
     }));
     g
 }

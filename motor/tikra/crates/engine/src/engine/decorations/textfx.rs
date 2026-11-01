@@ -111,6 +111,200 @@ fn is_space(t: &[Token]) -> bool {
     matches!(t, [Token::Char(_, Cat::Space)])
 }
 
+/// What `character_options` reads. `index` is 0-based, as the decoration counts characters.
+struct OptionQuery<'a> {
+    index: usize,
+    c: &'a Char,
+    te: &'a Settings,
+    factor: f64,
+    measuring: bool,
+}
+
+/// The six counts pgf defines for one character (`\tikzdecorationcharactercount` and the rest).
+struct CharacterCounts {
+    index: usize,
+    total: usize,
+    letter: usize,
+    letter_total: usize,
+    word: usize,
+    word_total: usize,
+}
+
+/// One character and the settings copied before its keys run (`process_keys` may change the state).
+struct DrawnCharacter {
+    c: Char,
+    te: Settings,
+    counts: CharacterCounts,
+    factor: f64,
+}
+
+struct Replacement {
+    options: Vec<Token>,
+    code: Vec<Token>,
+    saved_min: Option<Point>,
+    saved_max: Option<Point>,
+    placed: bool,
+}
+
+struct CharacterNode {
+    options: Vec<Token>,
+    text: Vec<Token>,
+    at: Point,
+    saved_min: Option<Point>,
+    saved_max: Option<Point>,
+    measuring: bool,
+    segment_from_width: bool,
+}
+
+fn character_options(q: &OptionQuery<'_>) -> Vec<Token> {
+    let mut opts = String::from("/pgf/decoration/text effects/.cd,");
+    opts.push_str(if q.measuring { "every character width/.try," } else { "every character/.try," });
+    opts.push_str(&format!("character {}/.try,", q.index + 1));
+    let mut extra: Vec<Token> = Vec::new();
+    for (s, o) in &q.te.styles {
+        if s.trim() == q.c.text.trim() {
+            extra.extend(super::super::tikra_tokens(","));
+            extra.extend(o.iter().cloned());
+        }
+    }
+    if q.c.sep {
+        opts.push_str("/pgf/decoration/text effects/every word separator/.try,");
+    } else if q.c.word > 0 {
+        opts.push_str(&format!("every word/.try,word {}/.try,", q.c.word));
+        if q.c.letter > 0 {
+            opts.push_str(&format!("every letter/.try,every {} letter/.try,", q.c.letter));
+            if q.c.letter == 1 {
+                opts.push_str("every first letter/.try,");
+            }
+            if q.c.final_letter {
+                opts.push_str("every final letter/.try,");
+            }
+        }
+    }
+    let mut options = super::super::tikra_tokens(&opts);
+    options.extend(extra);
+    options.extend(super::super::tikra_tokens(&format!(",/tikz/scale={}", q.factor.max(1e-6))));
+    options
+}
+
+fn define_character_counts(e: &mut Engine, drawn: &DrawnCharacter) {
+    let counts = &drawn.counts;
+    let values =
+        [counts.index.to_string(), counts.total.to_string(), counts.letter.to_string(), counts.letter_total.to_string(), counts.word.to_string(), counts.word_total.to_string()];
+    for (name, v) in [
+        "tikzdecorationcharactercount",
+        "tikzdecorationcharactertotal",
+        "tikzdecorationlettercount",
+        "tikzdecorationlettertotal",
+        "tikzdecorationwordcount",
+        "tikzdecorationwordtotal",
+    ]
+    .iter()
+    .zip(&values)
+    {
+        e.tex.define_string(name, v, false);
+    }
+    for (var, v) in drawn.te.vars.iter().zip(&values) {
+        if let Some(var) = var {
+            e.tex.define_string(var.trim_start_matches('\\'), v, false);
+        }
+    }
+    e.tex.set_meaning(&Token::cs("tikzdecorationcharacter"), crate::engine::macro_tokens(drawn.c.tokens.clone()), false);
+}
+
+/// The character's text after its inner style group: the command wrapped around it, or a space's box.
+fn character_text(e: &mut Engine, drawn: &DrawnCharacter, options: &[Token]) -> Vec<Token> {
+    let mut text = drawn.c.tokens.clone();
+    // the character's styles may set its command (`every word/.style={character command=…}`)
+    e.begin_group();
+    let styled = e.process_keys(options.to_vec(), Some("/tikz")).map(|_| e.st.decoration.te.character_command.clone());
+    e.end_group();
+    let command = styled.ok().flatten().or_else(|| drawn.te.character_command.clone());
+    if let Some(cmd) = &command {
+        let mut v = cmd.clone();
+        v.push(Token::Char('{', Cat::Begin));
+        v.extend(text);
+        v.push(Token::Char('}', Cat::End));
+        text = v;
+    }
+    // (a control space `\ ` is one too)
+    let blank = is_space(&drawn.c.tokens) || matches!(&drawn.c.tokens[..], [Token::Cs(n)] if &**n == " ");
+    if blank {
+        // a space: an empty box as wide as the font's interword space
+        text = super::super::tikra_tokens("$\\hspace{0.33333em}$");
+    }
+    text
+}
+
+fn character_replacement(drawn: &DrawnCharacter) -> Option<Vec<Token>> {
+    drawn.te.replacements.iter().find(|(s, _)| s.trim() == drawn.c.text.trim()).map(|(_, code)| code.clone())
+}
+
+fn finish_replacement(e: &mut Engine, job: Replacement) -> Result<f64, Error> {
+    let Replacement { options, code, saved_min, saved_max, placed } = job;
+    // `replace characters`: the code in a scope with the character's options; its width
+    // is that of the picture it draws
+    let saved_items = std::mem::take(&mut e.canvas.items);
+    e.canvas.min = None;
+    e.canvas.max = None;
+    e.begin_scope();
+    let r = e.process_keys(options, Some("/tikz")).and_then(|_| {
+        e.st.apply_pending();
+        e.run_tokens(code)
+    });
+    e.end_scope();
+    let drawn = std::mem::replace(&mut e.canvas.items, saved_items);
+    let (lo, hi) = (e.canvas.min, e.canvas.max);
+    (e.canvas.min, e.canvas.max) = (saved_min, saved_max);
+    e.end_group();
+    r?;
+    if placed {
+        e.canvas.items.extend(drawn);
+        // the drawing counts in the picture as it was drawn
+        for q in [lo, hi].into_iter().flatten() {
+            e.canvas.include(q);
+        }
+    }
+    let width = match (lo, hi) {
+        (Some(a), Some(b)) => b.x - a.x,
+        _ => 0.0,
+    };
+    Ok(width / PT)
+}
+
+fn finish_character_node(e: &mut Engine, node: CharacterNode) -> Result<f64, Error> {
+    let CharacterNode { options, text, at, saved_min, saved_max, measuring, segment_from_width } = node;
+    let name = "tikra@te@character".to_string();
+    let r = e.node(NodeSpec { options, name: Some(name.clone()), at: None, text, place: OnPath::Point(at), point: at, coordinate: false, default_pos: None });
+    // the size of what the node draws, as pgf measures the picture it makes: its outline (no
+    // outer sep), with half the line width around it if it is drawn
+    let width = e.nodes.get(&name).map(|info| {
+        let mut b = crate::canvas::Canvas::default();
+        for p in info.geometry.paths.iter().filter(|p| p.layer == crate::engine::shapes::Layer::Background && matches!(p.usage, crate::engine::shapes::Usage::Node)) {
+            b.include_path(&crate::canvas::transform_segments(&p.segments, &info.transform));
+        }
+        match (b.min, b.max) {
+            (Some(lo), Some(hi)) if segment_from_width => (hi.x - lo.x, info.transform),
+            (Some(lo), Some(hi)) => (hi.y - lo.y, info.transform),
+            _ => (0.0, info.transform),
+        }
+    });
+    e.nodes.remove(&name);
+    e.end_group();
+    let items = r?;
+    let line = items.iter().find_map(|i| match i {
+        crate::canvas::Item::Path { stroke: Some(s), .. } => Some(s.width),
+        _ => None,
+    });
+    let width = width.map(|(w, _)| w + line.unwrap_or(0.0));
+    if measuring {
+        (e.canvas.min, e.canvas.max) = (saved_min, saved_max);
+    } else {
+        e.canvas.items.extend(items);
+    }
+    Ok(width.unwrap_or(0.0) / PT)
+}
+
 impl Run<'_> {
     fn is_sep(&self, t: &[Token]) -> bool {
         match &self.s.te.word_separator {
@@ -250,142 +444,32 @@ impl Run<'_> {
     }
 
     /// The node of character `i`: drawn at `t`, or only measured (its width or height, pt).
+    /// The node of character `i`: drawn at `t`, or only measured (its width or height, pt).
     pub(super) fn te_node(&mut self, i: usize, t: Option<&Transform>) -> Result<f64, Error> {
-        let c = self.te.chars[i].clone();
-        let n = self.te.chars.len();
-        let te = self.s.te.clone();
-        let mut opts = String::from("/pgf/decoration/text effects/.cd,");
-        opts.push_str(if t.is_none() { "every character width/.try," } else { "every character/.try," });
-        opts.push_str(&format!("character {}/.try,", i + 1));
-        let mut extra: Vec<Token> = Vec::new();
-        for (s, o) in &te.styles {
-            if s.trim() == c.text.trim() {
-                extra.extend(super::super::tikra_tokens(","));
-                extra.extend(o.iter().cloned());
-            }
-        }
-        if c.sep {
-            opts.push_str("/pgf/decoration/text effects/every word separator/.try,");
-        } else if c.word > 0 {
-            opts.push_str(&format!("every word/.try,word {}/.try,", c.word));
-            if c.letter > 0 {
-                opts.push_str(&format!("every letter/.try,every {} letter/.try,", c.letter));
-                if c.letter == 1 {
-                    opts.push_str("every first letter/.try,");
-                }
-                if c.final_letter {
-                    opts.push_str("every final letter/.try,");
-                }
-            }
-        }
-        let mut options = super::super::tikra_tokens(&opts);
-        options.extend(extra);
-        options.extend(super::super::tikra_tokens(&format!(",/tikz/scale={}", self.te.factor.max(1e-6))));
+        let drawn = self.character_at(i);
+        let measuring = t.is_none();
+        let options = character_options(&OptionQuery { index: i, c: &drawn.c, te: &drawn.te, factor: drawn.factor, measuring });
         let e = &mut *self.e;
         e.begin_group();
-        let values = [(i + 1).to_string(), n.to_string(), c.letter.to_string(), c.letter_total.to_string(), c.word.to_string(), self.te.word_total.to_string()];
-        for (name, v) in [
-            "tikzdecorationcharactercount",
-            "tikzdecorationcharactertotal",
-            "tikzdecorationlettercount",
-            "tikzdecorationlettertotal",
-            "tikzdecorationwordcount",
-            "tikzdecorationwordtotal",
-        ]
-        .iter()
-        .zip(&values)
-        {
-            e.tex.define_string(name, v, false);
-        }
-        for (var, v) in te.vars.iter().zip(&values) {
-            if let Some(var) = var {
-                e.tex.define_string(var.trim_start_matches('\\'), v, false);
-            }
-        }
-        e.tex.set_meaning(&Token::cs("tikzdecorationcharacter"), crate::engine::macro_tokens(c.tokens.clone()), false);
+        define_character_counts(e, &drawn);
         let saved = (e.canvas.min, e.canvas.max);
         e.st.transform = t.map(to_cm).unwrap_or_default();
         e.st.pending = Transform::default();
         let at = e.st.transform.apply(Point::default());
-        let mut text = c.tokens.clone();
-        // the character's styles may set its command (`every word/.style={character command=…}`)
-        e.begin_group();
-        let styled = e.process_keys(options.clone(), Some("/tikz")).map(|_| e.st.decoration.te.character_command.clone());
-        e.end_group();
-        let command = styled.ok().flatten().or_else(|| te.character_command.clone());
-        if let Some(cmd) = &command {
-            let mut v = cmd.clone();
-            v.push(Token::Char('{', Cat::Begin));
-            v.extend(text);
-            v.push(Token::Char('}', Cat::End));
-            text = v;
+        let text = character_text(e, &drawn, &options);
+        if let Some(code) = character_replacement(&drawn) {
+            return finish_replacement(e, Replacement { options, code, saved_min: saved.0, saved_max: saved.1, placed: !measuring });
         }
-        // (a control space `\ ` is one too)
-        let blank = is_space(&c.tokens) || matches!(&c.tokens[..], [Token::Cs(n)] if &**n == " ");
-        if blank {
-            // a space: an empty box as wide as the font's interword space
-            text = super::super::tikra_tokens("$\\hspace{0.33333em}$");
-        }
-        if let Some((_, code)) = te.replacements.iter().find(|(s, _)| s.trim() == c.text.trim()) {
-            // `replace characters`: the code in a scope with the character's options; its width
-            // is that of the picture it draws
-            let code = code.clone();
-            let saved_items = std::mem::take(&mut e.canvas.items);
-            e.canvas.min = None;
-            e.canvas.max = None;
-            e.begin_scope();
-            let r = e.process_keys(options, Some("/tikz")).and_then(|_| {
-                e.st.apply_pending();
-                e.run_tokens(code)
-            });
-            e.end_scope();
-            let drawn = std::mem::replace(&mut e.canvas.items, saved_items);
-            let (lo, hi) = (e.canvas.min, e.canvas.max);
-            (e.canvas.min, e.canvas.max) = saved;
-            e.end_group();
-            r?;
-            if t.is_some() {
-                self.e.canvas.items.extend(drawn);
-                // the drawing counts in the picture as it was drawn
-                for q in [lo, hi].into_iter().flatten() {
-                    self.e.canvas.include(q);
-                }
-            }
-            let width = match (lo, hi) {
-                (Some(a), Some(b)) => b.x - a.x,
-                _ => 0.0,
-            };
-            return Ok(width / PT);
-        }
-        let name = "tikra@te@character".to_string();
-        let r = e.node(NodeSpec { options, name: Some(name.clone()), at: None, text, place: OnPath::Point(at), point: at, coordinate: false, default_pos: None });
-        // the size of what the node draws, as pgf measures the picture it makes: its outline (no
-        // outer sep), with half the line width around it if it is drawn
-        let width = e.nodes.get(&name).map(|info| {
-            let mut b = crate::canvas::Canvas::default();
-            for p in info.geometry.paths.iter().filter(|p| p.layer == crate::engine::shapes::Layer::Background && matches!(p.usage, crate::engine::shapes::Usage::Node)) {
-                b.include_path(&crate::canvas::transform_segments(&p.segments, &info.transform));
-            }
-            match (b.min, b.max) {
-                (Some(lo), Some(hi)) if te.segment_from_width => (hi.x - lo.x, info.transform),
-                (Some(lo), Some(hi)) => (hi.y - lo.y, info.transform),
-                _ => (0.0, info.transform),
-            }
-        });
-        e.nodes.remove(&name);
-        e.end_group();
-        let items = r?;
-        let line = items.iter().find_map(|i| match i {
-            crate::canvas::Item::Path { stroke: Some(s), .. } => Some(s.width),
-            _ => None,
-        });
-        let width = width.map(|(w, _)| w + line.unwrap_or(0.0));
-        if t.is_none() {
-            (self.e.canvas.min, self.e.canvas.max) = saved;
-        } else {
-            self.e.canvas.items.extend(items);
-        }
-        Ok(width.unwrap_or(0.0) / PT)
+        finish_character_node(e, CharacterNode { options, text, at, saved_min: saved.0, saved_max: saved.1, measuring, segment_from_width: drawn.te.segment_from_width })
+    }
+
+    /// The character and the settings, copied before any key of this character runs.
+    fn character_at(&self, i: usize) -> DrawnCharacter {
+        let c = self.te.chars[i].clone();
+        let total = self.te.chars.len();
+        let te = self.s.te.clone();
+        let counts = CharacterCounts { index: i + 1, total, letter: c.letter, letter_total: c.letter_total, word: c.word, word_total: self.te.word_total };
+        DrawnCharacter { factor: self.te.factor, c, te, counts }
     }
 }
 

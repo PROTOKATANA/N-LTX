@@ -5,7 +5,9 @@ use std::f64::consts::{FRAC_1_SQRT_2, SQRT_2};
 
 use crate::scene::{Point, Segment};
 
-use super::{angle_between, arc_points, arc_to, basic, cos, flatten, miter_offset, polar, polygon_path, ray, rotate_around, sin, tan, Border, Geometry, Input, Layer, Usage};
+use super::{
+    angle_between, arc_points, arc_to, basic, cos, flatten, miter_offset, polar, polygon_path, ray, rotate_around, sin, tan, Border, EllipseSpan, Geometry, Input, Layer, Usage,
+};
 
 /// The eight compass anchors as border points from the center.
 fn compass(g: &mut Geometry) {
@@ -138,8 +140,19 @@ pub struct Cloud {
     pub inner: Point,
 }
 
-/// The puffs of a cloud around `c` whose inner ellipse has radii `(xi, yi)`.
-fn puffs(c: Point, xi: f64, yi: f64, n: usize, arc: f64, o: f64) -> (Vec<Segment>, Vec<Point>, Vec<Point>) {
+/// The cloud puff layout: the inner ellipse, how many puffs, their arc and the outer sep.
+struct PuffLayout {
+    center: Point,
+    xi: f64,
+    yi: f64,
+    n: usize,
+    arc: f64,
+    outer: f64,
+}
+
+/// The puffs of a cloud around the inner ellipse.
+fn puffs(layout: PuffLayout) -> (Vec<Segment>, Vec<Point>, Vec<Point>) {
+    let PuffLayout { center: c, xi, yi, n, arc, outer: o } = layout;
     let step = 360.0 / n as f64;
     let quotient = 0.5 / cos((180.0 - arc) / 2.0);
     let half_complement = (180.0 - arc) / 2.0;
@@ -172,7 +185,7 @@ fn puffs(c: Point, xi: f64, yi: f64, n: usize, arc: f64, o: f64) -> (Vec<Segment
         v.push(Segment::CurveTo(control(s, 1.0, turn1), control(mid, -1.0, turn1), mid));
         v.push(Segment::CurveTo(control(mid, 1.0, turn2), control(e, -1.0, turn2), e));
         let ro = r + o;
-        outline.extend(arc_points(center, ro, ro, slope + half_complement, slope + half_complement + arc));
+        outline.extend(arc_points(center, EllipseSpan { a0: slope + half_complement, a1: slope + half_complement + arc, rx: ro, ry: ro }));
         anchors.push(center.plus(polar(slope + 90.0, ro)));
     }
     v.push(Segment::Close);
@@ -207,7 +220,7 @@ pub fn cloud_parts(input: &mut Input) -> Cloud {
     let d = ch * ch - k * k;
     let xi = (ch * big_x - k * big_y) / d;
     let yi = (ch * big_y - k * big_x) / d;
-    let (background, outline, puff_anchors) = puffs(input.center_point(), xi, yi, n, arc, input.outer_sep());
+    let (background, outline, puff_anchors) = puffs(PuffLayout { center: input.center_point(), xi, yi, n, arc, outer: input.outer_sep() });
     Cloud { background, outline, puffs: puff_anchors, outer: Point::new(big_x, big_y), inner: Point::new(xi, yi) }
 }
 
@@ -383,8 +396,8 @@ pub fn tape(input: &mut Input) -> Geometry {
             let q = p(-hw, hh + hb);
             v.push(Segment::LineTo(q));
             let (first, second) = if kind == Bend::InAndOut { ((225.0, 315.0), (135.0, 45.0)) } else { ((135.0, 45.0), (225.0, 315.0)) };
-            let q = arc_to(&mut v, q, first.0, first.1, rx, ry);
-            arc_to(&mut v, q, second.0, second.1, rx, ry);
+            let q = arc_to(&mut v, q, EllipseSpan { a0: first.0, a1: first.1, rx, ry });
+            arc_to(&mut v, q, EllipseSpan { a0: second.0, a1: second.1, rx, ry });
         }
     }
     v.push(Segment::LineTo(p(hw, -hh)));
@@ -394,8 +407,8 @@ pub fn tape(input: &mut Input) -> Geometry {
             let q = p(hw, -hh - hb);
             v.push(Segment::LineTo(q));
             let (first, second) = if kind == Bend::InAndOut { ((45.0, 135.0), (315.0, 225.0)) } else { ((315.0, 225.0), (45.0, 135.0)) };
-            let q = arc_to(&mut v, q, first.0, first.1, rx, ry);
-            arc_to(&mut v, q, second.0, second.1, rx, ry);
+            let q = arc_to(&mut v, q, EllipseSpan { a0: first.0, a1: first.1, rx, ry });
+            arc_to(&mut v, q, EllipseSpan { a0: second.0, a1: second.1, rx, ry });
         }
     }
     v.push(Segment::Close);
@@ -463,14 +476,14 @@ pub fn magnetic_tape(input: &mut Input) -> Geometry {
     let p = |dx: f64, dy: f64| c.plus(Point::new(dx, dy));
     let start = c.plus(polar(tail_angle, r));
     let mut v = vec![Segment::MoveTo(start)];
-    let q = arc_to(&mut v, start, tail_angle, 360.0, r, r);
-    arc_to(&mut v, q, 0.0, 270.0, r, r);
+    let q = arc_to(&mut v, start, EllipseSpan { a0: tail_angle, a1: 360.0, rx: r, ry: r });
+    arc_to(&mut v, q, EllipseSpan { a0: 0.0, a1: 270.0, rx: r, ry: r });
     v.push(Segment::LineTo(p(r + extend, -r)));
     v.push(Segment::LineTo(p(r + extend, -r + tail)));
     v.push(Segment::Close);
     // the border: the circle, and the tail's bottom and end
     let top = 360.0 - ((big - 2.0 * o - tail) / (big + extend)).atan().to_degrees();
-    let mut outline = arc_points(c, big, big, top - 360.0, 270.0);
+    let mut outline = arc_points(c, EllipseSpan { a0: top - 360.0, a1: 270.0, rx: big, ry: big });
     outline.push(p(big + extend, -big));
     outline.push(p(big + extend, -big + 2.0 * o + tail));
     let mut g = Geometry::new(c, Border::Outline(outline));
