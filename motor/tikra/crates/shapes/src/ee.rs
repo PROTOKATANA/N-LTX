@@ -62,7 +62,7 @@ fn line(a: (f64, f64), b: (f64, f64)) -> [Segment; 2] {
 pub fn direction_ee(input: &mut Input) -> Geometry {
     // another tip (`direction ee arrow=angle 45`): as long as it is, and drawn as tips are
     let spec = input.keys.text("/pgf/direction ee arrow");
-    let other = Some(spec.trim()).filter(|s| !s.is_empty() && *s != "direction ee").and_then(|s| crate::engine::arrows::tip_shapes(s, input.line_width));
+    let other = Some(spec.trim()).filter(|s| !s.is_empty() && *s != "direction ee").and_then(|s| tikra_arrows::tip_shapes(s, input.line_width));
     if let Some((d, paths)) = other {
         let ne = Point::new(0.0, 0.5 * input.minimum_height);
         let sw = Point::new(-d, -0.5 * input.minimum_height);

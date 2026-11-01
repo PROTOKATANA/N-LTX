@@ -1204,6 +1204,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tikra_arrows"
+version = "1.8.1"
+dependencies = [
+ "tikra_canvas",
+ "tikra_tex",
+]
+
+[[package]]
 name = "tikra_calendar"
 version = "1.8.1"
 dependencies = [
@@ -1231,8 +1239,10 @@ dependencies = [
  "mathra",
  "serde_json",
  "tikra",
+ "tikra_arrows",
  "tikra_canvas",
  "tikra_label",
+ "tikra_shapes",
  "tikra_tex",
  "ttf-parser",
 ]
@@ -1266,6 +1276,15 @@ name = "tikra_pgfplots"
 version = "1.8.1"
 dependencies = [
  "tikra_engine",
+]
+
+[[package]]
+name = "tikra_shapes"
+version = "1.8.1"
+dependencies = [
+ "tikra_arrows",
+ "tikra_canvas",
+ "tikra_tex",
 ]
 
 [[package]]

@@ -14,23 +14,6 @@ pub trait Eval {
     fn paint(&mut self, text: &str) -> Option<Color>;
 }
 
-impl Eval for super::super::Engine {
-    fn dim(&mut self, text: &str) -> Option<f64> {
-        self.length(text).ok()
-    }
-    fn num(&mut self, text: &str) -> Option<f64> {
-        self.number(text).ok()
-    }
-    fn paint(&mut self, text: &str) -> Option<Color> {
-        // pgf's names for the path's current colors (`fill=pgffillcolor`)
-        match text.trim() {
-            "pgffillcolor" => Some(self.st.fill_paint_color()),
-            "pgfstrokecolor" => Some(self.st.stroke_color()),
-            t => self.color(t),
-        }
-    }
-}
-
 /// Plain values only (`2pt`, `.5`, color names): for callers without an engine.
 pub struct Plain;
 
@@ -64,11 +47,11 @@ fn plain_num(s: &str) -> Option<f64> {
 
 /// `dimension factor factor` (`+3pt 4.5 .8`) of the length keys.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::engine::arrows) struct Dep(pub(in crate::engine::arrows) f64, pub(in crate::engine::arrows) f64, pub(in crate::engine::arrows) f64);
+pub(crate) struct Dep(pub(crate) f64, pub(crate) f64, pub(crate) f64);
 
 /// An arrow key, evaluated (`/pgf/arrow keys/…`).
 #[derive(Debug, Clone, PartialEq)]
-pub(in crate::engine::arrows) enum Opt {
+pub(crate) enum Opt {
     Length(Dep),
     Width(Dep),
     /// `width'`: a part of the length
@@ -134,26 +117,26 @@ pub enum Flex {
 
 /// The values of the arrow keys for one tip, in pt.
 #[derive(Debug, Clone, PartialEq)]
-pub(in crate::engine::arrows) struct Keys {
-    pub(in crate::engine::arrows) length: f64,
-    pub(in crate::engine::arrows) width: f64,
-    pub(in crate::engine::arrows) inset: f64,
-    pub(in crate::engine::arrows) line_width: f64,
-    pub(in crate::engine::arrows) sep: f64,
-    pub(in crate::engine::arrows) scale_length: f64,
-    pub(in crate::engine::arrows) scale_width: f64,
-    pub(in crate::engine::arrows) slant: f64,
-    pub(in crate::engine::arrows) swap: bool,
-    pub(in crate::engine::arrows) reversed: bool,
-    pub(in crate::engine::arrows) harpoon: bool,
-    pub(in crate::engine::arrows) open: bool,
-    pub(in crate::engine::arrows) round_cap: bool,
-    pub(in crate::engine::arrows) round_join: bool,
-    pub(in crate::engine::arrows) color: Option<Color>,
-    pub(in crate::engine::arrows) fill: Option<Color>,
-    pub(in crate::engine::arrows) arc: f64,
-    pub(in crate::engine::arrows) n: u32,
-    pub(in crate::engine::arrows) flex: Flex,
+pub(crate) struct Keys {
+    pub(crate) length: f64,
+    pub(crate) width: f64,
+    pub(crate) inset: f64,
+    pub(crate) line_width: f64,
+    pub(crate) sep: f64,
+    pub(crate) scale_length: f64,
+    pub(crate) scale_width: f64,
+    pub(crate) slant: f64,
+    pub(crate) swap: bool,
+    pub(crate) reversed: bool,
+    pub(crate) harpoon: bool,
+    pub(crate) open: bool,
+    pub(crate) round_cap: bool,
+    pub(crate) round_join: bool,
+    pub(crate) color: Option<Color>,
+    pub(crate) fill: Option<Color>,
+    pub(crate) arc: f64,
+    pub(crate) n: u32,
+    pub(crate) flex: Flex,
 }
 
 impl Default for Keys {
@@ -192,7 +175,7 @@ pub struct Widths {
 impl Widths {
     /// `\pgfarrowslinewidthdependent`: a length plus a factor of the line width (of the visible
     /// line, between the inner and the outer one, for double lines).
-    pub(in crate::engine::arrows) fn dep(&self, d: Dep) -> f64 {
+    pub(crate) fn dep(&self, d: Dep) -> f64 {
         if self.inner > 0.0 {
             d.0 + d.1 * (self.line * (1.0 - d.2 / 2.0) - d.2 / 2.0 * self.inner)
         } else {
@@ -248,7 +231,7 @@ impl Keys {
 
     /// The keys of a tip, as `\pgfarrows@getid` runs them: the tip's defaults, the given options,
     /// the late options, then the scaling.
-    pub(in crate::engine::arrows) fn of(kind: Kind, opts: &[Opt], lw: Widths) -> Keys {
+    pub(crate) fn of(kind: Kind, opts: &[Opt], lw: Widths) -> Keys {
         let mut k = Keys::default();
         let mut late = Vec::new();
         for o in defaults(kind).iter().chain(opts) {
@@ -317,7 +300,7 @@ fn split_list(s: &str) -> Vec<String> {
 }
 
 /// Reads arrow keys; unknown ones go to `warn`.
-pub(in crate::engine::arrows) fn parse_opts(ev: &mut dyn Eval, text: &str, warn: &mut Vec<String>) -> Vec<Opt> {
+pub(crate) fn parse_opts(ev: &mut dyn Eval, text: &str, warn: &mut Vec<String>) -> Vec<Opt> {
     let mut out = Vec::new();
     let dim = |ev: &mut dyn Eval, s: &str| -> f64 { plain_dim(s).or_else(|| ev.dim(s).map(|v| v / PT)).unwrap_or(0.0) };
     let num = |ev: &mut dyn Eval, s: &str| -> f64 { plain_num(s).or_else(|| ev.num(s)).unwrap_or(0.0) };

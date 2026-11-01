@@ -35,6 +35,7 @@ use crate::tex::{Cat, Meaning, Token};
 
 pub use crate::scene::{Point, Transform};
 pub use crate::{Error, PT};
+pub use tikra_shapes::{LineCap, ShapePaint, TextAnchor};
 
 /// A native key: run with the key's value (`None` without one, as in `[circuit]`).
 pub type KeyFn = fn(&mut Context, Option<Tokens>) -> Result<(), Error>;
@@ -210,16 +211,6 @@ pub struct ShapePath {
     pub opacity: Option<f64>,
 }
 
-/// How the ends of a stroke are drawn (`line cap`).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum LineCap {
-    #[default]
-    Butt,
-    Round,
-    /// Square, half the line width past the end.
-    Rect,
-}
-
 /// A text a library's shape draws, in the node's coordinates.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ShapeText {
@@ -237,28 +228,6 @@ pub struct ShapeText {
     pub upright: bool,
 }
 
-/// The point of a text's box that goes where a [`ShapeText`] says, as a node's anchors with no
-/// inner sep: `Base…` on its baseline, `Mid…` half an ex above it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum TextAnchor {
-    #[default]
-    Center,
-    North,
-    South,
-    East,
-    West,
-    NorthEast,
-    NorthWest,
-    SouthEast,
-    SouthWest,
-    Base,
-    BaseEast,
-    BaseWest,
-    Mid,
-    MidEast,
-    MidWest,
-}
-
 /// A segment of a path.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PathSegment {
@@ -267,22 +236,6 @@ pub enum PathSegment {
     /// Two control points, then the end.
     CurveTo(Point, Point, Point),
     Close,
-}
-
-/// How a path of a library's shape is painted.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum ShapePaint {
-    /// Stroked in the node's line color, this wide (cm), whether the node is `draw`n or not.
-    Stroke(f64),
-    /// Filled with the node's `fill`, when it has one (with [`ShapePath::color`], in that color,
-    /// still only when the node is filled).
-    #[default]
-    Fill,
-    /// Filled with the node's `fill`, or white without one (an open terminal hides the wire under
-    /// it).
-    Background,
-    /// Filled with the node's line color (or [`ShapePath::color`]).
-    Solid,
 }
 
 /// A label of a node (`label=…` or `pin=…`), as the node's options gave it.

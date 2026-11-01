@@ -9,7 +9,7 @@ use super::{Cubic, Geometry, Pen, Shape};
 
 /// `direction ee` of `pgflibraryshapes.gates.ee`: a triangle `d` long, filled and stroked with
 /// round joins, from `-d/2` to `d/2`.
-pub(in crate::engine::arrows) fn direction_ee(d: f64, lw: Widths) -> Geometry {
+pub(crate) fn direction_ee(d: f64, lw: Widths) -> Geometry {
     let mut p = Pen::default();
     let k = 0.38268343237 * d;
     p.m(-0.5 * d, k).l(0.5 * d, 0.0).l(-0.5 * d, -k).z();
@@ -339,7 +339,7 @@ impl OldDraw {
 
 /// The tips declared with `\pgfarrowsdeclare`: their extents (left and right) and drawing; the line
 /// ends at 0 and they have no hull, so they leave the bounding box alone.
-pub(in crate::engine::arrows) fn old(o: Old, lw: Widths, _reversed: bool) -> Geometry {
+pub(crate) fn old(o: Old, lw: Widths, _reversed: bool) -> Geometry {
     use Old::*;
     if let User(i) = o {
         let tip = DECLARED.with(|d| d.borrow().get(i as usize).cloned());

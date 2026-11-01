@@ -7,6 +7,7 @@ use crate::canvas::Item;
 use crate::scene::{Point, Segment};
 use crate::tex::{self, Cat, Meaning, Token};
 use crate::Error;
+pub use tikra_canvas::arcs::{arc_segments, EllipseArc};
 
 use super::coords::{read_coordinate_tokens, Coord};
 use super::nodes::{NodeSpec, OnPath};
@@ -21,7 +22,7 @@ mod repeat;
 mod svg;
 
 use connect::*;
-pub use geom::*;
+use geom::*;
 pub use plot::*;
 use repeat::*;
 pub use svg::*;
@@ -55,16 +56,6 @@ struct MidNode {
 
 /// An `edge`: its segments, options, nodes and connections.
 type EdgePath = (Vec<Segment>, Vec<Token>, Vec<Item>, Vec<Link>);
-
-/// An elliptical arc in degrees, before the transform that places it on the canvas.
-#[derive(Clone, Copy)]
-pub struct EllipseArc {
-    pub center: Point,
-    pub rx: f64,
-    pub ry: f64,
-    pub start: f64,
-    pub end: f64,
-}
 
 /// An SVG elliptical arc from `from` to `to`, in the path data's own unit.
 #[derive(Clone, Copy)]

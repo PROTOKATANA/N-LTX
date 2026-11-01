@@ -89,7 +89,7 @@ impl TipsMode {
 
 /// A kind of tip with drawing code: those of `arrows.meta`, and the older ones.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::engine::arrows) enum Kind {
+pub(crate) enum Kind {
     StraightBarb,
     Hooks,
     ArcBarb,
@@ -117,7 +117,7 @@ pub(in crate::engine::arrows) enum Kind {
 
 /// The tips declared with `\pgfarrowsdeclare` (pgf's core and the `arrows` library).
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(in crate::engine::arrows) enum Old {
+pub(crate) enum Old {
     Stealth,
     To,
     ToReversed,
@@ -172,7 +172,7 @@ pub struct DeclaredTip {
 
 thread_local! {
     /// The tips the document declared, for the figure being drawn.
-    pub(in crate::engine::arrows) static DECLARED: std::cell::RefCell<Vec<DeclaredTip>> = const { std::cell::RefCell::new(Vec::new()) };
+    pub(crate) static DECLARED: std::cell::RefCell<Vec<DeclaredTip>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// Forgets the tips declared for another figure.
@@ -352,13 +352,13 @@ fn start_to_end(name: &str, user: &UserTips) -> Option<String> {
 /// An entry of a tip sequence: a tip with its option lists (its own, then those of the shorthands
 /// it came from), or `.`, where the line ends.
 #[derive(Debug, Clone, PartialEq)]
-pub(in crate::engine::arrows) enum Raw {
+pub(crate) enum Raw {
     Tip { kind: Kind, opts: Vec<String> },
     Dot,
 }
 
 /// One level of braces around the whole text, as TeX strips them from an argument.
-pub(in crate::engine::arrows) fn strip_group(s: &str) -> &str {
+pub(crate) fn strip_group(s: &str) -> &str {
     if s.starts_with('{') && s.ends_with('}') {
         let mut level = 0;
         for (i, ch) in s.char_indices() {
@@ -400,7 +400,7 @@ fn bracket(c: &[char], i: usize) -> Option<(String, usize)> {
 /// (`\pgfarrows@parser`): a name up to the options is a tip or a shorthand; otherwise its first
 /// character is. At the start of a path names are those of starts, and each tip goes before the
 /// ones already read. None if a name is unknown.
-pub(in crate::engine::arrows) fn sequence(spec: &str, start: bool, user: &UserTips, depth: usize) -> Option<Vec<Raw>> {
+pub(crate) fn sequence(spec: &str, start: bool, user: &UserTips, depth: usize) -> Option<Vec<Raw>> {
     if depth > 12 {
         return None;
     }

@@ -6,6 +6,9 @@
 //! named anchors, the border on which lines to the node stop, where each part's text goes, and the
 //! paths it draws. As in pgf, anchors and the border include `outer sep`; the paths do not.
 
+pub use tikra_canvas::{canvas, scene};
+pub use tikra_tex::PT;
+
 mod arrows;
 mod basic;
 mod callouts;
@@ -20,6 +23,54 @@ mod geom;
 pub use geom::*;
 
 use crate::scene::{Point, Segment, Transform};
+
+/// How a path of a library's shape is painted.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum ShapePaint {
+    /// Stroked in the node's line color, this wide (cm), whether the node is `draw`n or not.
+    Stroke(f64),
+    /// Filled with the node's `fill`, when it has one (with [`ShapePath::color`], in that color,
+    /// still only when the node is filled).
+    #[default]
+    Fill,
+    /// Filled with the node's `fill`, or white without one (an open terminal hides the wire under
+    /// it).
+    Background,
+    /// Filled with the node's line color (or [`ShapePath::color`]).
+    Solid,
+}
+
+/// How the ends of a stroke are drawn (`line cap`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LineCap {
+    #[default]
+    Butt,
+    Round,
+    /// Square, half the line width past the end.
+    Rect,
+}
+
+/// The point of a text's box that goes where a [`ShapeText`] says, as a node's anchors with no
+/// inner sep: `Base…` on its baseline, `Mid…` half an ex above it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TextAnchor {
+    #[default]
+    Center,
+    North,
+    South,
+    East,
+    West,
+    NorthEast,
+    NorthWest,
+    SouthEast,
+    SouthWest,
+    Base,
+    BaseEast,
+    BaseWest,
+    Mid,
+    MidEast,
+    MidWest,
+}
 
 /// Width, height and depth of a node part's text box, in cm.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -182,7 +233,7 @@ pub enum Usage {
     /// stroked as the node's lines are, with these caps and joins (an arrow tip the shape draws)
     TipStroke(crate::canvas::Cap, crate::canvas::Join),
     /// a library's shape's path: painted as it says, in its color, dash pattern and caps if it has them
-    Library { paint: crate::extension::ShapePaint, color: Option<String>, dash: Option<Vec<f64>>, cap: Option<crate::extension::LineCap>, opacity: Option<f64> },
+    Library { paint: ShapePaint, color: Option<String>, dash: Option<Vec<f64>>, cap: Option<LineCap>, opacity: Option<f64> },
 }
 
 #[derive(Debug, Clone)]
@@ -200,7 +251,7 @@ pub struct ShapeText {
     pub tex: String,
     pub at: Point,
     pub color: Option<String>,
-    pub anchor: Option<crate::extension::TextAnchor>,
+    pub anchor: Option<TextAnchor>,
     pub font: Option<String>,
     /// Degrees counterclockwise around `at`, and whether the node's rotation is undone for it.
     pub turn: f64,

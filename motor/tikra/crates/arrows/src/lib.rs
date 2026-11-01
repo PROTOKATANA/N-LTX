@@ -5,6 +5,9 @@
 //! Geometry is in TeX points in the tip's own frame, as pgf writes it: the tip points right along x,
 //! y is to its left. Only the placement converts to the canvas (cm).
 
+pub use tikra_canvas::{canvas, color, scene};
+pub use tikra_tex::PT;
+
 mod keys;
 mod legacy;
 mod meta;
@@ -16,7 +19,6 @@ pub use spec::{clear_declared, declare_tip, parse_arrows, DeclaredTip, TipsMode,
 use crate::canvas::{Cap, Fill, Item, Join, Paint, Stroke};
 use crate::color::Color;
 use crate::scene::{Point, Segment, Transform};
-use crate::PT;
 
 use keys::{parse_opts, Keys, Opt};
 use spec::{sequence, Kind, Old, Raw};
@@ -86,7 +88,7 @@ impl Pen {
         let at = self.current();
         let (s, c) = a0.to_radians().sin_cos();
         let center = Point::new(at.x - rx * c, at.y - ry * s);
-        self.0.extend(super::path::arc_segments(super::path::EllipseArc { center, rx, ry, start: a0, end: a1 }, &Transform::default()));
+        self.0.extend(tikra_canvas::arcs::arc_segments(tikra_canvas::arcs::EllipseArc { center, rx, ry, start: a0, end: a1 }, &Transform::default()));
         self
     }
     /// `\pgfpathellipse` with axes along x and y.

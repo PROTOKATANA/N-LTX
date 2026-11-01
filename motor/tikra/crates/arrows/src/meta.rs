@@ -702,7 +702,7 @@ impl MetaDraw<'_> {
 }
 
 /// The tips of arrows.meta.
-pub(in crate::engine::arrows) fn meta(kind: Kind, k: &Keys, lw: Widths) -> Geometry {
+pub(crate) fn meta(kind: Kind, k: &Keys, lw: Widths) -> Geometry {
     let mut draw = MetaDraw {
         keys: k,
         lw,

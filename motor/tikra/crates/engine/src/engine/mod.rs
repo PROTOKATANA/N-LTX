@@ -3,7 +3,7 @@
 //! saved with TeX groups; what is drawn goes to a [`Canvas`].
 
 pub mod animations;
-pub mod arrows;
+pub use tikra_arrows as arrows;
 pub mod basic;
 pub mod chains;
 pub mod circuits;
@@ -37,12 +37,13 @@ mod running;
 pub mod saveboxes;
 mod scope;
 pub mod shadings;
-pub mod shapes;
+pub use tikra_shapes as shapes;
 pub mod spy;
 mod startup;
 pub mod state;
 pub mod three_d;
 pub mod tikzmath;
+mod tips;
 pub mod trees;
 pub mod turtle;
 pub mod user_shapes;
