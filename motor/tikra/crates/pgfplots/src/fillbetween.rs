@@ -152,8 +152,18 @@ fn empty(line: &[Point]) -> bool {
     hi.x - lo.x < PT || hi.y - lo.y < PT
 }
 
-/// Draws the plot: its segments, each filled in its styles.
-pub fn draw(e: &mut Engine, p: &Plot, spec: &[Token]) -> Result<(), Error> {
+/// The options of `fill between=[…]`.
+struct FillBetween {
+    of: String,
+    split: bool,
+    reverse: Option<bool>,
+    soft_domain: bool,
+    soft: [Option<String>; 3],
+    rest: Vec<Token>,
+}
+
+/// Reads `of`, `split`, `reverse`, the soft clips, and the options left for TikZ.
+fn parse_fill_between(spec: &[Token]) -> FillBetween {
     let mut of = String::new();
     let mut split = false;
     let mut reverse: Option<bool> = None;
@@ -187,23 +197,11 @@ pub fn draw(e: &mut Engine, p: &Plot, spec: &[Token]) -> Result<(), Error> {
             }
         }
     }
-    let Some((a, b)) = of.split_once(" and ") else {
-        e.warn("fill between: 'of=A and B' missing");
-        return Ok(());
-    };
-    let (Some(pa), Some(pb)) = (e.named_paths.get(a.trim()).cloned(), e.named_paths.get(b.trim()).cloned()) else {
-        e.warn(format!("fill between: no path named '{}' or '{}'", a.trim(), b.trim()));
-        return Ok(());
-    };
-    // `every segment no 1/.style=…` and the other options
-    if !rest.is_empty() {
-        let saved = e.st.key_path.clone();
-        let r = e.process_keys(rest, Some("/tikz/fill between"));
-        e.st.key_path = saved;
-        r?;
-    }
-    let (mut pa, mut pb) = (connected(&pa), connected(&pb));
-    // `soft clip first`, `soft clip second`: the paths cut to a region before the area is made
+    FillBetween { of, split, reverse, soft_domain, soft, rest }
+}
+
+/// `soft clip`, `soft clip first`, `soft clip second`: each region, or a warning when it is not understood.
+fn soft_regions(e: &mut Engine, soft: &[Option<String>; 3]) -> [Option<(Point, Point)>; 3] {
     let mut regions = [None, None, None];
     for (k, s) in soft.iter().enumerate() {
         if let Some(s) = s {
@@ -213,42 +211,41 @@ pub fn draw(e: &mut Engine, p: &Plot, spec: &[Token]) -> Result<(), Error> {
             }
         }
     }
-    if let Some(r) = regions[1] {
-        pa = clip_lines(&pa, r);
-    }
-    if let Some(r) = regions[2] {
-        pb = clip_lines(&pb, r);
-    }
-    // a path of no length (a point, as `(\pgfkeysvalueof{/pgfplots/xmin},0)` makes with xmin unset)
-    // has no intersections to split at or to clip: pgfplots fills nothing then
-    let point = |s: &[Segment]| {
-        let pts: Vec<Point> = s
-            .iter()
-            .filter_map(|g| match g {
-                Segment::MoveTo(p) | Segment::LineTo(p) | Segment::CurveTo(_, _, p) => Some(*p),
-                _ => None,
-            })
-            .collect();
-        pts.windows(2).all(|w| w[0].minus(w[1]).norm() < 1e-9)
-    };
-    if (split || soft_domain) && (point(&pa) || point(&pb)) {
-        return Ok(());
-    }
-    // nor a region to clip the area to: it is filled whole
-    if point(&pa) || point(&pb) {
-        regions[0] = None;
-    }
-    let reverse = reverse.unwrap_or_else(|| direction(&pa) == direction(&pb));
+    regions
+}
+
+/// A path of no length (a point, as `(\pgfkeysvalueof{/pgfplots/xmin},0)` makes with xmin unset).
+fn point_path(segs: &[Segment]) -> bool {
+    let pts: Vec<Point> = segs
+        .iter()
+        .filter_map(|g| match g {
+            Segment::MoveTo(p) | Segment::LineTo(p) | Segment::CurveTo(_, _, p) => Some(*p),
+            _ => None,
+        })
+        .collect();
+    pts.windows(2).all(|w| w[0].minus(w[1]).norm() < 1e-9)
+}
+
+/// The two paths, and whether `split` cuts them where they cross.
+struct AreaPair<'a> {
+    left: &'a [Segment],
+    right: &'a [Segment],
+    split: bool,
+    reverse: bool,
+}
+
+/// One area, or one per piece when `split` cuts the paths where they cross.
+fn fill_areas(e: &mut Engine, pair: &AreaPair<'_>) -> Vec<Vec<Segment>> {
     let mut pieces: Vec<Vec<Segment>> = Vec::new();
-    if split {
+    if pair.split {
         // both run the same way, then are cut where they cross: the kth pieces make the kth segment
-        let la = polyline(&pa);
-        let lb = if reverse { polyline(&pb) } else { polyline(&super::visual::reverse(&pb)) };
+        let la = polyline(pair.left);
+        let lb = if pair.reverse { polyline(pair.right) } else { polyline(&super::visual::reverse(pair.right)) };
         let crossings = tikra_engine::engine::intersections::intersections(&path_of(&la), &path_of(&lb));
         let (ca, cb) = (cut(&la, &crossings), cut(&lb, &crossings));
         if ca.len() != cb.len() {
             e.warn("fill between: the paths are cut into different numbers of pieces: filled as one");
-            pieces.push(area(&pa, &pb, reverse));
+            pieces.push(area(pair.left, pair.right, pair.reverse));
         } else {
             for (x, y) in ca.iter().zip(cb.iter()) {
                 if empty(x) && empty(y) {
@@ -258,42 +255,98 @@ pub fn draw(e: &mut Engine, p: &Plot, spec: &[Token]) -> Result<(), Error> {
             }
         }
     } else {
-        pieces.push(area(&pa, &pb, reverse));
+        pieces.push(area(pair.left, pair.right, pair.reverse));
     }
+    pieces
+}
+
+/// One filled segment: its style (`every segment`, odd or even, last) and its path.
+struct FillSegment<'a> {
+    plot: &'a Plot,
+    segs: Vec<Segment>,
+    index: usize,
+    last: usize,
+}
+
+fn paint_fill_segment(e: &mut Engine, seg: FillSegment<'_>) -> Result<(), Error> {
+    e.begin_group();
+    let r = (|| -> Result<(), Error> {
+        e.st.mode = Default::default();
+        e.st.mode.fill = true;
+        let mut style = toks("/tikz/fill between/every segment,");
+        style.extend(seg.plot.style.clone());
+        style.extend(toks(&format!(
+            ",/tikz/fill between/every segment no {}/.try,/tikz/fill between/every {} segment{}",
+            seg.index,
+            if seg.index % 2 == 1 { "odd" } else { "even" },
+            if seg.index == seg.last { ",/tikz/fill between/every last segment" } else { "" }
+        )));
+        e.process_keys(style, Some("/pgfplots"))?;
+        e.st.apply_pending();
+        // with the segment's decoration, preactions and postactions
+        let outer = e.st.clone();
+        e.finish_path(seg.segs, &outer, "fill between")
+    })();
+    e.end_group();
+    r
+}
+
+/// Draws the plot: its segments, each filled in its styles.
+pub fn draw(e: &mut Engine, p: &Plot, spec: &[Token]) -> Result<(), Error> {
+    let spec = parse_fill_between(spec);
+    let Some((a, b)) = spec.of.split_once(" and ") else {
+        e.warn("fill between: 'of=A and B' missing");
+        return Ok(());
+    };
+    let (Some(pa), Some(pb)) = (e.named_paths.get(a.trim()).cloned(), e.named_paths.get(b.trim()).cloned()) else {
+        e.warn(format!("fill between: no path named '{}' or '{}'", a.trim(), b.trim()));
+        return Ok(());
+    };
+    // `every segment no 1/.style=…` and the other options
+    if !spec.rest.is_empty() {
+        let saved = e.st.key_path.clone();
+        let r = e.process_keys(spec.rest, Some("/tikz/fill between"));
+        e.st.key_path = saved;
+        r?;
+    }
+    let (mut pa, mut pb) = (connected(&pa), connected(&pb));
+    // `soft clip first`, `soft clip second`: the paths cut to a region before the area is made
+    let mut regions = soft_regions(e, &spec.soft);
+    if let Some(r) = regions[1] {
+        pa = clip_lines(&pa, r);
+    }
+    if let Some(r) = regions[2] {
+        pb = clip_lines(&pb, r);
+    }
+    // a path of no length has no intersections to split at or to clip: pgfplots fills nothing then
+    if (spec.split || spec.soft_domain) && (point_path(&pa) || point_path(&pb)) {
+        return Ok(());
+    }
+    // nor a region to clip the area to: it is filled whole
+    if point_path(&pa) || point_path(&pb) {
+        regions[0] = None;
+    }
+    let reverse = spec.reverse.unwrap_or_else(|| direction(&pa) == direction(&pb));
+    let mut pieces = fill_areas(e, &AreaPair { left: &pa, right: &pb, split: spec.split, reverse });
     // `soft clip`: each area cut to the region
     if let Some(r) = regions[0] {
         pieces = pieces.iter().map(|s| clip_area(s, r)).filter(|s| !s.is_empty()).collect();
     }
     let last = pieces.len().saturating_sub(1);
     for (k, segs) in pieces.into_iter().enumerate() {
-        e.begin_group();
-        let r = (|| -> Result<(), Error> {
-            e.st.mode = Default::default();
-            e.st.mode.fill = true;
-            let mut style = toks("/tikz/fill between/every segment,");
-            style.extend(p.style.clone());
-            style.extend(toks(&format!(
-                ",/tikz/fill between/every segment no {k}/.try,/tikz/fill between/every {} segment{}",
-                if k % 2 == 1 { "odd" } else { "even" },
-                if k == last { ",/tikz/fill between/every last segment" } else { "" }
-            )));
-            e.process_keys(style, Some("/pgfplots"))?;
-            e.st.apply_pending();
-            // with the segment's decoration, preactions and postactions
-            let outer = e.st.clone();
-            e.finish_path(segs, &outer, "fill between")
-        })();
-        e.end_group();
-        r?;
+        paint_fill_segment(e, FillSegment { plot: p, segs, index: k, last })?;
     }
     Ok(())
 }
 
-/// `intersection segments={of=A and B, sequence={L1 -- R2[reverse]}}`: pieces of two named paths,
-/// cut where they cross, put into the path being built (`\tikzpathintersectionsegments`). `A0`,
-/// `B1` count from 0, `L1`, `R1` from 1, negative numbers from the end, `*` is the whole path;
-/// `--` joins a piece to the one before, `[reverse]` walks it backwards.
-pub fn intersection_segments(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
+/// `of`, `sequence` and `reverse` of `intersection segments`.
+struct IntersectionSpec {
+    of: String,
+    sequence: String,
+    reverse_all: bool,
+}
+
+fn parse_intersection(e: &mut Engine, v: Option<Vec<Token>>) -> IntersectionSpec {
     let mut of = String::new();
     let mut sequence = "A0 -- B1".to_string();
     let mut reverse_all = false;
@@ -306,18 +359,107 @@ pub fn intersection_segments(e: &mut Engine, v: Option<Vec<Token>>) -> Result<()
             other => e.warn(format!("intersection segments: option '{other}' not supported: ignored")),
         }
     }
+    IntersectionSpec { of, sequence, reverse_all }
+}
+
+/// Two named paths cut where they cross.
+struct CutPaths {
+    whole: [Vec<Point>; 2],
+    pieces: [Vec<Vec<Point>>; 2],
+    crossed: bool,
+}
+
+/// The paths named by `of=A and B`, cut at their crossings. None when the names are missing.
+fn cut_paths(e: &mut Engine, of: &str) -> Option<CutPaths> {
     let Some((a, b)) = of.split_once(" and ") else {
         e.warn("intersection segments: 'of=A and B' missing");
-        return Ok(());
+        return None;
     };
     let (Some(pa), Some(pb)) = (e.named_paths.get(a.trim()).cloned(), e.named_paths.get(b.trim()).cloned()) else {
         e.warn(format!("intersection segments: no path named '{}' or '{}'", a.trim(), b.trim()));
-        return Ok(());
+        return None;
     };
     let (la, lb) = (polyline(&pa), polyline(&pb));
     let crossings = tikra_engine::engine::intersections::intersections(&path_of(&la), &path_of(&lb));
+    let crossed = !crossings.is_empty();
     let pieces = [cut(&la, &crossings), cut(&lb, &crossings)];
-    let whole = [la, lb];
+    Some(CutPaths { whole: [la, lb], pieces, crossed })
+}
+
+/// One piece named in the sequence: which path, its index text, and whether to walk it backwards.
+struct PieceQuery<'a> {
+    which: usize,
+    letter: char,
+    index: &'a str,
+    one_based: bool,
+    reverse: bool,
+}
+
+/// The points of one sequence reference (`A0`, `L1`, `*`, `[reverse]`). None when that piece does not exist.
+fn piece_points(e: &mut Engine, paths: &CutPaths, query: &PieceQuery<'_>) -> Option<Vec<Point>> {
+    let line = if query.index == "*" || !paths.crossed {
+        if query.index != "*" {
+            e.warn("intersection segments: the paths do not cross: the whole path is used");
+        }
+        paths.whole[query.which].clone()
+    } else {
+        let n = paths.pieces[query.which].len() as i64;
+        let mut k: i64 = query.index.parse().unwrap_or(0);
+        if query.one_based && k >= 0 {
+            k -= 1;
+        }
+        if k < 0 {
+            k += n;
+        }
+        match usize::try_from(k).ok().and_then(|k| paths.pieces[query.which].get(k)) {
+            Some(p) => p.clone(),
+            None => {
+                e.warn(format!("intersection segments: there is no piece '{}{}'", query.letter, query.index));
+                return None;
+            }
+        }
+    };
+    Some(if query.reverse { line.into_iter().rev().collect() } else { line })
+}
+
+/// `[reverse]` and `reverse=false` on one piece.
+fn segment_reverse(e: &mut Engine, opts: &str, reverse_all: bool) -> bool {
+    let mut reverse = reverse_all;
+    for o in opts.split(',') {
+        match o.trim() {
+            "reverse" | "reverse=true" => reverse = true,
+            "reverse=false" => reverse = false,
+            "" => {}
+            other => e.warn(format!("intersection segments: option '{other}' not supported: ignored")),
+        }
+    }
+    reverse
+}
+
+/// The canvas coordinates of a piece, joined with `--` when the sequence said so.
+fn path_tokens(line: &[Point], joined: bool) -> Vec<Token> {
+    let mut out = Vec::new();
+    for (k, p) in line.iter().enumerate() {
+        let at = format!("(tikra cs:{}pt,{}pt)", p.x / PT, p.y / PT);
+        if k == 0 && !joined {
+            out.extend(toks(&format!(" {at}")));
+        } else {
+            out.extend(toks(&format!(" -- {at}")));
+        }
+    }
+    out
+}
+
+/// A sequence walked against the two cut paths.
+struct Sequence<'a> {
+    text: &'a str,
+    paths: &'a CutPaths,
+    reverse_all: bool,
+}
+
+/// Walks the sequence and builds the path tokens of the pieces it names.
+fn sequence_tokens(e: &mut Engine, seq: &Sequence<'_>) -> Vec<Token> {
+    let (sequence, paths, reverse_all) = (seq.text, seq.paths, seq.reverse_all);
     let mut out: Vec<Token> = Vec::new();
     let mut joined = false;
     let text: Vec<char> = sequence.chars().collect();
@@ -349,64 +491,45 @@ pub fn intersection_segments(e: &mut Engine, v: Option<Vec<Token>>) -> Result<()
         }
         let index: String = text[start..i].iter().collect();
         // `[reverse]`
-        let mut reverse = reverse_all;
         while i < text.len() && text[i].is_whitespace() {
             i += 1;
         }
+        let mut reverse = reverse_all;
         if text.get(i) == Some(&'[') {
             let close = text[i..].iter().position(|ch| *ch == ']').map_or(text.len(), |p| i + p);
             let opts: String = text[i + 1..close].iter().collect();
-            for o in opts.split(',') {
-                match o.trim() {
-                    "reverse" | "reverse=true" => reverse = true,
-                    "reverse=false" => reverse = false,
-                    "" => {}
-                    other => e.warn(format!("intersection segments: option '{other}' not supported: ignored")),
-                }
-            }
+            reverse = segment_reverse(e, &opts, reverse_all);
             i = close + 1;
         }
-        let line: Vec<Point> = if index == "*" || crossings.is_empty() {
-            if index != "*" {
-                e.warn("intersection segments: the paths do not cross: the whole path is used");
-            }
-            whole[which].clone()
-        } else {
-            let n = pieces[which].len() as i64;
-            let mut k: i64 = index.parse().unwrap_or(0);
-            if one_based && k >= 0 {
-                k -= 1;
-            }
-            if k < 0 {
-                k += n;
-            }
-            match usize::try_from(k).ok().and_then(|k| pieces[which].get(k)) {
-                Some(p) => p.clone(),
-                None => {
-                    e.warn(format!("intersection segments: there is no piece '{c}{index}'"));
-                    joined = false;
-                    continue;
-                }
-            }
+        let Some(line) = piece_points(e, paths, &PieceQuery { which, letter: c, index: &index, one_based, reverse }) else {
+            joined = false;
+            continue;
         };
-        let line: Vec<Point> = if reverse { line.into_iter().rev().collect() } else { line };
-        for (k, p) in line.iter().enumerate() {
-            let at = format!("(tikra cs:{}pt,{}pt)", p.x / PT, p.y / PT);
-            if k == 0 && !joined {
-                out.extend(toks(&format!(" {at}")));
-            } else {
-                out.extend(toks(&format!(" -- {at}")));
-            }
-        }
+        out.extend(path_tokens(&line, joined));
         joined = false;
     }
-    // as `insert path` does: the path goes on with them (`\tikra@insertpath`)
+    out
+}
+
+/// As `insert path` does: the path goes on with these tokens (`\tikra@insertpath`).
+fn append_insert_path(e: &mut Engine, out: Vec<Token>) {
     let mut body = match e.tex.meaning_of("tikra@insertpath") {
         tikra_engine::tex::Meaning::Macro(m) => tex::substitute(&m.body, &[]),
         _ => Vec::new(),
     };
     body.extend(out);
     e.tex.set_meaning(&Token::cs("tikra@insertpath"), tikra_engine::engine::macro_tokens(body), false);
+}
+
+/// `intersection segments={of=A and B, sequence={L1 -- R2[reverse]}}`: pieces of two named paths,
+/// cut where they cross, put into the path being built (`\tikzpathintersectionsegments`). `A0`,
+/// `B1` count from 0, `L1`, `R1` from 1, negative numbers from the end, `*` is the whole path;
+/// `--` joins a piece to the one before, `[reverse]` walks it backwards.
+pub fn intersection_segments(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
+    let spec = parse_intersection(e, v);
+    let Some(paths) = cut_paths(e, &spec.of) else { return Ok(()) };
+    let out = sequence_tokens(e, &Sequence { text: &spec.sequence, paths: &paths, reverse_all: spec.reverse_all });
+    append_insert_path(e, out);
     Ok(())
 }
 

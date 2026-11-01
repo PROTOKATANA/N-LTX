@@ -316,7 +316,7 @@ pub fn draw(e: &mut Engine, p: &Plot, f: &Frame, index: usize) -> Result<(), Err
             e.process_keys(super::toks("/pgfplots/boxplot/every average/.try"), Some("/tikz"))?;
             if let Some(name) = e.st.plot.plot_mark.clone() {
                 let size = e.st.plot.mark_size;
-                super::visual::draw_mark_set(e, &name, size, &tikra_engine::scene::Transform::default(), std::iter::once(at))?;
+                super::visual::draw_mark_set(e, &super::visual::MarkStamp { name: &name, size, local: &tikra_engine::scene::Transform::default() }, std::iter::once(at))?;
             }
             Ok(())
         })();

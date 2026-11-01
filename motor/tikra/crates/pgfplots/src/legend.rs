@@ -343,7 +343,7 @@ fn image(e: &mut Engine, spec: &[Token]) -> Result<(), Error> {
                 e.st.pending = Transform::default();
                 e.process_keys(toks("every mark"), Some("/tikz"))?;
                 let local = e.st.pending;
-                visual::draw_mark_set(e, &mark, size, &local, std::iter::once(pts[1]))?;
+                visual::draw_mark_set(e, &visual::MarkStamp { name: &mark, size, local: &local }, std::iter::once(pts[1]))?;
             }
         }
     }

@@ -96,7 +96,7 @@ pub(in crate::draw) fn draw_plot_entry(e: &mut Engine, job: &PlotJob<'_>, stream
     let index_of_type = stream.plots[..stream.seen].iter().filter(|q| q.handler == p.handler && !q.forget).count();
     stream.seen += 1;
     let before = e.canvas.items.len();
-    let r = crate::visual::draw_plot(e, p, &pts, &base, &s.frame, of_type, index_of_type);
+    let r = crate::visual::draw_plot(e, &crate::visual::PlotDraw { plot: p, pts: &pts, base: &base, frame: &s.frame, of_type, index_of_type });
     if p.fill_between.is_some() && before <= e.canvas.items.len() && stream.pre_main_end <= before {
         let drawn: Vec<Item> = e.canvas.items.drain(before..).collect();
         let at = stream.pre_main_end.min(e.canvas.items.len());
