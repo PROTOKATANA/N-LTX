@@ -70,6 +70,7 @@ pub fn compilar(escena: &Escena, encuadre: Encuadre, destino: Destino<'_>) {
         ctm: raiz,
         nivel: 0,
         teselador: Teselador::default(),
+        lineas_enteras: !recortada,
     };
     let marco = recortada.then(|| c.abrir_recorte(&rectangulo(escena.caja), false, raiz));
     if let Some(fondo) = escena.fondo {
@@ -120,6 +121,17 @@ fn con_franja(segmentos: &[Segmento], t: &Trazo) -> bool {
     razon <= CODO_SEGURO || (t.union == Union::Inglete && f64::from(razon) <= t.limite_inglete)
 }
 
+/// La línea base en un píxel entero, si no hay giro: es lo que hace Skia (`SkFont::setBaselineSnap`).
+/// Con la y en cuartos de píxel, a escala 1,25 cada línea cae en una fracción distinta y sus trazos
+/// horizontales se reparten entre dos filas: en K1 el salto de tinta en la base iba de 10 a 83.
+fn en_linea_entera(d: Afin) -> Afin {
+    if d.b == 0.0 && d.c == 0.0 {
+        Afin { f: d.f.round(), ..d }
+    } else {
+        d
+    }
+}
+
 /// Lo que hay que deshacer al llegar a su `Primitiva::Cerrar`.
 enum Abierta<'p> {
     Nada,
@@ -150,6 +162,9 @@ struct Compilador<'d, 'e> {
     /// El valor del stencil dentro de los recortes abiertos en esta capa.
     nivel: u32,
     teselador: Teselador,
+    /// El texto de un documento va a líneas enteras. Lo de una animación no: una etiqueta en
+    /// movimiento iría a saltos.
+    lineas_enteras: bool,
 }
 
 impl Compilador<'_, '_> {
@@ -162,10 +177,19 @@ impl Compilador<'_, '_> {
                     relleno,
                     trazo,
                 } => self.trazado(segmentos, relleno.as_ref(), trazo.as_ref()),
-                Primitiva::Glifo { glifo, matriz, color } => self.glifo(*glifo, *matriz, *color),
+                Primitiva::Glifo { glifo, matriz, color } => {
+                    let d = self.ctm.por((*matriz).into());
+                    let suelto = self.lineas_enteras && pila.is_empty();
+                    self.glifo(*glifo, if suelto { en_linea_entera(d) } else { d }, *color);
+                }
                 Primitiva::Imagen { mapa, matriz } => self.imagen(mapa, *matriz),
                 Primitiva::Abrir(capa) => {
+                    let suelto = self.lineas_enteras && pila.is_empty();
                     let abierta = self.abrir(capa);
+                    // una fórmula en línea sigue a su texto; dentro, sus índices y raíces no se tocan
+                    if suelto && matches!(capa, Capa::Transformacion(_)) {
+                        self.ctm = en_linea_entera(self.ctm);
+                    }
                     pila.push(abierta);
                 }
                 Primitiva::Cerrar => {
@@ -300,7 +324,11 @@ impl Compilador<'_, '_> {
         });
         self.nivel = 0;
         match mascara {
-            Luminancia::Escena(p) => self.primitivas(p),
+            Luminancia::Escena(p) => {
+                let lineas_enteras = std::mem::replace(&mut self.lineas_enteras, false);
+                self.primitivas(p);
+                self.lineas_enteras = lineas_enteras;
+            }
             Luminancia::Degradado(d) => {
                 if let Some(tinta) = self.tinta_degradado(d) {
                     let caja = rectangulo(self.caja);
@@ -449,8 +477,8 @@ impl Compilador<'_, '_> {
         self.d.lista.anadir_tinta(tinta)
     }
 
-    fn glifo(&mut self, glifo: GlifoId, m: Matriz, color: Color) {
-        let d = self.ctm.por(m.into());
+    /// `d` lleva el contorno a píxeles del documento.
+    fn glifo(&mut self, glifo: GlifoId, d: Afin, color: Color) {
         let color = rgba(color, 1.0);
         match self.glifos.colocar(glifo, d, self.d.atlas) {
             Colocado::Nada => {}
@@ -567,6 +595,102 @@ mod tests {
             matriz,
             color: NEGRO,
         }
+    }
+
+    /// Arriba y alto de cada máscara dibujada. Un cuadrado de 5 px en una fila entera ocupa 5 filas;
+    /// con la y en fracciones, 6: es el borrón que se ve en sus lados.
+    fn cuadrados(c: &Compilado) -> Vec<(f32, f32)> {
+        let q = c.lista.vertices.chunks(4);
+        q.map(|q| (q[0].y, q[2].y - q[0].y)).collect()
+    }
+
+    fn compilado(e: &Escena, raiz: Afin, recortada: bool) -> Compilado {
+        let (mut lista, mut atlas, mut rampas) = (Lista::base(), Atlas::default(), Rampas::default());
+        let destino = Destino {
+            lista: &mut lista,
+            atlas: &mut atlas,
+            rampas: &mut rampas,
+        };
+        compilar(e, Encuadre { raiz, recortada }, destino);
+        Compilado { lista, atlas }
+    }
+
+    fn escena_de_glifos(primitivas: Vec<Primitiva>) -> Escena {
+        Escena {
+            caja: Caja {
+                x: 0.0,
+                y: 0.0,
+                ancho: 100.0,
+                alto: 100.0,
+            },
+            primitivas,
+            contornos: BTreeMap::from([(GlifoId { fuente: 0, id: 1 }, cuadrado_de(4.0))]),
+            ..Escena::default()
+        }
+    }
+
+    fn cuadrado_de(lado: f64) -> Vec<Segmento> {
+        let p = |x, y| Punto { x, y };
+        vec![
+            Segmento::Mover(p(0.0, 0.0)),
+            Segmento::Linea(p(lado, 0.0)),
+            Segmento::Linea(p(lado, lado)),
+            Segmento::Linea(p(0.0, lado)),
+            Segmento::Cerrar,
+        ]
+    }
+
+    fn llevado(x: f64, y: f64) -> Matriz {
+        Matriz {
+            a: 1.0,
+            b: 0.0,
+            c: 0.0,
+            d: 1.0,
+            e: x,
+            f: y,
+        }
+    }
+
+    /// RAYO: si falla, el texto vuelve a verse borroso en unas líneas sí y en otras no.
+    #[test]
+    fn a_una_escala_cualquiera_cada_linea_cae_en_filas_enteras() {
+        let e = escena_de_glifos(
+            (0..8)
+                .map(|n| glifo(1, llevado(0.0, 10.0 + f64::from(n) * 0.2)))
+                .collect(),
+        );
+        let c = compilado(&e, Afin::escala(1.25), false);
+        assert_eq!(c.lista.vertices.len(), 8 * 4);
+        assert!(cuadrados(&c).iter().all(|q| q.1 == 5.0), "{:?}", cuadrados(&c));
+    }
+
+    #[test]
+    fn la_formula_en_linea_cae_en_la_fila_de_su_texto_y_dentro_no_se_toca() {
+        let y = 10.2;
+        let formula = vec![
+            Primitiva::Abrir(Capa::Transformacion(llevado(0.0, y))),
+            glifo(1, llevado(0.0, 0.0)),
+            glifo(1, llevado(0.0, 0.2)),
+            Primitiva::Cerrar,
+        ];
+        let e = escena_de_glifos([vec![glifo(1, llevado(0.0, y))], formula].concat());
+        let hechos = cuadrados(&compilado(&e, Afin::escala(1.25), false));
+        assert_eq!(hechos[0], hechos[1], "misma línea");
+        assert_eq!(hechos[2].1, 6.0, "el índice conserva su fracción");
+    }
+
+    #[test]
+    fn lo_animado_y_lo_girado_conservan_su_sitio_exacto() {
+        let e = escena_de_glifos(vec![glifo(1, llevado(0.0, 10.2))]);
+        let hechos = cuadrados(&compilado(&e, Afin::escala(1.25), true));
+        assert_eq!(hechos.last().map(|q| q.1), Some(6.0), "los anteriores son su marco");
+        let giro = Afin {
+            b: 0.3,
+            c: -0.3,
+            f: 1.3,
+            ..Afin::escala(1.25)
+        };
+        assert_eq!(en_linea_entera(giro).f, 1.3);
     }
 
     struct Compilado {
@@ -1153,8 +1277,10 @@ mod tests {
 
     #[test]
     fn un_glifo_cae_en_el_cuarto_de_pixel_mas_cercano() {
+        // dentro de un grupo, como el índice de una fórmula: el texto suelto va a filas enteras.
         // 0,24 está más cerca de 0,25 que de 0: redondear hacia abajo lo subiría casi un cuarto
-        let e = escena_de_glifo(8.0, vec![glifo(1, en(10.0, 20.24))]);
+        let grupo = Primitiva::Abrir(Capa::Transformacion(llevado(0.0, 0.0)));
+        let e = escena_de_glifo(8.0, vec![grupo, glifo(1, en(10.0, 20.24)), Primitiva::Cerrar]);
         let mut c = compilada_con(&e, Afin::IDENTIDAD);
         let s = c.atlas.tomar_sucio();
         // el borde inferior del cuadrado cae a 0,25 en su última fila, con una fila de más
