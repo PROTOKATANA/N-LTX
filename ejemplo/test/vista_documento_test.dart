@@ -13,6 +13,7 @@ class MotorFalso implements RepositorioMotor {
   final tintas = <Color>[];
   final fondos = <Color>[];
   final palabras = <Offset>[];
+  final encuadres = <Encuadre>[];
   var todos = 0;
   var borrados = 0;
   var copias = 0;
@@ -36,7 +37,7 @@ class MotorFalso implements RepositorioMotor {
   void fondo(Color color) => fondos.add(color);
 
   @override
-  void ver(Encuadre encuadre) {}
+  void ver(Encuadre encuadre) => encuadres.add(encuadre);
 
   @override
   void arrastrar(Offset desde, Offset hasta) => arrastres.add((desde, hasta));
@@ -86,7 +87,17 @@ Future<void> colorear(
   await t.pump();
 }
 
-Future<MotorFalso> montar(WidgetTester t) async {
+Widget documento(MotorFalso motor, {bool visible = true}) => MaterialApp(
+  home: VistaDocumento(
+    motor: motor,
+    pagina: 0,
+    fuente: 'hola',
+    zoom: _zoom,
+    visible: visible,
+  ),
+);
+
+Future<MotorFalso> montar(WidgetTester t, {bool visible = true}) async {
   final mensajero = t.binding.defaultBinaryMessenger;
   mensajero.setMockMethodCallHandler(const MethodChannel('ltx/lienzo'), (
     llamada,
@@ -106,16 +117,7 @@ Future<MotorFalso> montar(WidgetTester t) async {
   await t.binding.setSurfaceSize(const Size(800, 600));
   addTearDown(() => t.binding.setSurfaceSize(null));
   final motor = MotorFalso();
-  await t.pumpWidget(
-    MaterialApp(
-      home: VistaDocumento(
-        motor: motor,
-        pagina: 0,
-        fuente: 'hola',
-        zoom: _zoom,
-      ),
-    ),
-  );
+  await t.pumpWidget(documento(motor, visible: visible));
   await t.pumpAndSettle();
   motor.publicado(5000);
   await t.pump();
@@ -135,6 +137,41 @@ Future<TestGesture> raton(WidgetTester t, Offset donde) async {
 }
 
 void main() {
+  testWidgets('oculta se carga sin verse y al mostrarla no recompone', (
+    t,
+  ) async {
+    final motor = await montar(t, visible: false);
+    expect(motor.tintas, hasLength(1));
+    expect(motor.encuadres.last.visible, isFalse);
+    expect(
+      find.byType(Texture),
+      findsOneWidget,
+      reason: 'Flutter debe pintarla',
+    );
+    expect(find.byType(Scrollbar), findsNothing, reason: 'no se ve ni estorba');
+    await t.pumpWidget(documento(motor));
+    await t.pump();
+    expect(motor.tintas, hasLength(1));
+    expect(motor.encuadres.last.visible, isTrue);
+    expect(find.byType(Scrollbar), findsOneWidget);
+  });
+
+  testWidgets('ocultarla y volver a verla conserva el sitio', (t) async {
+    final motor = await montar(t);
+    final vista = find.byType(SingleChildScrollView);
+    t.widget<SingleChildScrollView>(vista).controller!.jumpTo(300);
+    await t.pump();
+    final y = motor.encuadres.last.y;
+    expect(y, greaterThan(0));
+    await t.pumpWidget(documento(motor, visible: false));
+    await t.pump();
+    expect(motor.encuadres.last.visible, isFalse);
+    expect(motor.encuadres.last.y, y);
+    await t.pumpWidget(documento(motor));
+    await t.pump();
+    expect(motor.encuadres.last.y, y);
+  });
+
   testWidgets('arrastrar selecciona, en bp del documento', (t) async {
     final motor = await montar(t);
     final g = await raton(t, const Offset(100, 100));

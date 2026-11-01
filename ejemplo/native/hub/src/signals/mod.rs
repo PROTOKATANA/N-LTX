@@ -27,6 +27,8 @@ pub struct VerDocumento {
     pub alto: u32,
     pub escala: f64,
     pub y: f64,
+    /// `false`: se deja listo sin enseñarlo, y lo animado no se reproduce.
+    pub visible: bool,
 }
 
 /// Dart → Rust: se ha arrastrado de (`ax`, `ay`) a (`bx`, `by`), en bp desde la esquina del documento.

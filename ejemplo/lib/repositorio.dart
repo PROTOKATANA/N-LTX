@@ -46,12 +46,16 @@ class Encuadre {
     required this.alto,
     required this.escala,
     required this.y,
+    this.visible = true,
   });
 
   final int ancho;
   final int alto;
   final double escala;
   final double y;
+
+  /// Falso: el motor lo deja listo sin enseñarlo, y lo animado no se reproduce.
+  final bool visible;
 }
 
 /// Cómo habla la interfaz con el motor: los widgets no conocen las señales.
@@ -115,6 +119,7 @@ class RepositorioRinf implements RepositorioMotor {
     alto: e.alto,
     escala: e.escala,
     y: e.y,
+    visible: e.visible,
   ).sendSignalToRust();
 
   @override

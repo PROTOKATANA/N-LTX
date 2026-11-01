@@ -18,6 +18,7 @@ class VistaDocumento extends StatefulWidget {
     this.fondo = Colors.white,
     this.tinta = Colors.black,
     this.conMuestras = false,
+    this.visible = true,
   });
 
   final RepositorioMotor motor;
@@ -36,6 +37,11 @@ class VistaDocumento extends StatefulWidget {
   /// Tras `fuente` van todas las muestras: las tiene Rust.
   final bool conMuestras;
 
+  /// Falso: el documento se carga sin verse, para que al mostrarlo ya esté. Compone, sube y pinta su
+  /// primera pantalla y, sin nada nuevo, no gasta CPU. Tiene que estar en el árbol: `Offstage` no
+  /// serviría, porque Flutter solo pide una textura que se pinta, y sin eso la GPU no empieza.
+  final bool visible;
+
   @override
   State<VistaDocumento> createState() => _VistaDocumentoState();
 }
@@ -50,6 +56,9 @@ const _anchoBarra = 16.0;
 const _bordeArrastre = 24.0;
 const _pasoArrastre = 14.0;
 const _ritmoArrastre = Duration(milliseconds: 16);
+
+/// Lo que se ve de la textura mientras está oculta: nada que se distinga, pero Flutter la pinta.
+const _opacidadOculta = 1 / 255;
 
 class _VistaDocumentoState extends State<VistaDocumento> {
   /// Solo para lo que exige el motor de Flutter: la textura y su tamaño.
@@ -139,6 +148,7 @@ class _VistaDocumentoState extends State<VistaDocumento> {
       _pedirPublicacion();
     }
     if (antes.fondo != widget.fondo) widget.motor.fondo(widget.fondo);
+    if (antes.visible != widget.visible) _verVista();
   }
 
   void _pedirPublicacion() {
@@ -168,6 +178,7 @@ class _VistaDocumentoState extends State<VistaDocumento> {
         alto: (_tam.height * _pixeles).round(),
         escala: widget.zoom * _pixeles,
         y: (y * _pixeles).roundToDouble(),
+        visible: widget.visible,
       ),
     );
   }
@@ -254,6 +265,19 @@ class _VistaDocumentoState extends State<VistaDocumento> {
     );
   }
 
+  /// Oculta, en un solo píxel: la textura ya pintada se enseña entera en el siguiente fotograma.
+  Widget _pintada(int textura, double pixeles) {
+    final imagen = _textura1a1(textura, pixeles);
+    if (widget.visible) return imagen;
+    return Align(
+      alignment: Alignment.topLeft,
+      child: SizedBox.square(
+        dimension: 1,
+        child: Opacity(opacity: _opacidadOculta, child: imagen),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     for (final s in _suscripciones) {
@@ -287,45 +311,52 @@ class _VistaDocumentoState extends State<VistaDocumento> {
           },
           child: Focus(
             focusNode: _foco,
-            autofocus: true,
+            autofocus: widget.visible,
+            canRequestFocus: widget.visible,
             child: Stack(
               fit: StackFit.expand,
               children: [
-                ColoredBox(color: widget.fondo),
-                if (textura != null) _textura1a1(textura, pixeles),
-                Listener(
-                  behavior: HitTestBehavior.translucent,
-                  onPointerDown: _alBajar,
-                  onPointerMove: _alMover,
-                  onPointerUp: _alSubir,
-                  onPointerCancel: _alSubir,
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.text,
-                    child: Scrollbar(
-                      controller: _desplazamiento,
-                      thumbVisibility: true,
-                      child: SingleChildScrollView(
+                if (widget.visible) ColoredBox(color: widget.fondo),
+                if (textura != null) _pintada(textura, pixeles),
+                // con clave: oculta, el `Stack` tiene otros hijos y se perdería el desplazamiento
+                Offstage(
+                  key: const ValueKey('interaccion'),
+                  offstage: !widget.visible,
+                  child: Listener(
+                    behavior: HitTestBehavior.translucent,
+                    onPointerDown: _alBajar,
+                    onPointerMove: _alMover,
+                    onPointerUp: _alSubir,
+                    onPointerCancel: _alSubir,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.text,
+                      child: Scrollbar(
                         controller: _desplazamiento,
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: _publicado.alto * widget.zoom,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: _desplazamiento,
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: _publicado.alto * widget.zoom,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-                Positioned(
-                  left: 12,
-                  right: 12,
-                  bottom: 8,
-                  child: IgnorePointer(
-                    child: _Pie(
-                      _publicado,
-                      _componiendo ? 'Componiendo…' : _medidas,
-                      conMuestras: widget.conMuestras,
+                if (widget.visible)
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 8,
+                    child: IgnorePointer(
+                      child: _Pie(
+                        _publicado,
+                        _componiendo ? 'Componiendo…' : _medidas,
+                        conMuestras: widget.conMuestras,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),

@@ -9,6 +9,7 @@ class VerDocumento {
     required this.alto,
     required this.escala,
     required this.y,
+    required this.visible,
   });
 
   static VerDocumento deserialize(BinaryDeserializer deserializer) {
@@ -18,6 +19,7 @@ class VerDocumento {
       alto: deserializer.deserializeUint32(),
       escala: deserializer.deserializeFloat64(),
       y: deserializer.deserializeFloat64(),
+      visible: deserializer.deserializeBool(),
     );
     deserializer.decreaseContainerDepth();
     return instance;
@@ -36,18 +38,21 @@ class VerDocumento {
   final int alto;
   final double escala;
   final double y;
+  final bool visible;
 
   VerDocumento copyWith({
     int? ancho,
     int? alto,
     double? escala,
     double? y,
+    bool? visible,
   }) {
     return VerDocumento(
       ancho: ancho ?? this.ancho,
       alto: alto ?? this.alto,
       escala: escala ?? this.escala,
       y: y ?? this.y,
+      visible: visible ?? this.visible,
     );
   }
 
@@ -57,6 +62,7 @@ class VerDocumento {
     serializer.serializeUint32(alto);
     serializer.serializeFloat64(escala);
     serializer.serializeFloat64(y);
+    serializer.serializeBool(visible);
     serializer.decreaseContainerDepth();
   }
 
@@ -75,7 +81,8 @@ class VerDocumento {
       && ancho == other.ancho
       && alto == other.alto
       && escala == other.escala
-      && y == other.y;
+      && y == other.y
+      && visible == other.visible;
   }
 
   @override
@@ -84,6 +91,7 @@ class VerDocumento {
         alto,
         escala,
         y,
+        visible,
       );
 
   @override
@@ -95,7 +103,8 @@ class VerDocumento {
         'ancho: $ancho, '
         'alto: $alto, '
         'escala: $escala, '
-        'y: $y'
+        'y: $y, '
+        'visible: $visible'
         ')';
       return true;
     }());

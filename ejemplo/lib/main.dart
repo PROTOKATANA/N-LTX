@@ -46,6 +46,7 @@ class _GaleriaState extends State<Galeria> {
   );
   double _zoom = 1.6;
   bool _oscuro = false;
+  bool _oculto = false;
   Pantalla _pantalla = Pantalla.documento;
   String _k1 = '';
 
@@ -102,6 +103,7 @@ class _GaleriaState extends State<Galeria> {
           fondo: _oscuro ? const Color(0xFF575965) : Colors.white,
           tinta: _oscuro ? Colors.white : Colors.black,
           conMuestras: _pantalla == Pantalla.muestras,
+          visible: !_oculto,
         ),
       ),
     ],
@@ -130,6 +132,13 @@ class _GaleriaState extends State<Galeria> {
           icon: const Icon(Icons.dark_mode_outlined),
           selectedIcon: const Icon(Icons.dark_mode),
           onPressed: () => setState(() => _oscuro = !_oscuro),
+        ),
+        IconButton(
+          tooltip: 'Dejarlo listo sin verlo',
+          isSelected: _oculto,
+          icon: const Icon(Icons.visibility_outlined),
+          selectedIcon: const Icon(Icons.visibility_off),
+          onPressed: () => setState(() => _oculto = !_oculto),
         ),
         const SizedBox(width: 8),
         const Icon(Icons.zoom_in, size: 18),

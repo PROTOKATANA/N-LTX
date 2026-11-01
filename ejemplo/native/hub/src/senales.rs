@@ -32,12 +32,20 @@ pub async fn escuchar(compositor: Compositor, taller: Arc<Taller>, seleccion: Ar
                 tinta: Color::de_rgb(s.message.tinta),
             }),
             Some(s) = fondo.recv() => taller.fondo(Color::de_rgb(s.message.color)),
-            Some(s) = ver.recv() => taller.ver(Vista {
-                ancho: s.message.ancho,
-                alto: s.message.alto,
-                escala: s.message.escala,
-                y: s.message.y,
-            }),
+            Some(s) = ver.recv() => {
+                let m = s.message;
+                let vista = Vista {
+                    ancho: m.ancho,
+                    alto: m.alto,
+                    escala: m.escala,
+                    y: m.y,
+                };
+                if m.visible {
+                    taller.ver(vista);
+                } else {
+                    taller.dejar_listo(vista);
+                }
+            }
             Some(s) = arrastrar.recv() => {
                 let m = s.message;
                 seleccion.arrastrar((m.ax, m.ay), (m.bx, m.by));

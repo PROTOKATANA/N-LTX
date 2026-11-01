@@ -46,6 +46,11 @@ pub trait Animador: Send + Sync {
     /// El fotograma de `fuente` a los `segundos`, o `None` si esa fuente no se puede componer. No
     /// debe esperar a componerlo: se llama en cada fotograma, desde el hilo que pinta.
     fn fotograma(&self, fuente: &str, segundos: f64) -> Option<Arc<Escena>>;
+    /// Lo que se ve de `fuente` sin reproducirla, para una vista oculta. Quien lo implemente no debe
+    /// encargar nada: oculto no se gasta CPU.
+    fn quieto(&self, fuente: &str) -> Option<Arc<Escena>> {
+        self.fotograma(fuente, 0.0)
+    }
 }
 
 /// La lista base y para qué escena y escala se compiló.
@@ -94,6 +99,8 @@ pub struct Lienzo {
     seleccion: Vec<Caja>,
     /// Sobre qué se pinta. Sin decirlo, blanco.
     fondo: Option<Color>,
+    /// Nadie mira: lo animado se pinta quieto y no pide más fotogramas.
+    oculto: bool,
 }
 
 fn raiz(escena: &Escena, escala: f64) -> Afin {
@@ -116,6 +123,11 @@ impl Lienzo {
     /// Marca `cajas` sobre el documento. Va con las animaciones: cambiarla no recompila la base.
     pub fn seleccionar(&mut self, cajas: Vec<Caja>) {
         self.seleccion = cajas;
+    }
+
+    /// Con la vista oculta, lo animado se queda quieto.
+    pub fn ocultar(&mut self, oculto: bool) {
+        self.oculto = oculto;
     }
 
     /// Sobre qué se pinta. Va con el fotograma: cambiarlo no recompila nada.
@@ -255,8 +267,13 @@ impl Lienzo {
             if esquina.y + zona.caja.alto * escala < vista.y || esquina.y > vista.y + f64::from(vista.alto) {
                 continue;
             }
-            animada = true;
-            let Some(f) = animador.fotograma(&zona.fuente, segundos) else {
+            animada = !self.oculto;
+            let fotograma = if self.oculto {
+                animador.quieto(&zona.fuente)
+            } else {
+                animador.fotograma(&zona.fuente, segundos)
+            };
+            let Some(f) = fotograma else {
                 continue;
             };
             let dentro = Afin::traslacion(zona.caja.x - f.caja.x, zona.caja.y - f.caja.y);

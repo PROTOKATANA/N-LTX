@@ -356,6 +356,10 @@ impl Animador for AnimadorTikra {
     fn fotograma(&self, fuente: &str, segundos: f64) -> Option<Arc<Escena>> {
         filmoteca().fotograma(fuente, self.tinta, segundos)
     }
+
+    fn quieto(&self, fuente: &str) -> Option<Arc<Escena>> {
+        filmoteca().quieto(fuente, self.tinta)
+    }
 }
 
 #[cfg(test)]

@@ -128,6 +128,12 @@ impl<C: Compositor + Send + Sync + 'static> Proyector<C> {
         visto
     }
 
+    /// Lo último que se vio, o el primer fotograma. No encarga nada: es para lo que nadie está mirando.
+    pub fn quieto(&self) -> Option<Arc<Escena>> {
+        let estado = self.bloquear();
+        self.mas_reciente(&estado, estado.cabeza)
+    }
+
     fn indice(&self, segundos: f64) -> u32 {
         let a = self.reproductor.animacion();
         let fase = segundos / a.duracion;
@@ -389,6 +395,18 @@ pub(crate) mod tests {
         let e = p.ver(0.5).unwrap();
         assert!(reloj.elapsed() < Duration::from_millis(100), "{:?}", reloj.elapsed());
         assert_eq!(valor_de(&e), 0, "lo que hay hecho, aunque aún no sea el suyo");
+    }
+
+    #[test]
+    fn quieto_enseña_algo_y_no_encarga_nada() {
+        let contador = Contador::default();
+        let p = Proyector::nuevo(FUENTE, contador.clone()).unwrap();
+        let antes = contador.compuestos.load(Ordering::SeqCst);
+        for _ in 0..50 {
+            assert!(p.quieto().is_some());
+        }
+        std::thread::sleep(Duration::from_millis(30));
+        assert_eq!(contador.compuestos.load(Ordering::SeqCst), antes);
     }
 
     #[test]

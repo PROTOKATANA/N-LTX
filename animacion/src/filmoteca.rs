@@ -98,6 +98,11 @@ impl<C: Compositor + Send + Sync + 'static> Filmoteca<C> {
         escena
     }
 
+    /// Lo que se ve de `fuente` sin reproducirla. No encarga nada.
+    pub fn quieto(&self, fuente: &str, tinta: Color) -> Option<Arc<Escena>> {
+        self.proyector(fuente, tinta).ok()?.quieto()
+    }
+
     /// Entre todas no pueden pasarse. Las que están en pantalla se reparten el presupuesto a partes
     /// iguales: quitarse fotogramas unas a otras las obligaría a recomponerlos sin parar. Lo que falte
     /// sale de las que hace más que no se ven.
@@ -160,6 +165,26 @@ mod tests {
         let hecho = compuestos();
         filmoteca.caja(FUENTE, NEGRO).unwrap();
         assert_eq!(compuestos(), hecho, "lo anticipado no se repite");
+    }
+
+    /// RAYO: si falla, una vista oculta vuelve a encargar fotogramas que nadie ve.
+    #[test]
+    fn quieto_enseña_algo_sin_encargar_nada() {
+        static COMPUESTOS: OnceLock<Contador> = OnceLock::new();
+        let filmoteca = Filmoteca::nueva(|_| COMPUESTOS.get_or_init(Contador::default).clone());
+        let compuestos = || {
+            COMPUESTOS
+                .get_or_init(Contador::default)
+                .compuestos
+                .load(Ordering::SeqCst)
+        };
+        assert!(filmoteca.quieto(FUENTE, NEGRO).is_some());
+        let hecho = compuestos();
+        for _ in 0..20 {
+            assert!(filmoteca.quieto(FUENTE, NEGRO).is_some());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(40));
+        assert_eq!(compuestos(), hecho);
     }
 
     #[test]

@@ -21,6 +21,7 @@ const PASO: Duration = Duration::from_millis(16);
 pub(crate) enum Orden {
     Publicar(Escena, Option<Arc<dyn Animador>>),
     Ver(Vista),
+    DejarListo(Vista),
     Seleccionar(Vec<Caja>),
     Fondo(Color),
     /// La GPU perdió lo que tenía: hay que volver a mandar las texturas.
@@ -60,6 +61,13 @@ impl Taller {
     /// Qué parte del documento se ve.
     pub fn ver(&self, vista: Vista) {
         self.pedir(Orden::Ver(vista));
+    }
+
+    /// Deja `vista` compilada, subida y pintada sin enseñarla, para que al verla no quede nada por
+    /// hacer: sirve para cargar un documento antes de mostrarlo. Lo animado se pinta quieto y, sin
+    /// nada nuevo, no se gasta CPU. La siguiente [`Taller::ver`] la reproduce.
+    pub fn dejar_listo(&self, vista: Vista) {
+        self.pedir(Orden::DejarListo(vista));
     }
 
     /// Sobre qué color se pinta. No recompone ni recompila: se ve en el próximo fotograma.
@@ -142,7 +150,14 @@ impl Trabajo {
     fn aplicar(&mut self, orden: Orden) -> bool {
         match orden {
             Orden::Publicar(escena, animador) => self.lienzo.publicar(escena, animador),
-            Orden::Ver(vista) => self.vista = Some(vista),
+            Orden::Ver(vista) => {
+                self.vista = Some(vista);
+                self.lienzo.ocultar(false);
+            }
+            Orden::DejarListo(vista) => {
+                self.vista = Some(vista);
+                self.lienzo.ocultar(true);
+            }
             Orden::Seleccionar(cajas) => self.lienzo.seleccionar(cajas),
             Orden::Fondo(color) => self.lienzo.pintar_sobre(color),
             Orden::Reenviar => self.lienzo.reenviar(),
@@ -230,6 +245,7 @@ mod tests {
     #[derive(Default)]
     struct Falso {
         fotogramas: AtomicU32,
+        quietos: AtomicU32,
         romper: bool,
     }
 
@@ -237,6 +253,11 @@ mod tests {
         fn fotograma(&self, _fuente: &str, _segundos: f64) -> Option<Arc<Escena>> {
             let n = self.fotogramas.fetch_add(1, Ordering::Relaxed);
             assert!(!(self.romper && n == 1), "a propósito");
+            Some(Arc::new(escena(Vec::new())))
+        }
+
+        fn quieto(&self, _fuente: &str) -> Option<Arc<Escena>> {
+            self.quietos.fetch_add(1, Ordering::Relaxed);
             Some(Arc::new(escena(Vec::new())))
         }
     }
@@ -267,6 +288,49 @@ mod tests {
             vistas = a.esperar(1, 0, TOPE);
         }
         assert!(!a.tomar(1, false).vertices_base().is_empty());
+    }
+
+    /// RAYO: si falla, un panel oculto vuelve a gastar CPU reproduciendo lo que nadie ve.
+    #[test]
+    fn oculto_se_pinta_una_vez_con_lo_animado_quieto_y_al_verlo_empieza() {
+        let a = Arc::new(Almacen::default());
+        let falso = Arc::new(Falso::default());
+        let t = Taller::abrir(1, Arc::clone(&a));
+        t.publicar(escena(vec![zona()]), Some(falso.clone()));
+        t.dejar_listo(vista());
+        let mut vistas = a.esperar(1, 0, TOPE);
+        assert!(vistas > 0, "se entrega sin verse");
+        assert!(!a.tomar(1, false).vertices_base().is_empty(), "ya está compilado");
+        assert_eq!(a.esperar(1, vistas, Duration::from_millis(60)), vistas, "no sigue");
+        assert_eq!(falso.fotogramas.load(Ordering::Relaxed), 0);
+        assert!(falso.quietos.load(Ordering::Relaxed) >= 1);
+        t.ver(vista());
+        while vistas < 4 {
+            let antes = vistas;
+            vistas = a.esperar(1, vistas, TOPE);
+            assert!(vistas > antes, "al verlo se reproduce");
+        }
+        assert!(falso.fotogramas.load(Ordering::Relaxed) >= 3);
+    }
+
+    #[test]
+    fn volver_a_ocultar_para_lo_animado() {
+        let a = Arc::new(Almacen::default());
+        let falso = Arc::new(Falso::default());
+        let t = Taller::abrir(1, Arc::clone(&a));
+        t.publicar(escena(vec![zona()]), Some(falso.clone()));
+        t.ver(vista());
+        let mut vistas = 0;
+        while vistas < 3 {
+            let antes = vistas;
+            vistas = a.esperar(1, vistas, TOPE);
+            assert!(vistas > antes, "no se reproduce");
+        }
+        t.dejar_listo(vista());
+        std::thread::sleep(Duration::from_millis(40));
+        let parado = a.esperar(1, 0, Duration::ZERO);
+        std::thread::sleep(Duration::from_millis(60));
+        assert_eq!(a.esperar(1, 0, Duration::ZERO), parado);
     }
 
     #[test]
