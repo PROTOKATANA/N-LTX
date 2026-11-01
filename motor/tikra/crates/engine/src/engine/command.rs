@@ -655,7 +655,7 @@ impl Engine {
             use crate::scene::Segment as S;
             let segments = vec![S::MoveTo(lo), S::LineTo(Point::new(hi.x, lo.y)), S::LineTo(hi), S::LineTo(Point::new(lo.x, hi.y)), S::Close];
             let stroke = crate::canvas::Stroke {
-                color: crate::color::Color::BLACK,
+                color: self.st.paint.ink.unwrap_or(crate::color::Color::BLACK),
                 width: rule,
                 dash: None,
                 cap: crate::canvas::Cap::Butt,

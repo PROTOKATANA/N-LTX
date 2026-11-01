@@ -90,8 +90,12 @@ Pintado Pintor :: pintar(const Gpu & gpu , const Marco & marco , std :: uint32_t
 
 	Ejecucion ejecucion(gpu , recursos_ , Recuadro{ w , h , float(vista.y) , float(vista.y + h) }) ;
 
+	const Fondo color = marco.fondo() ;
+
+	const float fondo[4] = { color.r , color.g , color.b , 1.0f } ;
+
 	if (
-		!ejecucion.abrir_base(error) ||
+		!ejecucion.abrir_base(fondo , error) ||
 		!ejecucion.lista(marco.comandos_base() , recursos_.base , error) ||
 		!ejecucion.lista(marco.comandos_vivos() , recursos_.vivos , error)
 	) { return Pintado{} ; }

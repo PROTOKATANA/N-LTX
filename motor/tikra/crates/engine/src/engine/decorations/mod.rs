@@ -77,7 +77,7 @@ impl Default for Settings {
             connection_node: String::new(),
             segment_code: [None, None, None, None],
             text: Vec::new(),
-            text_color: "black".into(),
+            text_color: String::new(),
             text_format: ('|', None),
             text_fit: false,
             text_stretch: false,

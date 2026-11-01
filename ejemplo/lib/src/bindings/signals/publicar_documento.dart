@@ -9,6 +9,7 @@ class PublicarDocumento {
     required this.fuente,
     required this.ancho,
     required this.conMuestras,
+    required this.tinta,
   });
 
   static PublicarDocumento deserialize(BinaryDeserializer deserializer) {
@@ -17,6 +18,7 @@ class PublicarDocumento {
       fuente: deserializer.deserializeString(),
       ancho: deserializer.deserializeFloat64(),
       conMuestras: deserializer.deserializeBool(),
+      tinta: deserializer.deserializeUint32(),
     );
     deserializer.decreaseContainerDepth();
     return instance;
@@ -34,16 +36,19 @@ class PublicarDocumento {
   final String fuente;
   final double ancho;
   final bool conMuestras;
+  final int tinta;
 
   PublicarDocumento copyWith({
     String? fuente,
     double? ancho,
     bool? conMuestras,
+    int? tinta,
   }) {
     return PublicarDocumento(
       fuente: fuente ?? this.fuente,
       ancho: ancho ?? this.ancho,
       conMuestras: conMuestras ?? this.conMuestras,
+      tinta: tinta ?? this.tinta,
     );
   }
 
@@ -52,6 +57,7 @@ class PublicarDocumento {
     serializer.serializeString(fuente);
     serializer.serializeFloat64(ancho);
     serializer.serializeBool(conMuestras);
+    serializer.serializeUint32(tinta);
     serializer.decreaseContainerDepth();
   }
 
@@ -69,7 +75,8 @@ class PublicarDocumento {
     return other is PublicarDocumento
       && fuente == other.fuente
       && ancho == other.ancho
-      && conMuestras == other.conMuestras;
+      && conMuestras == other.conMuestras
+      && tinta == other.tinta;
   }
 
   @override
@@ -77,6 +84,7 @@ class PublicarDocumento {
         fuente,
         ancho,
         conMuestras,
+        tinta,
       );
 
   @override
@@ -87,7 +95,8 @@ class PublicarDocumento {
       fullString = '$runtimeType('
         'fuente: $fuente, '
         'ancho: $ancho, '
-        'conMuestras: $conMuestras'
+        'conMuestras: $conMuestras, '
+        'tinta: $tinta'
         ')';
       return true;
     }());

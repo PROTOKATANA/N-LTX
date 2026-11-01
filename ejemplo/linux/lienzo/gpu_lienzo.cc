@@ -24,8 +24,6 @@ using namespace Diligent ;
 
 namespace {
 
-constexpr float fondo_lienzo[4] = { 1.0f , 1.0f , 1.0f , 1.0f } ;
-
 // Sin monitor no hay lienzo que medir
 
 constexpr std :: uint32_t ancho_sin_monitor = 1920 ;
@@ -164,7 +162,11 @@ struct GpuLienzo :: Impl {
 
 		if (!pintado.imagen) { return gpu_fallo(error , fallo.c_str()) ; }
 
-		surface.fijar_region(pintado.ancho , pintado.alto , fondo_lienzo) ;
+		const ltx :: Fondo color = marco->fondo() ;
+
+		const float fondo[4] = { color.r , color.g , color.b , 1.0f } ;
+
+		surface.fijar_region(pintado.ancho , pintado.alto , fondo) ;
 
 		pintor.copiar(gpu , pintado.imagen) ;
 

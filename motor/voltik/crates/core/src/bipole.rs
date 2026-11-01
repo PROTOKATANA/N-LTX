@@ -655,7 +655,7 @@ fn draw_body(cx: &mut Context, body: &Body) -> Result<(), Error> {
     if cx.macro_text("voltik@gt") == "1" {
         let tip = -comp.width / 2.0;
         let (long, half) = (BLOCK_ARROW[0] * look.unit / look.x, BLOCK_ARROW[1] * look.unit / look.y);
-        code.push_str(&format!("\\fill[black] {} -- {} -- {} -- cycle;", look.at([tip, 0.0]), look.at([tip - long, half]), look.at([tip - long, -half])));
+        code.push_str(&format!("\\fill {} -- {} -- {} -- cycle;", look.at([tip, 0.0]), look.at([tip - long, half]), look.at([tip - long, -half])));
     }
     let name = cx.macro_text("voltik@name");
     if !name.is_empty() && !poles.is_empty() {

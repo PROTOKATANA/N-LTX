@@ -28,6 +28,12 @@ const COLOR_SELECCION: Color = Color {
     b: 0.89,
 };
 const OPACIDAD_SELECCION: f64 = 0.3;
+/// Sobre un fondo oscuro la marca es clara: medido sobre #575965 con tinta blanca, la azul a 0,55 se
+/// distingue 1,39 del fondo y tiñe el texto, que baja a 2,5. Esta se distingue 1,72 y lo deja blanco,
+/// con 4,05 de contraste.
+const OPACIDAD_SELECCION_OSCURA: f64 = 0.22;
+/// Hasta esta luminancia, el fondo es oscuro.
+const FONDO_OSCURO: f64 = 0.18;
 
 /// El ancho que le queda al texto en una vista de `vista` bp.
 pub fn ancho_de_texto(vista: f64) -> f64 {
@@ -55,6 +61,7 @@ struct Compilada {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Hecho {
     pub vista: Vista,
+    pub fondo: Color,
     pub generacion_base: u64,
     pub base: Arc<Lista>,
     pub generacion_vivos: u64,
@@ -85,6 +92,8 @@ pub struct Lienzo {
     rampas: Rampas,
     /// Lo que hay que marcar, en bp del documento.
     seleccion: Vec<Caja>,
+    /// Sobre qué se pinta. Sin decirlo, blanco.
+    fondo: Option<Color>,
 }
 
 fn raiz(escena: &Escena, escala: f64) -> Afin {
@@ -102,6 +111,15 @@ impl Lienzo {
     /// Marca `cajas` sobre el documento. Va con las animaciones: cambiarla no recompila la base.
     pub fn seleccionar(&mut self, cajas: Vec<Caja>) {
         self.seleccion = cajas;
+    }
+
+    /// Sobre qué se pinta. Va con el fotograma: cambiarlo no recompila nada.
+    pub fn pintar_sobre(&mut self, fondo: Color) {
+        self.fondo = Some(fondo);
+    }
+
+    fn fondo(&self) -> Color {
+        self.fondo.unwrap_or(Color::BLANCO)
     }
 
     /// La GPU no tiene nada: el próximo fotograma llevará las texturas enteras.
@@ -161,6 +179,7 @@ impl Lienzo {
         tintas.extend_from_slice(&vivos.tintas);
         let hecho = Hecho {
             vista,
+            fondo: self.fondo(),
             generacion_base,
             base,
             generacion_vivos: self.generaciones_vivos,
@@ -185,11 +204,16 @@ impl Lienzo {
             let arriba = m.aplicar(Punto { x: c.x, y: c.y }).y;
             arriba + c.alto * vista.escala >= vista.y && arriba <= vista.y + f64::from(vista.alto)
         };
+        let (color, opacidad) = if self.fondo().luminancia() <= FONDO_OSCURO {
+            (Color::BLANCO, OPACIDAD_SELECCION_OSCURA)
+        } else {
+            (COLOR_SELECCION, OPACIDAD_SELECCION)
+        };
         let marca = |c: &Caja| Primitiva::Trazado {
             segmentos: rectangulo(*c).to_vec(),
             relleno: Some(Relleno {
-                pintura: Pintura::Solida(COLOR_SELECCION),
-                opacidad: OPACIDAD_SELECCION,
+                pintura: Pintura::Solida(color),
+                opacidad,
                 par_impar: false,
             }),
             trazo: None,
@@ -271,6 +295,43 @@ mod tests {
             }),
             trazo: None,
         }
+    }
+
+    /// RAYO: el fondo no se compila. Cambiarlo solo lleva otro color en el fotograma: si esto falla,
+    /// un cambio de tema vuelve a subir toda la geometría.
+    #[test]
+    fn cambiar_el_fondo_no_recompila_ni_vuelve_a_subir_nada() {
+        let mut l = Lienzo::default();
+        l.publicar(escena(Vec::new()), None);
+        let a = l.preparar(vista(0.0), 0.0).hecho;
+        assert_eq!(a.fondo, Color::BLANCO);
+        let oscuro = Color::de_rgb(0x575965);
+        l.pintar_sobre(oscuro);
+        let b = l.preparar(vista(0.0), 0.0).hecho;
+        assert_eq!(b.fondo, oscuro);
+        assert_eq!(b.generacion_base, a.generacion_base);
+        assert_eq!(b.generacion_vivos, a.generacion_vivos);
+        assert!(Arc::ptr_eq(&a.base, &b.base), "la misma lista, sin copiarla");
+    }
+
+    #[test]
+    fn la_seleccion_se_distingue_sobre_un_fondo_oscuro() {
+        let opacidad = |fondo: Option<Color>| {
+            let mut l = Lienzo::default();
+            l.publicar(escena(Vec::new()), None);
+            if let Some(f) = fondo {
+                l.pintar_sobre(f);
+            }
+            l.seleccionar(vec![Caja {
+                x: 0.0,
+                y: 0.0,
+                ancho: 10.0,
+                alto: 10.0,
+            }]);
+            format!("{:?}", l.preparar(vista(0.0), 0.0).hecho.vivos.vertices)
+        };
+        assert_ne!(opacidad(None), opacidad(Some(Color::de_rgb(0x575965))));
+        assert_eq!(opacidad(None), opacidad(Some(Color::BLANCO)));
     }
 
     fn vista(y: f64) -> Vista {

@@ -85,7 +85,11 @@ impl Engine {
                             (None, Some(stroke))
                         }
                         ShapePaint::Fill => (draw.node_fill.clone().map(|f| own.map_or(f, solid)), None),
-                        ShapePaint::Background => (Some(own.map(solid).or_else(|| draw.node_fill.clone()).unwrap_or_else(|| solid(crate::color::Color::WHITE))), None),
+                        ShapePaint::Background => {
+                            // white stands for the paper, and under an ink the paper is not white
+                            let paper = self.st.paint.ink.is_none().then(|| solid(crate::color::Color::WHITE));
+                            (own.map(solid).or_else(|| draw.node_fill.clone()).or(paper), None)
+                        }
                         ShapePaint::Solid => (Some(solid(own.unwrap_or_else(|| self.st.stroke_color()))), None),
                     }
                 }

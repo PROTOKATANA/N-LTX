@@ -108,6 +108,14 @@ pub mod ffi {
         pub y: f64,
     }
 
+    /// Sobre qué se pinta, sRGB de 0 a 1.
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct Fondo {
+        pub r: f32,
+        pub g: f32,
+        pub b: f32,
+    }
+
     /// Lo que mide lo que viaja a la GPU.
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct Limites {
@@ -133,6 +141,7 @@ pub mod ffi {
         fn anotar_lienzo(ms: f64);
 
         fn vista(self: &Marco) -> Vista;
+        fn fondo(self: &Marco) -> Fondo;
         /// Mientras no cambien, lo que ya se copió sigue valiendo.
         fn generacion_base(self: &Marco) -> u64;
         fn generacion_vivos(self: &Marco) -> u64;

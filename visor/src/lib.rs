@@ -8,6 +8,8 @@ mod compositor;
 mod muestras;
 mod seleccion;
 
+pub use primitivas::Color;
+
 pub use compositor::{Avisos, Compositor, Destino, Encargo, Resultado};
 pub use muestras::Muestras;
 pub use seleccion::Seleccion;

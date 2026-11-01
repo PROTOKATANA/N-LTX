@@ -52,12 +52,17 @@ class Encuadre {
 
 /// Cómo habla la interfaz con el motor: los widgets no conocen las señales.
 abstract interface class RepositorioMotor {
-  /// Compone `fuente` para una vista de `ancho` bp, seguido o no de todas las muestras.
+  /// Compone `fuente` para una vista de `ancho` bp, seguido o no de todas las muestras. `tinta` es
+  /// el color de lo que el documento no colorea: cambiarla recompone.
   void publicar(
     String fuente, {
     required double ancho,
+    required Color tinta,
     bool conMuestras = false,
   });
+
+  /// Sobre qué color se pinta. No recompone: se ve en el próximo fotograma.
+  void fondo(Color color);
 
   void ver(Encuadre encuadre);
 
@@ -82,16 +87,23 @@ abstract interface class RepositorioMotor {
 
 /// El repositorio sobre las señales de rinf.
 class RepositorioRinf implements RepositorioMotor {
+  static int _rgb(Color color) => color.toARGB32() & 0xFFFFFF;
+
   @override
   void publicar(
     String fuente, {
     required double ancho,
+    required Color tinta,
     bool conMuestras = false,
   }) => PublicarDocumento(
     fuente: fuente,
     ancho: ancho,
     conMuestras: conMuestras,
+    tinta: _rgb(tinta),
   ).sendSignalToRust();
+
+  @override
+  void fondo(Color color) => PonerFondo(color: _rgb(color)).sendSignalToRust();
 
   @override
   void ver(Encuadre e) => VerDocumento(

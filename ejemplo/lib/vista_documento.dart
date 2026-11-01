@@ -15,6 +15,8 @@ class VistaDocumento extends StatefulWidget {
     required this.pagina,
     required this.fuente,
     required this.zoom,
+    this.fondo = Colors.white,
+    this.tinta = Colors.black,
     this.conMuestras = false,
   });
 
@@ -24,6 +26,12 @@ class VistaDocumento extends StatefulWidget {
   final Object pagina;
   final String fuente;
   final double zoom;
+
+  /// Sobre qué color se pinta: cambiarlo no recompone.
+  final Color fondo;
+
+  /// El color de lo que el documento no colorea: cambiarlo recompone.
+  final Color tinta;
 
   /// Tras `fuente` van todas las muestras: las tiene Rust.
   final bool conMuestras;
@@ -104,6 +112,7 @@ class _VistaDocumentoState extends State<VistaDocumento> {
   }
 
   Future<void> _abrir() async {
+    widget.motor.fondo(widget.fondo);
     final id = await _canal.invokeMethod<int>('create', 0);
     final lienzo = await _canal.invokeListMethod<int>('lienzo', 0);
     if (!mounted) return;
@@ -125,9 +134,11 @@ class _VistaDocumentoState extends State<VistaDocumento> {
     }
     if (antes.fuente != widget.fuente ||
         antes.zoom != widget.zoom ||
+        antes.tinta != widget.tinta ||
         antes.conMuestras != widget.conMuestras) {
       _pedirPublicacion();
     }
+    if (antes.fondo != widget.fondo) widget.motor.fondo(widget.fondo);
   }
 
   void _pedirPublicacion() {
@@ -142,6 +153,7 @@ class _VistaDocumentoState extends State<VistaDocumento> {
     widget.motor.publicar(
       widget.fuente,
       ancho: _tam.width / widget.zoom,
+      tinta: widget.tinta,
       conMuestras: widget.conMuestras,
     );
     _verVista();
@@ -279,7 +291,7 @@ class _VistaDocumentoState extends State<VistaDocumento> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                const ColoredBox(color: Colors.white),
+                ColoredBox(color: widget.fondo),
                 if (textura != null) _textura1a1(textura, pixeles),
                 Listener(
                   behavior: HitTestBehavior.translucent,

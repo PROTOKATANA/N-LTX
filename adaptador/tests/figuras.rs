@@ -282,6 +282,7 @@ fn una_biblioteca_externa_se_inyecta_sin_tocar_tikra() {
 
     let c = FiguraTikra {
         bibliotecas: &BIBLIOTECAS,
+        ..FiguraTikra::default()
     }
     .componer(r"\begin{tikzpicture}\draw[carretera] (0,0) -- (2,0);\end{tikzpicture}")
     .expect("figura");

@@ -170,6 +170,10 @@ pub struct Paint {
     pub blend: Option<String>,
     /// `\pgfsetfillpattern`: the basic layer's fills use the pattern
     pub fill_pattern: bool,
+    /// What the figure does not color is drawn in this, if it is not black.
+    pub ink: Option<Color>,
+    /// The fill around a text that is not the one of its own node: its matrix's.
+    pub backdrop: Option<Color>,
 }
 
 impl Default for Paint {
@@ -188,6 +192,8 @@ impl Default for Paint {
             transparency_group: false,
             blend: None,
             fill_pattern: false,
+            ink: None,
+            backdrop: None,
         }
     }
 }
@@ -536,6 +542,21 @@ impl Default for GState {
     }
 }
 
+/// The WCAG AA contrast for a text.
+const LEGIBLE_CONTRAST: f64 = 4.5;
+/// Under this, what is behind a fill shows more than the fill.
+const MIN_COVERING_OPACITY: f64 = 0.5;
+
+/// `ink`, unless it does not show on `fill`: then black, what the figure was written for.
+fn legible_on(ink: Color, fill: Color) -> Color {
+    let contrast = ink.contrast(&fill);
+    if contrast < LEGIBLE_CONTRAST && Color::BLACK.contrast(&fill) > contrast {
+        Color::BLACK
+    } else {
+        ink
+    }
+}
+
 impl GState {
     pub fn stroke_color(&self) -> Color {
         self.paint.draw_color.unwrap_or(self.paint.color)
@@ -544,7 +565,22 @@ impl GState {
         self.paint.fill_color.unwrap_or(self.paint.color)
     }
     pub fn text_paint_color(&self) -> Color {
-        self.paint.text_color.unwrap_or(self.paint.color)
+        let color = self.paint.text_color.unwrap_or(self.paint.color);
+        // `fill=white` with no text color asks for a text that can be read on it, whatever the ink
+        match (self.paint.ink, self.fill_under_text()) {
+            (Some(ink), Some(fill)) if self.paint.text_color.is_none() && color == ink => legible_on(ink, fill),
+            _ => color,
+        }
+    }
+
+    /// The solid color a node's text is on, if it knows it: not a fill that barely covers.
+    fn fill_under_text(&self) -> Option<Color> {
+        self.own_fill().or(self.paint.backdrop)
+    }
+
+    /// What a matrix's fill is to the text of its cells.
+    pub fn own_fill(&self) -> Option<Color> {
+        (self.mode.fill && self.paint.fill_opacity >= MIN_COVERING_OPACITY).then(|| self.fill_paint_color())
     }
     /// Applies the pending transformations (`\tikz@transform`) and clears them.
     pub fn apply_pending(&mut self) {

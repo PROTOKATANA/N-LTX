@@ -29,7 +29,12 @@ pub struct IncrustadosMotor {
 /// prepararlas cuesta demasiado para hacerlo dos veces.
 pub fn filmoteca() -> &'static Filmoteca<FiguraTikra> {
     static FILMOTECA: OnceLock<Filmoteca<FiguraTikra>> = OnceLock::new();
-    FILMOTECA.get_or_init(|| Filmoteca::nueva(FiguraTikra::default))
+    FILMOTECA.get_or_init(|| {
+        Filmoteca::nueva(|tinta| FiguraTikra {
+            tinta,
+            ..FiguraTikra::default()
+        })
+    })
 }
 
 impl Incrustados for IncrustadosMotor {
@@ -44,11 +49,15 @@ impl Incrustados for IncrustadosMotor {
     }
 
     fn figura(&self, fuente: &str) -> Result<Composicion, ErrorComposicion> {
-        protegido(|| FiguraTikra::default().componer(fuente))
+        let figura = FiguraTikra {
+            tinta: self.color,
+            ..FiguraTikra::default()
+        };
+        protegido(|| figura.componer(fuente))
     }
 
     fn caja_de_animacion(&self, fuente: &str) -> Result<Caja, ErrorComposicion> {
-        protegido(|| filmoteca().caja(fuente).map_err(ErrorComposicion))
+        protegido(|| filmoteca().caja(fuente, self.color).map_err(ErrorComposicion))
     }
 }
 

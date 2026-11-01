@@ -53,6 +53,18 @@ impl Color {
         Color { r, g, b, model: Model::Cmyk([c, m, y, k]) }
     }
 
+    /// The WCAG relative luminance, from 0 to 1.
+    pub fn luminance(&self) -> f64 {
+        let linear = |v: f64| if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) };
+        0.2126 * linear(self.r) + 0.7152 * linear(self.g) + 0.0722 * linear(self.b)
+    }
+
+    /// The WCAG contrast between two colors, from 1 to 21.
+    pub fn contrast(&self, other: &Color) -> f64 {
+        let (a, b) = (self.luminance(), other.luminance());
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+
     pub fn hex(&self) -> String {
         let c = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
         format!("#{:02x}{:02x}{:02x}", c(self.r), c(self.g), c(self.b))

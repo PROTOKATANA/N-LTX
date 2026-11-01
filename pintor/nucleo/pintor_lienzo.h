@@ -46,7 +46,8 @@ public:
 
 	bool subir(const Gpu & gpu , const Marco & marco , std :: string & error) ;
 
-	// Lo que se ve en `marco`, hasta `ancho_maximo` × `alto_maximo`
+	// Lo que se ve en `marco`, hasta `ancho_maximo` × `alto_maximo`, sobre su
+	// fondo (`Taller :: fondo`)
 
 	Pintado pintar(const Gpu & gpu , const Marco & marco , std :: uint32_t ancho_maximo , std :: uint32_t alto_maximo , std :: string & error) ;
 

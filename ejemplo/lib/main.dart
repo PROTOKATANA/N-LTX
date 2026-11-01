@@ -45,6 +45,7 @@ class _GaleriaState extends State<Galeria> {
     text: r'Prueba: la ley $F=ma$ y el agua \ce{H2O}.',
   );
   double _zoom = 1.6;
+  bool _oscuro = false;
   Pantalla _pantalla = Pantalla.documento;
   String _k1 = '';
 
@@ -98,6 +99,8 @@ class _GaleriaState extends State<Galeria> {
           pagina: _pantalla,
           fuente: _fuente,
           zoom: _zoom,
+          fondo: _oscuro ? const Color(0xFF575965) : Colors.white,
+          tinta: _oscuro ? Colors.white : Colors.black,
           conMuestras: _pantalla == Pantalla.muestras,
         ),
       ),
@@ -120,7 +123,15 @@ class _GaleriaState extends State<Galeria> {
           selected: {_pantalla},
           onSelectionChanged: (s) => setState(() => _pantalla = s.first),
         ),
-        const SizedBox(width: 20),
+        const SizedBox(width: 12),
+        IconButton(
+          tooltip: 'Fondo oscuro',
+          isSelected: _oscuro,
+          icon: const Icon(Icons.dark_mode_outlined),
+          selectedIcon: const Icon(Icons.dark_mode),
+          onPressed: () => setState(() => _oscuro = !_oscuro),
+        ),
+        const SizedBox(width: 8),
         const Icon(Icons.zoom_in, size: 18),
         SizedBox(
           width: 170,

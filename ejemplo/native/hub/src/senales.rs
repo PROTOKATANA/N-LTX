@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use pintor::{Taller, Vista, medidas};
 use rinf::DartSignal;
-use visor::{Compositor, Encargo, Seleccion};
+use visor::{Color, Compositor, Encargo, Seleccion};
 
 use crate::avisos;
 use crate::signals;
@@ -15,6 +15,7 @@ const CADA_MEDIDA: Duration = Duration::from_secs(1);
 
 pub async fn escuchar(compositor: Compositor, taller: Arc<Taller>, seleccion: Arc<Seleccion>) {
     let publicar = signals::PublicarDocumento::get_dart_signal_receiver();
+    let fondo = signals::PonerFondo::get_dart_signal_receiver();
     let ver = signals::VerDocumento::get_dart_signal_receiver();
     let arrastrar = signals::SeleccionarTexto::get_dart_signal_receiver();
     let palabra = signals::SeleccionarPalabra::get_dart_signal_receiver();
@@ -28,7 +29,9 @@ pub async fn escuchar(compositor: Compositor, taller: Arc<Taller>, seleccion: Ar
                 fuente: s.message.fuente,
                 ancho: s.message.ancho,
                 con_muestras: s.message.con_muestras,
+                tinta: Color::de_rgb(s.message.tinta),
             }),
+            Some(s) = fondo.recv() => taller.fondo(Color::de_rgb(s.message.color)),
             Some(s) = ver.recv() => taller.ver(Vista {
                 ancho: s.message.ancho,
                 alto: s.message.alto,

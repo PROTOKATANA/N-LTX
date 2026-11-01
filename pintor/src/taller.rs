@@ -7,7 +7,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use primitivas::{Caja, Escena};
+use primitivas::{Caja, Color, Escena};
 
 use crate::almacen::Almacen;
 use crate::hilos;
@@ -22,6 +22,7 @@ pub(crate) enum Orden {
     Publicar(Escena, Option<Arc<dyn Animador>>),
     Ver(Vista),
     Seleccionar(Vec<Caja>),
+    Fondo(Color),
     /// La GPU perdió lo que tenía: hay que volver a mandar las texturas.
     Reenviar,
     Parar,
@@ -59,6 +60,11 @@ impl Taller {
     /// Qué parte del documento se ve.
     pub fn ver(&self, vista: Vista) {
         self.pedir(Orden::Ver(vista));
+    }
+
+    /// Sobre qué color se pinta. No recompone ni recompila: se ve en el próximo fotograma.
+    pub fn fondo(&self, color: Color) {
+        self.pedir(Orden::Fondo(color));
     }
 
     /// Qué partes del documento están seleccionadas, en bp.
@@ -138,6 +144,7 @@ impl Trabajo {
             Orden::Publicar(escena, animador) => self.lienzo.publicar(escena, animador),
             Orden::Ver(vista) => self.vista = Some(vista),
             Orden::Seleccionar(cajas) => self.lienzo.seleccionar(cajas),
+            Orden::Fondo(color) => self.lienzo.pintar_sobre(color),
             Orden::Reenviar => self.lienzo.reenviar(),
             Orden::Parar => return false,
         }

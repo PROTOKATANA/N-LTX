@@ -8,11 +8,11 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Duration;
 
-use primitivas::MapaDeBits;
+use primitivas::{Color, MapaDeBits};
 
 use crate::lienzo::{Entrega, Hecho};
 use crate::lista::Lista;
-use crate::puente_lienzo::ffi::{Comando, Tinta, Vertice, Vista};
+use crate::puente_lienzo::ffi::{Comando, Fondo, Tinta, Vertice, Vista};
 use crate::taller::Orden;
 use crate::textura::Sucio;
 
@@ -149,6 +149,16 @@ impl Marco {
         )
     }
 
+    /// Sin nada hecho, blanco.
+    pub fn fondo(&self) -> Fondo {
+        let c = self.hecho.as_ref().map_or(Color::BLANCO, |h| h.fondo);
+        Fondo {
+            r: c.r as f32,
+            g: c.g as f32,
+            b: c.b as f32,
+        }
+    }
+
     pub fn generacion_base(&self) -> u64 {
         self.hecho.as_ref().map_or(0, |h| h.generacion_base)
     }
@@ -255,6 +265,7 @@ mod tests {
                 escala: 1.0,
                 y,
             },
+            fondo: Color::BLANCO,
             generacion_base: 1,
             base: Arc::new(Lista::base()),
             generacion_vivos: 0,

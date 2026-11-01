@@ -544,7 +544,15 @@ pub fn run_document_with(code: &str, libraries: &[&'static crate::extension::Lib
 
 /// Runs a whole document in an engine built with `parts`.
 pub fn run_document_in(code: &str, parts: piece::Parts<'_>) -> Result<(Canvas, Vec<String>, crate::describe::Facts), Error> {
+    run_document_inked(code, parts, crate::color::Color::BLACK)
+}
+
+/// [`run_document_in`], with `ink` as the color of what the figure does not color itself. It is
+/// only where the graphic state starts: `black` is still black.
+pub fn run_document_inked(code: &str, parts: piece::Parts<'_>, ink: crate::color::Color) -> Result<(Canvas, Vec<String>, crate::describe::Facts), Error> {
     let mut e = Engine::of(parts);
+    e.st.paint.color = ink;
+    e.st.paint.ink = (ink != crate::color::Color::BLACK).then_some(ink);
     crate::expr::reset_random();
     // tikra's margin around a figure, unless a standalone border says otherwise
     e.canvas.margin = 2.0 * crate::PT;

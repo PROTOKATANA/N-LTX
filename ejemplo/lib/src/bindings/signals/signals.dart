@@ -18,6 +18,7 @@ part 'borrar_seleccion.dart';
 part 'copiar_seleccion.dart';
 part 'documento_publicado.dart';
 part 'medidas_pintor.dart';
+part 'poner_fondo.dart';
 part 'publicar_documento.dart';
 part 'seleccionar_palabra.dart';
 part 'seleccionar_texto.dart';

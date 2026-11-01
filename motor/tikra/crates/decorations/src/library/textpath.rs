@@ -161,7 +161,7 @@ impl Run<'_> {
     /// The label of one character, with the format's color (`\color{…}`) taken out.
     fn char_label(&mut self, text: &str, format: &str, math: bool) -> tikra_engine::scene::Label {
         let (font, color) = split_color(format);
-        let color = color.and_then(|c| self.e.color(&c)).or_else(|| self.e.color(&self.s.text_color.clone())).unwrap_or(Color::BLACK);
+        let color = color.and_then(|c| self.e.color(&c)).or_else(|| self.e.color(&self.s.text_color.clone())).unwrap_or(self.e.st.paint.ink.unwrap_or(Color::BLACK));
         let body = if math { format!("${text}$") } else { text.to_string() };
         let mut warnings = Vec::new();
         let label = tikra_engine::label::compose_label(&body, &font, None, 'l', color, &mut warnings);

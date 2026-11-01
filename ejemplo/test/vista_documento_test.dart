@@ -10,6 +10,8 @@ import 'package:nltx_ejemplo/vista_documento.dart';
 /// El motor de mentira: apunta lo que le piden.
 class MotorFalso implements RepositorioMotor {
   final arrastres = <(Offset, Offset)>[];
+  final tintas = <Color>[];
+  final fondos = <Color>[];
   final palabras = <Offset>[];
   var todos = 0;
   var borrados = 0;
@@ -26,8 +28,12 @@ class MotorFalso implements RepositorioMotor {
   void publicar(
     String fuente, {
     required double ancho,
+    required Color tinta,
     bool conMuestras = false,
-  }) {}
+  }) => tintas.add(tinta);
+
+  @override
+  void fondo(Color color) => fondos.add(color);
 
   @override
   void ver(Encuadre encuadre) {}
@@ -58,6 +64,27 @@ class MotorFalso implements RepositorioMotor {
 }
 
 const _zoom = 2.0;
+
+Future<void> colorear(
+  WidgetTester t,
+  MotorFalso motor, {
+  required Color fondo,
+  required Color tinta,
+}) async {
+  await t.pumpWidget(
+    MaterialApp(
+      home: VistaDocumento(
+        motor: motor,
+        pagina: 0,
+        fuente: 'hola',
+        zoom: _zoom,
+        fondo: fondo,
+        tinta: tinta,
+      ),
+    ),
+  );
+  await t.pump();
+}
 
 Future<MotorFalso> montar(WidgetTester t) async {
   final mensajero = t.binding.defaultBinaryMessenger;
@@ -202,6 +229,25 @@ void main() {
     final parado = barra.position.pixels;
     await t.pump(const Duration(milliseconds: 200));
     expect(barra.position.pixels, parado, reason: 'al soltar se para');
+  });
+
+  testWidgets('cambiar el fondo no vuelve a publicar', (t) async {
+    final motor = await montar(t);
+    final publicadas = motor.tintas.length;
+    await colorear(
+      t,
+      motor,
+      fondo: const Color(0xFF575965),
+      tinta: Colors.black,
+    );
+    expect(motor.fondos.last, const Color(0xFF575965));
+    expect(motor.tintas.length, publicadas);
+  });
+
+  testWidgets('cambiar la tinta vuelve a publicar con la nueva', (t) async {
+    final motor = await montar(t);
+    await colorear(t, motor, fondo: Colors.white, tinta: Colors.white);
+    expect(motor.tintas.last, Colors.white);
   });
 
   testWidgets('Ctrl+C copia y Ctrl+A selecciona todo', (t) async {

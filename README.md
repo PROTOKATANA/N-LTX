@@ -50,6 +50,11 @@ el pegamento, y `ejemplo/` lo tiene entero para copiarlo:
 
 - **Rust:** depende de `visor` y `pintor`, y traduce sus señales a `Compositor`, `Seleccion` y `Taller`
   (`ejemplo/native/hub`). `Compositor::abrir` recibe de qué carpetas se pueden leer las imágenes.
+- **Colores:** se cambian en ejecución. `Taller::fondo` fija el fondo: no recompone ni recompila, va con el
+  fotograma. `Encargo::tinta` fija el color de lo que el documento no colorea, TikZ incluido: recompone. Lo
+  que el documento pide se respeta, aunque sea `black`, y el texto de un nodo con relleno propio solo deja
+  la tinta si no se leería sobre ese relleno. Un texto sobre un relleno que no es de su nodo no se puede
+  saber: `\fill[green!20]` y un `\node` encima se quedan con la tinta.
 - **Rendimiento:** el perfil y el asignador son de quien compila. Sin `lto = "fat"` y `codegen-units = 1`,
   un fotograma de animación cuesta un 11 % más, y sin `mimalloc` en el hub, entre un 5 % y un 13 % más.
 - **C++:** añade DiligentCore, dice en `NLTX_CXX` dónde deja `cxx` lo que genera y hace

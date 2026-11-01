@@ -31,6 +31,9 @@ solo se usa para registrar la textura. Todo se pinta con Vulkan en una sola supe
 `pintor/README.md`. Lo que el pintor no sabe hacer se avisa en pantalla: patrones (los aproxima con su
 color) y mosaicos.
 
+El botón de la luna alterna fondo #575965 y tinta blanca en ejecución: `lib/main.dart` solo cambia dos
+propiedades de `VistaDocumento`.
+
 Se puede medir con `NLTX_BANCO_GPU=1` y volcar cada fotograma a un PPM con `NLTX_VOLCAR_LIENZO=<archivo>`.
 `linux/gpu/pruebas/probar.sh` prueba las piezas puras de la base.
 

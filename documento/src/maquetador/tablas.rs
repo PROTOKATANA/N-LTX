@@ -11,7 +11,7 @@ use super::{Columna, Maquetador, SEPARACION, rectangulo};
 use crate::lector::{Alineado, Celda, Estilo, Tabla, Tramo};
 use crate::tema::{Ajuste, EstiloTabla, Reparto};
 
-const BLANCO: Color = Color { r: 1.0, g: 1.0, b: 1.0 };
+const BLANCO: Color = Color::BLANCO;
 /// En una cabecera, el blanco vale mientras contraste al menos esto: un título se lee por su peso.
 const CONTRASTE_CABECERA: f64 = 2.0;
 /// El margen vertical de una celda frente al horizontal.
@@ -68,6 +68,8 @@ struct Paleta {
     texto_cabecera: Option<Color>,
     filas: Vec<Color>,
     texto: Color,
+    /// El texto de lo que no lleva fondo.
+    sobre_pagina: Color,
     reglas: Option<Color>,
 }
 
@@ -118,24 +120,6 @@ impl Medidas {
     fn ancho_total(&self) -> f64 {
         self.anchos.iter().sum::<f64>() + self.hueco * self.anchos.len().saturating_sub(1) as f64
     }
-}
-
-/// La luminancia relativa de WCAG.
-fn luminancia(c: Color) -> f64 {
-    let lineal = |v: f64| {
-        if v <= 0.04045 {
-            v / 12.92
-        } else {
-            ((v + 0.055) / 1.055).powf(2.4)
-        }
-    };
-    0.2126 * lineal(c.r) + 0.7152 * lineal(c.g) + 0.0722 * lineal(c.b)
-}
-
-/// El contraste de WCAG entre dos colores: de 1 a 21.
-fn contraste(a: Color, b: Color) -> f64 {
-    let (la, lb) = (luminancia(a), luminancia(b));
-    (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
 }
 
 /// El color a la altura `t` de una lista repartida entre 0 y 1.
@@ -287,11 +271,17 @@ impl Maquetador<'_> {
 
     fn paleta_de(&mut self, e: &EstiloTabla) -> Paleta {
         let lista = |m: &mut Self, nombres: &[String]| nombres.iter().filter_map(|n| m.color_de(n)).collect();
+        let tinta = self.formato.color;
+        let texto = self.color_de(&e.texto).unwrap_or(tinta);
+        // el gris del tema solo se lee sobre una página clara; un color pedido se respeta
+        let del_tema = e.texto == self.formato.tema.tabla.texto;
+        let clara = tinta.contraste(Color::BLANCO) < tinta.contraste(Color::NEGRO);
         Paleta {
             cabecera: lista(self, &e.cabecera),
             texto_cabecera: e.texto_cabecera.as_deref().and_then(|n| self.color_de(n)),
             filas: lista(self, &e.filas),
-            texto: self.color_de(&e.texto).unwrap_or(self.formato.color),
+            texto,
+            sobre_pagina: if del_tema && clara { tinta } else { texto },
             reglas: e.reglas.as_deref().and_then(|n| self.color_de(n)),
         }
     }
@@ -438,9 +428,9 @@ fn color_sobre(fondo: Option<Color>, es_cabecera: bool, p: &Paleta) -> Color {
     if let (true, Some(c)) = (es_cabecera, p.texto_cabecera) {
         return c;
     }
-    let Some(fondo) = fondo else { return p.texto };
-    let blanco = contraste(BLANCO, fondo);
-    if (es_cabecera && blanco >= CONTRASTE_CABECERA) || blanco > contraste(p.texto, fondo) {
+    let Some(fondo) = fondo else { return p.sobre_pagina };
+    let blanco = BLANCO.contraste(fondo);
+    if (es_cabecera && blanco >= CONTRASTE_CABECERA) || blanco > p.texto.contraste(fondo) {
         BLANCO
     } else {
         p.texto
@@ -485,6 +475,7 @@ mod tests {
             texto_cabecera: None,
             filas: Vec::new(),
             texto: GRIS,
+            sobre_pagina: GRIS,
             reglas: None,
         }
     }
@@ -492,8 +483,8 @@ mod tests {
     #[test]
     fn el_contraste_es_el_de_wcag() {
         let negro = Color { r: 0.0, g: 0.0, b: 0.0 };
-        assert!((contraste(BLANCO, negro) - 21.0).abs() < 1e-9);
-        assert!((contraste(negro, negro) - 1.0).abs() < 1e-9);
+        assert!((BLANCO.contraste(negro) - 21.0).abs() < 1e-9);
+        assert!((negro.contraste(negro) - 1.0).abs() < 1e-9);
     }
 
     #[test]

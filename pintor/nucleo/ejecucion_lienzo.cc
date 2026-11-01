@@ -6,8 +6,6 @@ namespace ltx {
 
 namespace {
 
-constexpr float fondo_lienzo[4] = { 1.0f , 1.0f , 1.0f , 1.0f } ;
-
 constexpr float transparente[4] = { 0.0f , 0.0f , 0.0f , 0.0f } ;
 
 ITextureView * vista_srv(ITexture * t) { return t->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) ; }
@@ -18,11 +16,11 @@ Ejecucion :: Ejecucion(const Gpu & gpu , Recursos & recursos , const Recuadro & 
 
 	gpu_(gpu) , r_(recursos) , recuadro_(recuadro) {}
 
-bool Ejecucion :: abrir_base(std :: string & error) {
+bool Ejecucion :: abrir_base(const float * fondo , std :: string & error) {
 
 	if (!r_.objetivo(gpu_ , 0 , error)) { return false ; }
 
-	fijar(0 , fondo_lienzo) ;
+	fijar(0 , fondo) ;
 
 	return true ;
 

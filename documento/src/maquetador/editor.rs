@@ -280,7 +280,7 @@ impl Maquetador<'_> {
             self.avisos.push(format!("tema de código desconocido: {tema}"));
             ColoresEditor {
                 fondo: self.formato.tema.fondo_codigo,
-                texto: self.formato.color,
+                texto: self.tinta_sobre(self.formato.tema.fondo_codigo),
                 numeros: escurecido(self.formato.tema.fondo_codigo, 0.55),
             }
         })

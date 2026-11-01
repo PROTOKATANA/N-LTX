@@ -82,6 +82,8 @@ fn bind_legend_keys(e: &mut Engine) -> Result<(), Error> {
     }
     e.process_keys(toks(&direct), None)?;
     e.process_keys(toks("/pgfplots/every axis legend"), Some("/tikz"))?;
+    // what the entries' text is on (`fill=white`, by default)
+    e.st.paint.backdrop = e.st.own_fill().or(e.st.paint.backdrop);
     Ok(())
 }
 

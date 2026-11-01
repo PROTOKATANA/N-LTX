@@ -38,6 +38,39 @@ pub struct Color {
     pub b: f64,
 }
 
+impl Color {
+    pub const NEGRO: Color = Color { r: 0.0, g: 0.0, b: 0.0 };
+    pub const BLANCO: Color = Color { r: 1.0, g: 1.0, b: 1.0 };
+
+    /// De `0xRRGGBB`, como se escribe en CSS.
+    pub fn de_rgb(rgb: u32) -> Color {
+        let canal = |desplazado: u32| f64::from((rgb >> desplazado) & 0xff) / 255.0;
+        Color {
+            r: canal(16),
+            g: canal(8),
+            b: canal(0),
+        }
+    }
+
+    /// La luminancia relativa de WCAG: de 0 a 1.
+    pub fn luminancia(self) -> f64 {
+        let lineal = |v: f64| {
+            if v <= 0.04045 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * lineal(self.r) + 0.7152 * lineal(self.g) + 0.0722 * lineal(self.b)
+    }
+
+    /// El contraste de WCAG entre dos colores: de 1 a 21.
+    pub fn contraste(self, otro: Color) -> f64 {
+        let (a, b) = (self.luminancia(), otro.luminancia());
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Segmento {
     Mover(Punto),
@@ -289,4 +322,25 @@ impl Error for ErrorComposicion {}
 /// Convierte una fuente LaTeX en una escena.
 pub trait Compositor {
     fn componer(&self, fuente: &str) -> Result<Composicion, ErrorComposicion>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn un_color_se_escribe_como_en_css() {
+        let c = Color::de_rgb(0x575965);
+        assert_eq!(c.r, 87.0 / 255.0);
+        assert_eq!(c.g, 89.0 / 255.0);
+        assert_eq!(c.b, 101.0 / 255.0);
+        assert_eq!(Color::de_rgb(0xffffff), Color::BLANCO);
+        assert_eq!(Color::de_rgb(0), Color::NEGRO);
+    }
+
+    #[test]
+    fn el_contraste_va_de_1_a_21() {
+        assert!((Color::BLANCO.contraste(Color::NEGRO) - 21.0).abs() < 1e-9);
+        assert!((Color::NEGRO.contraste(Color::NEGRO) - 1.0).abs() < 1e-9);
+    }
 }

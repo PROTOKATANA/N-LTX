@@ -10,6 +10,14 @@ pub struct PublicarDocumento {
     pub fuente: String,
     pub ancho: f64,
     pub con_muestras: bool,
+    /// El color de lo que el documento no colorea, `0xRRGGBB`.
+    pub tinta: u32,
+}
+
+/// Dart → Rust: sobre qué color se pinta, `0xRRGGBB`. No recompone.
+#[derive(Clone, Copy, Deserialize, DartSignal)]
+pub struct PonerFondo {
+    pub color: u32,
 }
 
 /// Dart → Rust: qué parte del documento se ve, en píxeles físicos.

@@ -21,6 +21,8 @@ use editor::BloqueDeCodigo;
 use texto::Letra;
 
 /// Separación entre bloques y sangría de las listas, en cuerpos de letra.
+/// El contraste mínimo del texto, el de WCAG AA.
+const CONTRASTE_LEGIBLE: f64 = 4.5;
 const SEPARACION: f64 = 0.7;
 const SANGRIA: f64 = 1.8;
 /// Ancho de las reglas, en bp.
@@ -378,14 +380,29 @@ impl Maquetador<'_> {
     }
 
     /// La fuente de lo que no se pudo componer, en un bloque sencillo.
+    /// La tinta, salvo que no se lea sobre `fondo`: el texto de un panel claro con la tinta clara.
+    fn tinta_sobre(&self, fondo: Color) -> Color {
+        let tinta = self.formato.color;
+        if tinta.contraste(fondo) >= CONTRASTE_LEGIBLE {
+            tinta
+        } else if Color::NEGRO.contraste(fondo) >= Color::BLANCO.contraste(fondo) {
+            Color::NEGRO
+        } else {
+            Color::BLANCO
+        }
+    }
+
     fn fuente_cruda(&mut self, fuente: &str, c: Columna) {
         let tam = self.formato.tam * 0.84;
         let margen = tam * 0.75;
         let inicio = self.primitivas.len();
         let arriba = self.y;
         self.y += margen;
+        let legible = self.tinta_sobre(self.formato.tema.fondo_codigo);
+        let color = (legible != self.formato.color).then(|| self.indice_de_color(legible));
         let mono = Estilo {
             mono: true,
+            color,
             ..Estilo::default()
         };
         let tramos = [Tramo::Texto(fuente.into(), mono)];

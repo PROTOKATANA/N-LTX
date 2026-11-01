@@ -57,6 +57,11 @@ pub mod engine {
     pub fn run_document_with(code: &str, libraries: &[&'static Library]) -> Result<(Canvas, Vec<String>, Facts), Error> {
         run_document_in(code, piece::Parts { pieces: PIECES, libraries })
     }
+
+    /// [`run_document_with`], with `ink` as the color of what the figure does not color itself.
+    pub fn run_document_with_ink(code: &str, libraries: &[&'static Library], ink: crate::color::Color) -> Result<(Canvas, Vec<String>, Facts), Error> {
+        run_document_inked(code, piece::Parts { pieces: PIECES, libraries }, ink)
+    }
 }
 #[doc(hidden)]
 pub use tikra_canvas::{canvas, color, scene};

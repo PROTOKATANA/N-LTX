@@ -50,7 +50,9 @@ de su contenido: solo muestra la textura y dice qué parte se ve.
   dientes. Llegan decodificadas y con el alfa multiplicado, y se reconocen por su `id`: republicar no las
   vuelve a subir, y al dejar de pintarse se sueltan.
 - **Selección:** cajas translúcidas sobre todo lo demás. Van con las animaciones: cambiarla no recompila
-  la escena, y lo que no se ve no se tesela.
+  la escena, y lo que no se ve no se tesela. Sobre un fondo oscuro la marca es clara, para no teñir el texto.
+- **Fondo:** `Taller::fondo` lo cambia sin recompilar nada: viaja con el fotograma (`Marco::fondo`) y
+  `ltx::Pintor` limpia con él. Sin decirlo, blanco.
 - **Recortes:** geometría en el stencil, sin texturas aparte.
 - **Relleno y trazo translúcidos:** cada muestra se pinta una sola vez, con el stencil.
 - **Grupos, mezclas y máscaras:** una textura por capa, del tamaño de la vista. Son lo único caro, y las

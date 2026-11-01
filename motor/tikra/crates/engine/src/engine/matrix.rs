@@ -263,6 +263,9 @@ impl Engine {
         let saved_mode = self.st.mode.clone();
         self.process_keys(tikra_tokens("every matrix/.try"), Some("/tikz"))?;
         self.process_keys(options.clone(), Some("/tikz"))?;
+        // a filled matrix is what its cells' text is on (a pgfplots legend)
+        let backdrop = self.st.own_fill();
+        self.st.paint.backdrop = backdrop.or(self.st.paint.backdrop);
         self.st.mode = saved_mode;
         // the basic layer's `\pgfmatrixemptycode`, `\pgfmatrixbegincode` and `\pgfmatrixendcode`,
         // what `execute at empty cell`, `execute at begin cell` and `execute at end cell` set

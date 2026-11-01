@@ -4,7 +4,7 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender, channel};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 
 use adaptador::{filmoteca, piezas_con_imagenes};
@@ -16,8 +16,6 @@ use crate::muestras::Muestras;
 
 /// Bp por em del texto y de las fórmulas.
 const TAM_FORMULA: f64 = 14.0;
-
-const NEGRO: Color = Color { r: 0.0, g: 0.0, b: 0.0 };
 
 /// Lo que se cuenta a la interfaz tras componer. `error` vacío si no hubo.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -45,6 +43,9 @@ pub struct Encargo {
     pub fuente: String,
     pub ancho: f64,
     pub con_muestras: bool,
+    /// El color de lo que el documento no colorea. Cambiarla recompone; lo que pide un color, aunque
+    /// sea `black`, lo conserva. El fondo no se compone: lo lleva `Taller::fondo`.
+    pub tinta: Color,
 }
 
 pub struct Compositor {
@@ -113,43 +114,50 @@ fn trabajar(encargos: &Receiver<Encargo>, t: &Trabajo<'_>) {
     }
 }
 
-/// Cargar las fuentes y componer lo incrustado es lo caro: se hace una vez, con el primer encargo.
+/// Lo compuesto lleva la tinta dentro: componer lo incrustado se hace una vez por tinta, con el primer
+/// encargo, y al cambiarla se empieza de nuevo.
 struct Imprenta {
-    documento: OnceLock<Documento>,
+    documento: Mutex<Option<(Color, Arc<Documento>)>>,
     carpetas: Vec<PathBuf>,
 }
 
 impl Imprenta {
     fn nueva(carpetas: Vec<PathBuf>) -> Imprenta {
         Imprenta {
-            documento: OnceLock::new(),
+            documento: Mutex::new(None),
             carpetas,
         }
     }
 
-    fn documento(&self) -> &Documento {
-        self.documento.get_or_init(|| {
-            let formato = Formato {
-                tam: TAM_FORMULA,
-                color: NEGRO,
-                ..Formato::default()
-            };
-            Documento::nuevo(formato, piezas_con_imagenes(NEGRO, self.carpetas.clone()))
-        })
+    fn documento(&self, tinta: Color) -> Arc<Documento> {
+        let mut guardado = self.documento.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some((_, documento)) = guardado.as_ref().filter(|(t, _)| *t == tinta) {
+            return Arc::clone(documento);
+        }
+        let formato = Formato {
+            tam: TAM_FORMULA,
+            color: tinta,
+            ..Formato::default()
+        };
+        let piezas = piezas_con_imagenes(tinta, self.carpetas.clone());
+        let documento = Arc::new(Documento::nuevo(formato, piezas));
+        *guardado = Some((tinta, Arc::clone(&documento)));
+        documento
     }
 }
 
 fn compuesto(imprenta: &Imprenta, encargo: &Encargo, muestras: &Muestras) -> Result<Composicion, ErrorComposicion> {
     let ancho = ancho_de_texto(encargo.ancho);
+    let documento = imprenta.documento(encargo.tinta);
     if !encargo.con_muestras {
-        return imprenta.documento().componer_a(&encargo.fuente, ancho);
+        return documento.componer_a(&encargo.fuente, ancho);
     }
     let propio = Apartado {
         titulo: None,
         fuente: &encargo.fuente,
     };
     let apartados: Vec<Apartado<'_>> = std::iter::once(propio).chain(muestras.apartados()).collect();
-    imprenta.documento().componer_serie(&apartados, ancho)
+    documento.componer_serie(&apartados, ancho)
 }
 
 /// Los documentos de lo compuesto, en orden.
@@ -168,7 +176,8 @@ fn componer(imprenta: &Imprenta, encargo: &Encargo, muestras: &Muestras, destino
         Ok(Ok(Composicion { escena, mut avisos })) => {
             let alto = escena.caja.alto + 2.0 * pintor::MARGEN;
             avisos.extend(carencias(&escena));
-            destino.publicar(escena, Arc::new(AnimadorTikra), fuentes_de(encargo, muestras));
+            let animador = Arc::new(AnimadorTikra { tinta: encargo.tinta });
+            destino.publicar(escena, animador, fuentes_de(encargo, muestras));
             Resultado {
                 alto,
                 avisos,
@@ -192,11 +201,13 @@ fn componer(imprenta: &Imprenta, encargo: &Encargo, muestras: &Muestras, destino
 }
 
 /// Da los fotogramas de las animaciones: los prepara la filmoteca, por delante de lo que se ve.
-struct AnimadorTikra;
+struct AnimadorTikra {
+    tinta: Color,
+}
 
 impl Animador for AnimadorTikra {
     fn fotograma(&self, fuente: &str, segundos: f64) -> Option<Arc<Escena>> {
-        filmoteca().fotograma(fuente, segundos)
+        filmoteca().fotograma(fuente, self.tinta, segundos)
     }
 }
 
@@ -218,6 +229,7 @@ mod tests {
             fuente: fuente.into(),
             ancho,
             con_muestras: false,
+            tinta: Color::NEGRO,
         }
     }
 
@@ -225,7 +237,7 @@ mod tests {
         Muestras::default()
     }
 
-    use std::sync::Mutex;
+    use std::sync::OnceLock;
 
     use adaptador::FiguraTikra;
     use animacion::Reproductor;
@@ -316,11 +328,63 @@ mod tests {
 
     #[test]
     fn el_animador_no_deja_pasar_un_error() {
-        let a = AnimadorTikra;
+        let a = AnimadorTikra { tinta: Color::NEGRO };
         assert!(a.fotograma("nada", 0.0).is_none());
         let fuente =
             r"\begin{animacion}[t=0:90]\begin{tikzpicture}\draw (0,0) -- (\t:1);\end{tikzpicture}\end{animacion}";
         assert!(a.fotograma(fuente, 1.0).is_some());
+    }
+
+    #[derive(Default)]
+    struct Pintado(Mutex<Vec<String>>);
+
+    impl Destino for Pintado {
+        fn publicar(&self, escena: Escena, _animador: Arc<dyn Animador>, _fuentes: Vec<String>) {
+            self.0.lock().unwrap().push(format!("{:?}", escena.primitivas));
+        }
+    }
+
+    /// Cada tinta compone lo suyo, con una imprenta propia: lo compuesto la lleva dentro.
+    #[test]
+    fn cambiar_de_tinta_recompone_con_la_nueva_sin_reiniciar() {
+        let imprenta = Imprenta::nueva(Vec::new());
+        let pintado = Pintado::default();
+        let fuente = r"Sea $x$ \begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}";
+        for tinta in [Color::NEGRO, Color::BLANCO, Color::NEGRO] {
+            let mut e = encargo(fuente, 400.0);
+            e.tinta = tinta;
+            let r = componer(&imprenta, &e, &sin_muestras(), &pintado);
+            assert_eq!(r.error, "");
+        }
+        let hechos = pintado.0.lock().unwrap();
+        let [negro, blanco, otra_vez] = &hechos[..] else {
+            panic!("tres composiciones");
+        };
+        assert_eq!(negro, otra_vez, "volver a la tinta deja lo mismo");
+        let color = |c: Color| format!("{c:?}");
+        assert!(negro.contains(&color(Color::NEGRO)) && !negro.contains(&color(Color::BLANCO)));
+        assert!(blanco.contains(&color(Color::BLANCO)) && !blanco.contains(&color(Color::NEGRO)));
+    }
+
+    #[test]
+    fn un_color_pedido_no_cambia_con_la_tinta() {
+        let imprenta = Imprenta::nueva(Vec::new());
+        let pintado = Pintado::default();
+        let mut e = encargo(r"\textcolor{black}{negro}", 400.0);
+        e.tinta = Color::BLANCO;
+        componer(&imprenta, &e, &sin_muestras(), &pintado);
+        assert!(pintado.0.lock().unwrap()[0].contains(&format!("{:?}", Color::NEGRO)));
+    }
+
+    #[test]
+    fn las_animaciones_salen_con_la_tinta() {
+        let fuente =
+            r"\begin{animacion}[t=0:90]\begin{tikzpicture}\draw (0,0) -- (\t:1);\end{tikzpicture}\end{animacion}";
+        let a = AnimadorTikra { tinta: Color::BLANCO };
+        let escena = a.fotograma(fuente, 0.0).unwrap();
+        let hecho = format!("{:?}", escena.primitivas);
+        assert!(hecho.contains(&format!("{:?}", Color::BLANCO)), "{hecho}");
+        assert!(!hecho.contains(&format!("{:?}", Color::NEGRO)), "{hecho}");
     }
 
     #[derive(Default)]

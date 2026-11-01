@@ -9,7 +9,7 @@
 //! una palabra (`\\\\coordinates`) con una orden escapada.
 
 use mathra::layout::kerning::TextKerning;
-use primitivas::{Caja, Composicion, Compositor, ErrorComposicion, Escena, Punto};
+use primitivas::{Caja, Color, Composicion, Compositor, ErrorComposicion, Escena, Punto};
 use tikra::canvas::Canvas;
 use tikra::extension::Library;
 
@@ -22,9 +22,19 @@ pub(crate) const BP: f64 = 72.0 / 2.54;
 /// Compone una figura TikZ. `bibliotecas` añade paquetes; `voltik` solo se carga si la figura usa
 /// `circuitikz`: sus definiciones gastan parte del límite de instrucciones y cambian figuras que no
 /// tienen circuitos (`penrose-tiling` deja de caber y `fault-tree` se aleja de su PDF).
-#[derive(Default)]
 pub struct FiguraTikra {
     pub bibliotecas: &'static [&'static Library],
+    /// El color de lo que la figura no colorea. Lo que pide un color, aunque sea `black`, lo lleva.
+    pub tinta: Color,
+}
+
+impl Default for FiguraTikra {
+    fn default() -> Self {
+        FiguraTikra {
+            bibliotecas: &[],
+            tinta: Color::NEGRO,
+        }
+    }
 }
 
 impl FiguraTikra {
@@ -43,8 +53,10 @@ impl Compositor for FiguraTikra {
         let entrada = preparar(&voltik::environments(fuente))?;
         // `tikra::convert` lo hace antes de maquetar cualquier etiqueta
         tikra::label::set_kerning(TextKerning::Ot1);
-        let (lienzo, avisos, hechos) = tikra::engine::run_document_with(&entrada, &self.bibliotecas_para(fuente))
-            .map_err(|e| ErrorComposicion(e.to_string()))?;
+        let tinta = tikra::color::Color::rgb(self.tinta.r, self.tinta.g, self.tinta.b);
+        let (lienzo, avisos, hechos) =
+            tikra::engine::run_document_with_ink(&entrada, &self.bibliotecas_para(fuente), tinta)
+                .map_err(|e| ErrorComposicion(e.to_string()))?;
 
         let mut destino = Destino {
             avisos,

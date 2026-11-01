@@ -32,7 +32,9 @@ public:
 
 	Ejecucion(const Gpu & gpu , Recursos & recursos , const Recuadro & recuadro) ;
 
-	bool abrir_base(std :: string & error) ;
+	// `fondo` : RGBA del color sobre el que se pinta
+
+	bool abrir_base(const float * fondo , std :: string & error) ;
 
 	bool lista(rust :: Slice<const ltx :: Comando> comandos , Malla & malla , std :: string & error) ;
 
