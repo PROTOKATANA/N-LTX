@@ -1,612 +1,15 @@
-//! Running pgfkeys: key lists, handlers (`.style`, `.code`, `.default`, `.initial`, `.store in`,
-//! `.is choice`…), TikZ's `.unknown` (a color, an arrow specification, a shape name), and the keys
-//! that TikZ defines with code, done natively. Keys that TikZ defines as styles are defined here the
-//! same way, from TikZ's own definitions.
+//! Native pgfkeys and the catalogue of keys TikZ defines with code.
 
 use std::rc::Rc;
 
 use crate::canvas::{Cap, Join};
 use crate::keys::{self, macro_name};
 use crate::scene::{Point, Transform};
-use crate::tex::{self, Body, Cat, Macro, Meaning, Param, Token};
+use crate::tex::{self, Cat, Meaning, Token};
 use crate::{Error, PT};
 
-use super::{macro_from, macro_tokens, tikra_tokens, Engine, EXTENSION_KEY_BASE, NATIVE_KEY_BASE};
-
-pub type KeyFn = fn(&mut Engine, Option<Vec<Token>>) -> Result<(), Error>;
-
-fn group(v: Vec<Token>) -> Vec<Token> {
-    let mut out = Vec::with_capacity(v.len() + 2);
-    out.push(Token::Char('{', Cat::Begin));
-    out.extend(v);
-    out.push(Token::Char('}', Cat::End));
-    out
-}
-
-/// Where a key list runs: its default path, and whether that path ends with the list.
-#[derive(Clone, Copy)]
-struct ListPath<'a> {
-    path: Option<&'a str>,
-    restore: bool,
-}
-
-/// What a key may have to be text alone: nothing that TeX reads as anything else.
-fn is_plain(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b" /.-!:<>|_+*'\"".contains(&b)
-}
-
-fn is_novalue(v: &[Token]) -> bool {
-    let v: Vec<&Token> = v.iter().filter(|t| !t.is_space()).collect();
-    v.len() == 1 && v[0].is_cs("pgfkeysnovalue")
-}
-
-impl Engine {
-    /// Runs a key list now, with `path` as the default path (or the current one).
-    pub fn process_keys(&mut self, list: Vec<Token>, path: Option<&str>) -> Result<(), Error> {
-        self.keys_command(list, path, true)
-    }
-
-    /// `\tikzset`, `\pgfkeys`, `\pgfkeysalso`: the list's keys, one after the other. They run
-    /// directly and not as tokens through the interpreter: a key costs one lookup instead of being
-    /// lexed, expanded and read back, 22 % less per element (`banco_animacion`, 5,000 elements:
-    /// 68.1 to 53.0 ms per frame).
-    pub fn keys_command(&mut self, list: Vec<Token>, path: Option<&str>, restore: bool) -> Result<(), Error> {
-        self.run_items(keys::split_list(&list), ListPath { path, restore })
-    }
-
-    /// [`process_keys`] under `/tikz`, for what every path runs (`every path/.try`, `fill,draw`):
-    /// a list of plain keys has nothing to read as TeX, which is 5 % of a `\fill` in a `\foreach`
-    /// (`banco_animacion`, 5,000 elements: 40.8 to 38.8 ms per frame).
-    ///
-    /// [`process_keys`]: Engine::process_keys
-    pub fn tikz_keys(&mut self, list: &str) -> Result<(), Error> {
-        if !list.bytes().all(|b| is_plain(b) || b == b',') {
-            return self.process_keys(tikra_tokens(list), Some("/tikz"));
-        }
-        let items = list.split(',').map(|k| keys::Item { key: k.to_string(), value: None });
-        self.run_items(items.collect(), ListPath { path: Some("/tikz"), restore: true })
-    }
-
-    fn run_items(&mut self, items: Vec<keys::Item>, at: ListPath<'_>) -> Result<(), Error> {
-        if self.key_lists == 0 {
-            self.keys_allowed += super::KEYS_PER_LIST;
-        }
-        self.key_lists += 1;
-        let r = self.nested(|e, depth| e.list_of(items, at, depth));
-        self.key_lists -= 1;
-        r
-    }
-
-    fn list_of(&mut self, items: Vec<keys::Item>, at: ListPath<'_>, depth: usize) -> Result<(), Error> {
-        let old = self.st.key_path.clone();
-        if let Some(p) = at.path {
-            self.st.key_path = p.trim().to_string();
-        }
-        for item in items {
-            // a style called without a value passes `\pgfkeysnovalue` on: pgfkeys skips it
-            if item.key.trim() == "\\pgfkeysnovalue" && item.value.is_none() {
-                continue;
-            }
-            let key = self.key_name(&item.key)?;
-            self.run_item(&key, item.value)?;
-            // what a key leaves in the input (a stored value is "typeset") goes before the next key
-            self.run_until(depth)?;
-        }
-        if at.restore && at.path.is_some() {
-            self.st.key_path = old;
-        }
-        Ok(())
-    }
-
-    /// A key as written, which a macro in it may complete. Text alone has nothing to expand.
-    fn key_name(&mut self, text: &str) -> Result<String, Error> {
-        if text.bytes().all(is_plain) && !text.contains("  ") {
-            return Ok(text.trim().to_string());
-        }
-        Ok(self.tex.expand_to_string(tikra_tokens(text))?.trim().to_string())
-    }
-
-    fn run_item(&mut self, key: &str, value: Option<Vec<Token>>) -> Result<(), Error> {
-        let value = value.filter(|v| !is_novalue(v));
-        // a label's text is a node's: it keeps them with `handle active characters in nodes`
-        let text = matches!(key, "label" | "pin" | "node contents");
-        let value = match value {
-            Some(v) if self.st.active_in_code && !(text && self.st.active_in_nodes) => Some(deactivate(v)),
-            v => v,
-        };
-        self.invoke(key, value)
-    }
-
-    pub fn invoke(&mut self, key: &str, value: Option<Vec<Token>>) -> Result<(), Error> {
-        self.keys_run += 1;
-        if self.keys_run > self.keys_allowed {
-            if !std::mem::replace(&mut self.keys_capped, true) {
-                self.warn(format!("more than {} options (styles that multiply?): the rest ignored", self.keys_allowed));
-            }
-            return Ok(());
-        }
-        // `/handlers/first char syntax`: a key that starts with a character that has a macro there
-        // is that macro, with the whole key (and its value) as argument
-        // (looked up only once it is on: every key passes here)
-        if let Some(c) = key.trim_start().chars().next().filter(|_| self.first_char_syntax) {
-            let handler = format!("/handlers/first char syntax/the character {c}");
-            if let Some(code) = keys::value(&self.tex, &handler).filter(|_| self.key_text("/handlers/first char syntax").trim() == "true") {
-                let mut whole = tikra_tokens(key.trim());
-                if let Some(v) = value {
-                    whole.push(Token::Char('=', tex::Cat::Other));
-                    whole.extend(v);
-                }
-                let mut run = code;
-                run.extend(group(whole));
-                return self.run_tokens(run);
-            }
-        }
-        let path = keys::full_path(&self.st.key_path, key);
-        if path == "/handlers/first char syntax" {
-            self.first_char_syntax = true;
-        }
-        // a key named like a handler (`characters/.append`) is a key: pgfkeys looks for keys first
-        if let Some((base, h)) = keys::handler(&path).filter(|_| !self.tex.is_defined(&macro_name(&format!("{path}/.@cmd")))) {
-            let (mut base, h) = (base.to_string(), h.to_string());
-            // `/handler config=full or existing`: a handler that changes a key that does not exist
-            // goes to the key of the same name on the search path (pgfplots' `every mark/.append style`)
-            if matches!(h.as_str(), ".append style" | ".prefix style" | ".append code" | ".prefix code" | ".append" | ".prefix" | ".add") && !self.key_exists(&base) {
-                if let Some(list) = keys::value(&self.tex, &format!("{}/.@searchalso", keys::parent(&base))) {
-                    let name = keys::name(&base).to_string();
-                    let found = tex::tokens_to_string(&list).split(',').map(|p| format!("{}/{name}", p.trim().trim_end_matches('/'))).find(|other| self.key_exists(other));
-                    if let Some(other) = found {
-                        base = other;
-                    }
-                }
-            }
-            return self.handler(&base, &h, value);
-        }
-        if self.run_key(&path, value.clone())? {
-            return Ok(());
-        }
-        self.unknown(&path, value)
-    }
-
-    /// Whether a key has code or a value.
-    pub fn key_exists(&self, path: &str) -> bool {
-        self.tex.is_defined(&macro_name(path)) || self.tex.is_defined(&macro_name(&format!("{path}/.@cmd")))
-    }
-
-    /// Runs the key at `path` if it is defined; false if it is not.
-    pub fn run_key(&mut self, path: &str, value: Option<Vec<Token>>) -> Result<bool, Error> {
-        // the two names differ in their end: one text for both, as this runs for every key
-        let mut name = macro_name(path);
-        let length = name.len();
-        name.push_str("/.@cmd");
-        let cmd = self.tex.meaning_of(&name);
-        name.truncate(length);
-        name.push_str("/.@def");
-        let value = value.or_else(|| keys::stored(&self.tex, &name));
-        match cmd {
-            Meaning::Native(id) if id >= EXTENSION_KEY_BASE => {
-                let f = self.extension_fns[(id - EXTENSION_KEY_BASE) as usize];
-                self.current_key.clear();
-                self.current_key.push_str(path);
-                let v = value.filter(|v| !is_novalue(v)).map(crate::extension::Tokens);
-                f(&mut crate::extension::Context { e: self }, v)?;
-                Ok(true)
-            }
-            Meaning::Native(id) if id >= NATIVE_KEY_BASE => {
-                let f = self.key_fns[(id - NATIVE_KEY_BASE) as usize];
-                self.current_key.clear();
-                self.current_key.push_str(path);
-                let v = value.filter(|v| !is_novalue(v));
-                f(self, v)?;
-                Ok(true)
-            }
-            Meaning::Macro(m) => {
-                let n = m.params.iter().filter(|p| matches!(p, Param::Arg(_))).count();
-                let v = value.unwrap_or_else(|| vec![Token::cs("pgfkeysnovalue")]);
-                let args = if n <= 1 { vec![v] } else { split_arguments(&v, n) };
-                let code = tex::substitute(&m.body, &args);
-                self.run_tokens(code)?;
-                Ok(true)
-            }
-            _ => {
-                if self.tex.is_defined(&macro_name(path)) {
-                    match value {
-                        Some(v) => self.tex.set_meaning(&Token::cs(&macro_name(path)), macro_tokens(v), false),
-                        None => {
-                            // a stored value used as a key: its value is "typeset" (inserted)
-                            if let Some(v) = keys::value(&self.tex, path) {
-                                self.tex.push_tokens(v);
-                            }
-                        }
-                    }
-                    return Ok(true);
-                }
-                Ok(false)
-            }
-        }
-    }
-
-    fn unknown(&mut self, path: &str, value: Option<Vec<Token>>) -> Result<(), Error> {
-        let parent = keys::parent(path).to_string();
-        let name = keys::name(path).to_string();
-        // the parent's .unknown handler (TikZ's: a color, an arrow specification, a shape)
-        let handler = macro_name(&format!("{parent}/.unknown/.@cmd"));
-        if self.tex.is_defined(&handler) {
-            self.tex.define_string("pgfkeyscurrentname", &name, false);
-            self.tex.define_string("pgfkeyscurrentkey", path, false);
-            self.tex.set_meaning(&Token::cs("pgfkeyscurrentvalue"), macro_tokens(value.clone().unwrap_or_else(|| vec![Token::cs("pgfkeysnovalue")])), false);
-            if self.run_key(&format!("{parent}/.unknown"), value.clone())? {
-                return Ok(());
-            }
-        }
-        // .search also
-        if let Some(list) = keys::value(&self.tex, &format!("{parent}/.@searchalso")) {
-            let text = tex::tokens_to_string(&list);
-            for p in text.split(',').map(str::trim).filter(|p| !p.is_empty()) {
-                let other = format!("{}/{name}", p.trim_end_matches('/'));
-                if self.run_key(&other, value.clone())? {
-                    return Ok(());
-                }
-            }
-        }
-        self.unknown_warning(&name, path);
-        Ok(())
-    }
-
-    fn unknown_warning(&mut self, name: &str, path: &str) {
-        let _ = path;
-        self.warn(format!("option '{name}' not supported: ignored"));
-    }
-
-    /// `/tikz/.unknown`: a color, an arrow specification or a shape name; otherwise a `/pgf/` key.
-    fn tikz_unknown(&mut self, value: Option<Vec<Token>>) -> Result<(), Error> {
-        let name = keys::value(&self.tex, "pgfkeyscurrentname").or_else(|| match self.tex.meaning_of("pgfkeyscurrentname") {
-            Meaning::Macro(m) => Some(tex::substitute(&m.body, &[])),
-            _ => None,
-        });
-        let name = name.map(|v| tex::tokens_to_string(&v)).unwrap_or_default();
-        if name.starts_with('"') {
-            return self.quotes(&name, value);
-        }
-        // `myself:rotate={…}`, `:fill={…}`: an animated attribute
-        if let (Some(v), true) = (&value, name.contains(':')) {
-            if let Some(o) = self.animation_option(&name, v.clone())? {
-                self.process_keys(o, Some("/tikz"))?;
-            }
-            return Ok(());
-        }
-        if value.is_none() {
-            if let Some(c) = self.color(&name) {
-                self.st.paint.color = c;
-                self.st.paint.draw_color = None;
-                self.st.paint.fill_color = None;
-                self.st.paint.text_color = None;
-                return Ok(());
-            }
-            if let Some((a, b)) = super::arrows::parse_arrows(&name, &self.st.pen.tips) {
-                self.st.pen.start_arrow = a;
-                self.st.pen.end_arrow = b;
-                return Ok(());
-            }
-            if super::nodes::is_shape(&name) || self.user_shapes.contains_key(&name) {
-                self.tex.define_string(&macro_name("/tikz/shape"), &name, false);
-                return Ok(());
-            }
-        }
-        let pgf = format!("/pgf/{name}");
-        if self.run_key(&pgf, value)? {
-            return Ok(());
-        }
-        self.unknown_warning(&name, &format!("/tikz/{name}"));
-        Ok(())
-    }
-
-    /// The quotes library: `"text" options` makes a label in node options, and a node on the path in
-    /// `to`/`edge` options; `'` after the quotes means `swap`.
-    fn quotes(&mut self, key: &str, value: Option<Vec<Token>>) -> Result<(), Error> {
-        // pgfkeys split `"x=1"` at its `=`: put it back together
-        let mut whole = key.to_string();
-        if let Some(v) = value {
-            whole.push('=');
-            whole.push_str(&tex::tokens_to_string(&v));
-        }
-        let Some(end) = whole[1..].find('"').map(|i| i + 1) else {
-            self.warn(format!("quotes: closing '\"' missing in {whole}"));
-            return Ok(());
-        };
-        let text = whole[1..end].to_string();
-        let mut options = whole[end + 1..].trim().to_string();
-        if let Some(rest) = options.strip_prefix('\'') {
-            options = format!("swap,{}", rest.trim());
-        }
-        // `"text" above, red` is one key in a list only up to the comma: the rest are options
-        let options = options.split_whitespace().collect::<Vec<_>>().join(" ");
-        if self.st.pic.quotes_in_pic {
-            self.st.pic.pic_text = Some((tikra_tokens(&text), tikra_tokens(&options)));
-        } else if self.st.quotes_on_path {
-            let mut o = tikra_tokens("every edge quotes/.try,");
-            o.extend(tikra_tokens(&options));
-            self.st.quoted.push((tikra_tokens(&text), o));
-        } else {
-            // `quotes mean pin`: pins instead of labels
-            let pin = matches!(self.tex.meaning_of("tikra@quotes@pin"), Meaning::Macro(m) if tex::tokens_to_string(&tex::substitute(&m.body, &[])).trim() == "1");
-            let spec = format!("[direction shorthands,every {} quotes/.try,{options}]{text}", if pin { "pin" } else { "label" });
-            self.st.node.labels.push((tikra_tokens(&spec), pin));
-        }
-        Ok(())
-    }
-
-    // ---------------------------------------------------------------- handlers
-
-    fn define_code(&mut self, path: &str, n: usize, body: Vec<Token>) {
-        let params = (1..=n as u8).map(Param::Arg).collect();
-        let m = Macro { params, body: tex::parse_body(body), optional: None, protected: false };
-        self.tex.set_meaning(&Token::cs(&macro_name(&format!("{path}/.@cmd"))), Meaning::Macro(Rc::new(m)), false);
-    }
-
-    /// The code of a key, as tokens with `#1`… in place, if it is a macro.
-    fn code_tokens(&self, path: &str) -> Option<(usize, Vec<Token>)> {
-        match self.tex.meaning_of(&macro_name(&format!("{path}/.@cmd"))) {
-            Meaning::Macro(m) => {
-                let n = m.params.len();
-                let mut v = Vec::new();
-                for b in &m.body {
-                    match b {
-                        Body::Tok(t) => {
-                            if matches!(t, Token::Char(_, Cat::Param)) {
-                                // a ## inside: keep it doubled so the code stays the same once defined again
-                                v.push(t.clone());
-                            }
-                            v.push(t.clone());
-                        }
-                        Body::Arg(k) => {
-                            v.push(Token::Char('#', Cat::Param));
-                            v.push(Token::other(char::from(b'0' + k)));
-                        }
-                    }
-                }
-                // single # were doubled above; undo for plain tokens
-                let mut out = Vec::with_capacity(v.len());
-                let mut i = 0;
-                while i < v.len() {
-                    if matches!(v[i], Token::Char(_, Cat::Param))
-                        && matches!(v.get(i + 1), Some(Token::Char(_, Cat::Param)))
-                        && !matches!(v.get(i + 2), Some(Token::Char(c, _)) if c.is_ascii_digit())
-                    {
-                        out.push(v[i].clone());
-                        i += 2;
-                        continue;
-                    }
-                    out.push(v[i].clone());
-                    i += 1;
-                }
-                Some((n, out))
-            }
-            _ => None,
-        }
-    }
-
-    fn style_body(value: Vec<Token>) -> Vec<Token> {
-        let mut b = vec![Token::cs("pgfkeysalso")];
-        b.extend(group(value));
-        b
-    }
-
-    fn handler(&mut self, base: &str, h: &str, value: Option<Vec<Token>>) -> Result<(), Error> {
-        let v = value.clone().unwrap_or_default();
-        match h {
-            ".cd" => self.st.key_path = base.to_string(),
-            ".style" | ".estyle" => {
-                let v = if h == ".estyle" { self.tex.expand_fully(v)? } else { v };
-                self.define_code(base, 1, Self::style_body(v));
-            }
-            ".append style" | ".prefix style" => {
-                let (n, old) = self.code_tokens(base).unwrap_or((1, Vec::new()));
-                let new = Self::style_body(v);
-                let body = if h == ".append style" { [old, new].concat() } else { [new, old].concat() };
-                self.define_code(base, n.max(1), body);
-            }
-            ".code" | ".ecode" => {
-                let v = if h == ".ecode" { self.tex.expand_fully(v)? } else { v };
-                self.define_code(base, 1, v);
-                // a pgfplots coordinate filter given as code drops its expressions
-                if base.ends_with(" filter") {
-                    self.tex.set_meaning(&Token::cs(&macro_name(&format!("{base}/@expressions"))), macro_tokens(Vec::new()), false);
-                }
-            }
-            // pgfplots' `coordinate style/.condition={test}{style}` and `coordinate style/.from={style}`
-            ".condition" => {
-                let path = format!("{base}/@conditions");
-                let mut list = keys::value(&self.tex, &path).unwrap_or_default();
-                list.extend(v);
-                self.tex.set_meaning(&Token::cs(&macro_name(&path)), macro_tokens(list), false);
-            }
-            ".from" => {
-                self.tex.set_meaning(&Token::cs(&macro_name(&format!("{base}/@from"))), macro_tokens(v), false);
-            }
-            // pgfplots' `x filter/.expression={…}`: the filter's value is the expression's (after
-            // the filter's code, `.append expression` after the expressions before)
-            ".expression" | ".append expression" => {
-                let path = format!("{base}/@expressions");
-                let mut list = if h == ".expression" {
-                    self.define_code(base, 1, Vec::new());
-                    Vec::new()
-                } else {
-                    keys::value(&self.tex, &path).unwrap_or_default()
-                };
-                list.extend(group(v));
-                self.tex.set_meaning(&Token::cs(&macro_name(&path)), macro_tokens(list), false);
-            }
-            ".append code" | ".prefix code" => {
-                let (n, old) = self.code_tokens(base).unwrap_or((1, Vec::new()));
-                let body = if h == ".append code" { [old, v].concat() } else { [v, old].concat() };
-                self.define_code(base, n.max(1), body);
-            }
-            ".code 2 args" | ".style 2 args" | ".code n args" | ".style n args" | ".ecode 2 args" | ".estyle 2 args" => {
-                let (n, body) = if h.contains("n args") {
-                    let args = split_arguments(&v, 2);
-                    let n: usize = tex::tokens_to_string(&args[0]).trim().parse().unwrap_or(1);
-                    (n, args[1].clone())
-                } else {
-                    (2, v)
-                };
-                let body = if h.contains("style") { Self::style_body(body) } else { body };
-                self.define_code(base, n, body);
-            }
-            ".code args" | ".style args" | ".ecode args" | ".estyle args" => {
-                // as pgf: a macro with the parameter text, called with the value and \pgfeov
-                let args = split_arguments(&v, 2);
-                let body = if h.contains("style") { Self::style_body(args[1].clone()) } else { args[1].clone() };
-                let aux = Token::cs(&macro_name(&format!("{base}/.@args")));
-                let mut def = vec![Token::cs("def"), aux.clone()];
-                def.extend(args[0].clone());
-                def.push(Token::cs("pgfeov"));
-                def.extend(group(body));
-                self.run_tokens(def)?;
-                self.define_code(base, 1, vec![aux, Token::Char('#', Cat::Param), Token::other('1'), Token::cs("pgfeov")]);
-            }
-            ".tip" => {
-                // `name/.tip=spec`: \pgfdeclarearrow{name=name, means=spec}, the name being the last part of the path
-                let name = base.rsplit('/').next().unwrap_or(base).trim().to_string();
-                let means = tex::tokens_to_string(&v);
-                std::rc::Rc::make_mut(&mut self.st.pen.tips).declare(&name, &means);
-            }
-            ".default" => self.tex.set_meaning(&Token::cs(&macro_name(&format!("{base}/.@def"))), macro_tokens(v), false),
-            ".initial" => self.tex.set_meaning(&Token::cs(&macro_name(base)), macro_tokens(v), false),
-            // `/K/.is family`: the key `/K` makes `/K` the default path
-            ".is family" => self.define_code(base, 0, tikra_tokens(&format!("\\pgfkeysalso{{{base}/.cd}}"))),
-            ".value required" | ".value forbidden" | ".show code" | ".show value" | ".activate family" | ".deactivate family" | ".belongs to family" => {}
-            ".store in" | ".estore in" => {
-                let target: Vec<Token> = v.into_iter().filter(|t| !t.is_space()).collect();
-                let mut body = vec![Token::cs(if h == ".store in" { "def" } else { "edef" })];
-                body.extend(target);
-                body.extend(group(vec![Token::Char('#', Cat::Param), Token::other('1')]));
-                self.define_code(base, 1, body);
-            }
-            ".is if" => {
-                let name = tex::tokens_to_string(&v).trim().to_string();
-                // key=true runs \nametrue
-                let body = vec![Token::cs("csname"), Token::other(' ')].into_iter().take(1).collect::<Vec<_>>();
-                let mut body = body;
-                body.extend(tex::string_tokens(&name));
-                body.push(Token::Char('#', Cat::Param));
-                body.push(Token::other('1'));
-                body.push(Token::cs("endcsname"));
-                self.define_code(base, 1, body);
-                self.tex.set_meaning(&Token::cs(&macro_name(&format!("{base}/.@def"))), macro_from("true"), false);
-            }
-            ".is choice" => {
-                // base=choice runs base/choice
-                let mut body = vec![Token::cs("pgfkeysalso")];
-                let mut inner = tex::string_tokens(&format!("{base}/"));
-                inner.push(Token::Char('#', Cat::Param));
-                inner.push(Token::other('1'));
-                body.extend(group(inner));
-                self.define_code(base, 1, body);
-            }
-            ".search also" => {
-                let s = tex::tokens_to_string(&v);
-                self.tex.define_string(&macro_name(&format!("{base}/.@searchalso")), &s, false);
-            }
-            ".try" | ".retry" | ".lastretry" => {
-                let _ = self.run_key(base, value)?;
-            }
-            ".expand once" | ".expand twice" | ".expanded" => {
-                let v = self.tex.expand_fully(v)?;
-                if !self.run_key(base, Some(v.clone()))? {
-                    self.unknown(base, Some(v))?;
-                }
-            }
-            ".get" => {
-                if let Some(target) = v.into_iter().find(|t| !t.is_space()) {
-                    let val = keys::value(&self.tex, base).unwrap_or_default();
-                    self.tex.set_meaning(&target, macro_tokens(val), false);
-                }
-            }
-            ".add" => {
-                let args = split_arguments(&v, 2);
-                let old = keys::value(&self.tex, base).unwrap_or_default();
-                let new = [args[0].clone(), old, args[1].clone()].concat();
-                self.tex.set_meaning(&Token::cs(&macro_name(base)), macro_tokens(new), false);
-            }
-            ".append" | ".prefix" => {
-                let old = keys::value(&self.tex, base).unwrap_or_default();
-                let new = if h == ".append" { [old, v].concat() } else { [v, old].concat() };
-                self.tex.set_meaning(&Token::cs(&macro_name(base)), macro_tokens(new), false);
-            }
-            ".forward to" => {
-                let target = tex::tokens_to_string(&v).trim().to_string();
-                let mut inner = tex::string_tokens(&format!("{target}="));
-                inner.extend(group(vec![Token::Char('#', Cat::Param), Token::other('1')]));
-                self.define_code(base, 1, Self::style_body(inner));
-            }
-            ".list" => {
-                for item in super::foreach_items(&v) {
-                    if !self.run_key(base, Some(item.clone()))? {
-                        self.unknown(base, Some(item))?;
-                    }
-                }
-            }
-            ".pic" => {
-                // name/.pic={code}: the pic type `name`, under /tikz/pics
-                let name = base.trim_start_matches("/tikz/").trim_start_matches('/');
-                let mut body = tikra_tokens("code=");
-                body.extend(group(v));
-                self.define_code(&format!("/tikz/pics/{name}"), 1, Self::style_body(body));
-            }
-            ".unknown" => {
-                // `/foo/.unknown/.code={…}` reaches here as a handler of the path /foo/.unknown
-                self.define_code(&format!("{base}/.unknown"), 1, v);
-            }
-            other => {
-                // a user handler: /handlers/<name>/.code
-                let user = format!("/handlers/{}", other);
-                self.tex.define_string("pgfkeyscurrentpath", base, false);
-                if !self.run_key(&user, value)? {
-                    self.warn(format!("key handler '{other}' not supported (in '{base}/{other}'): ignored"));
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-/// `{a}{b}` (or `ab`) as `n` arguments, TeX-style.
-pub fn split_arguments(v: &[Token], n: usize) -> Vec<Vec<Token>> {
-    let mut out = Vec::new();
-    let mut i = 0;
-    while out.len() < n {
-        while i < v.len() && v[i].is_space() {
-            i += 1;
-        }
-        if i >= v.len() {
-            out.push(Vec::new());
-            continue;
-        }
-        if matches!(v[i], Token::Char(_, Cat::Begin)) {
-            let mut depth = 0usize;
-            let start = i;
-            while i < v.len() {
-                match v[i] {
-                    Token::Char(_, Cat::Begin) => depth += 1,
-                    Token::Char(_, Cat::End) => {
-                        depth -= 1;
-                        if depth == 0 {
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-                i += 1;
-            }
-            out.push(v[start + 1..i.min(v.len())].to_vec());
-            i += 1;
-        } else {
-            out.push(vec![v[i].clone()]);
-            i += 1;
-        }
-    }
-    out
-}
+use super::super::{macro_from, tikra_tokens, Engine, NATIVE_KEY_BASE};
+use super::KeyFn;
 
 // -------------------------------------------------------------------- the native keys
 
@@ -899,7 +302,7 @@ keyfn!(k_sharp, |e, _v| {
 
 keyfn!(k_arrows, |e, v| {
     let s = text(e, &v)?;
-    match super::arrows::parse_arrows(&s, &e.st.pen.tips) {
+    match super::super::arrows::parse_arrows(&s, &e.st.pen.tips) {
         Some((a, b)) => {
             e.st.pen.start_arrow = a;
             e.st.pen.end_arrow = b;
@@ -922,7 +325,7 @@ keyfn!(k_default_arrow, |e, v| {
 
 keyfn!(k_tips, |e, v| {
     let s = text(e, &v)?;
-    match super::arrows::TipsMode::from_name(&s) {
+    match super::super::arrows::TipsMode::from_name(&s) {
         Some(m) => e.st.pen.tips_mode = m,
         None => e.warn(format!("tips={s} not supported: ignored")),
     }
@@ -1062,7 +465,7 @@ keyfn!(k_scale_around, |e, v| {
 keyfn!(k_cm, |e, v| {
     // cm={a,b,c,d,(tx,ty)}
     let s = text(e, &v)?;
-    let parts = super::coords::split_commas(&s);
+    let parts = super::super::coords::split_commas(&s);
     if parts.len() >= 5 {
         let n: Vec<f64> = parts[..4].iter().map(|x| e.number(x).unwrap_or(0.0)).collect();
         let tv = Some(tikra_tokens(parts[4..].join(",").trim()));
@@ -1183,53 +586,97 @@ keyfn!(k_anchor, |e, v| {
 
 /// `above`, `below left=2mm`, `below=1cm of a`, `right=of a.north`: an anchor and an offset or a reference.
 fn placement(e: &mut Engine, dir: &str, v: Option<Vec<Token>>) -> Result<(), Error> {
-    let anchor = match dir {
-        "above" => "south",
-        "below" => "north",
-        "left" => "east",
-        "right" => "west",
-        "above left" => "south east",
-        "above right" => "south west",
-        "below left" => "north east",
-        "base left" => "base east",
-        "base right" => "base west",
-        "mid left" => "mid east",
-        "mid right" => "mid west",
-        _ => "north west",
-    };
-    set_value(e, "/tikz/anchor", anchor);
-    let (sy, sx) = (
-        if dir.contains("above") {
-            1.0
-        } else if dir.contains("below") {
-            -1.0
-        } else {
-            0.0
-        },
-        if dir.contains("left") {
-            -1.0
-        } else if dir.contains("right") {
-            1.0
-        } else {
-            0.0
-        },
-    );
+    let places = place_anchors(dir);
+    set_value(e, "/tikz/anchor", places.node);
+    let signs = place_signs(dir);
     let Some(v) = v else { return Ok(()) };
     let s = e.tex.expand_to_string(v)?.trim().to_string();
     if s.is_empty() {
         return Ok(());
     }
     // positioning: `<vertical> and <horizontal> of <node>`; without `of`, an offset from the position
-    let (dist, target) = match s.split_once("of ").filter(|_| s.contains("of ")) {
-        Some((d, t)) => (d.trim().to_string(), Some(t.trim().to_string())),
-        None => (s.clone(), None),
+    let parts = of_parts(&s);
+    let lengths = placement_lengths(e, &parts.dist, parts.target.is_some())?;
+    let offset = place_offset(signs, &lengths, parts.target.is_some());
+    let Some(target) = parts.target else {
+        add_transform(e, Transform::translation(offset.x, offset.y));
+        return Ok(());
     };
+    place_on(e, &PlaceOn { anchor: places.target, target: &target, offset })
+}
+
+struct PlaceAnchors {
+    node: &'static str,
+    target: &'static str,
+}
+
+fn place_anchors(dir: &str) -> PlaceAnchors {
+    let (node, target) = match dir {
+        "above" => ("south", "north"),
+        "below" => ("north", "south"),
+        "left" => ("east", "west"),
+        "right" => ("west", "east"),
+        "above left" => ("south east", "north west"),
+        "above right" => ("south west", "north east"),
+        "below left" => ("north east", "south west"),
+        "base left" => ("base east", "base west"),
+        "base right" => ("base west", "base east"),
+        "mid left" => ("mid east", "mid west"),
+        "mid right" => ("mid west", "mid east"),
+        // `below right` is not its own row: both anchors fall through, as TikZ's table does
+        _ => ("north west", "south east"),
+    };
+    PlaceAnchors { node, target }
+}
+
+struct PlaceSigns {
+    x: f64,
+    y: f64,
+}
+
+fn place_signs(dir: &str) -> PlaceSigns {
+    let y = if dir.contains("above") {
+        1.0
+    } else if dir.contains("below") {
+        -1.0
+    } else {
+        0.0
+    };
+    let x = if dir.contains("left") {
+        -1.0
+    } else if dir.contains("right") {
+        1.0
+    } else {
+        0.0
+    };
+    PlaceSigns { x, y }
+}
+
+struct OfParts {
+    dist: String,
+    target: Option<String>,
+}
+
+fn of_parts(s: &str) -> OfParts {
+    match s.split_once("of ").filter(|_| s.contains("of ")) {
+        Some((d, t)) => OfParts { dist: d.trim().to_string(), target: Some(t.trim().to_string()) },
+        None => OfParts { dist: s.to_string(), target: None },
+    }
+}
+
+struct AxisLengths {
+    vertical: f64,
+    horizontal: f64,
+    single: bool,
+}
+
+fn placement_lengths(e: &mut Engine, dist: &str, has_target: bool) -> Result<AxisLengths, Error> {
     let (dv, dh) = node_distance(e)?;
-    let (v_, h_) = if dist.is_empty() {
+    let (vertical, horizontal) = if dist.is_empty() {
         (dv, dh)
     } else if let Some((a, b)) = dist.split_once(" and ") {
         (place_length(e, a, 1)?, place_length(e, b, 0)?)
-    } else if target.is_none() && !e.st.positioning {
+    } else if !has_target && !e.st.positioning {
         // TikZ's own `left=30`: a length, a bare number in points (the positioning library reads it
         // in the vectors' units)
         let s = e.math_string(tikra_tokens(dist.trim()))?;
@@ -1237,37 +684,35 @@ fn placement(e: &mut Engine, dir: &str, v: Option<Vec<Token>>) -> Result<(), Err
         let m = if unit { v } else { v * crate::PT };
         (m, m)
     } else {
-        let m = place_length(e, &dist, 1)?;
-        (m, if target.is_some() { m } else { place_length(e, &dist, 0)? })
+        let m = place_length(e, dist, 1)?;
+        (m, if has_target { m } else { place_length(e, dist, 0)? })
     };
     // a single distance (given, or the node distance) along a diagonal is measured along it
     let single = if dist.is_empty() { !node_distance_text(e).contains(" and ") } else { !dist.contains(" and ") };
-    let diagonal = sx != 0.0 && sy != 0.0 && single;
-    let offset = if diagonal && target.is_some() {
+    Ok(AxisLengths { vertical, horizontal, single })
+}
+
+fn place_offset(signs: PlaceSigns, lengths: &AxisLengths, has_target: bool) -> Point {
+    let diagonal = signs.x != 0.0 && signs.y != 0.0 && lengths.single;
+    if diagonal && has_target {
         // a single distance along a diagonal is measured along it
-        Point::new(sx * h_ * std::f64::consts::FRAC_1_SQRT_2, sy * v_ * std::f64::consts::FRAC_1_SQRT_2)
+        Point::new(signs.x * lengths.horizontal * std::f64::consts::FRAC_1_SQRT_2, signs.y * lengths.vertical * std::f64::consts::FRAC_1_SQRT_2)
     } else {
-        Point::new(sx * h_, sy * v_)
-    };
-    let Some(target) = target else {
-        add_transform(e, Transform::translation(offset.x, offset.y));
-        return Ok(());
-    };
+        Point::new(signs.x * lengths.horizontal, signs.y * lengths.vertical)
+    }
+}
+
+struct PlaceOn<'a> {
+    anchor: &'a str,
+    target: &'a str,
+    offset: Point,
+}
+
+fn place_on(e: &mut Engine, on: &PlaceOn) -> Result<(), Error> {
+    let target_anchor = on.anchor;
+    let target = on.target;
+    let offset = on.offset;
     // the distance is between borders; the reference is the target's matching anchor
-    let target_anchor = match dir {
-        "above" => "north",
-        "below" => "south",
-        "left" => "west",
-        "right" => "east",
-        "above left" => "north west",
-        "above right" => "north east",
-        "below left" => "south west",
-        "base left" => "base west",
-        "base right" => "base east",
-        "mid left" => "mid west",
-        "mid right" => "mid east",
-        _ => "south east",
-    };
     let (name, explicit) = match target.split_once('.') {
         Some((n, a)) if e.nodes.contains_key(n.trim()) => (n.trim().to_string(), Some(a.trim().to_string())),
         _ => (target.trim_start_matches('(').trim_end_matches(')').to_string(), None),
@@ -1343,7 +788,7 @@ keyfn!(k_use_path, |e, v| {
     Ok(())
 });
 
-pub(super) fn node_distance(e: &mut Engine) -> Result<(f64, f64), Error> {
+pub(in super::super) fn node_distance(e: &mut Engine) -> Result<(f64, f64), Error> {
     let s = node_distance_text(e);
     let read = |e: &mut Engine, t: &str| match place_length(e, t, 1) {
         Ok(v) => v,
@@ -1803,7 +1248,7 @@ keyfn!(k_samples, |e, v| {
 keyfn!(k_samples_at, |e, v| {
     let list = e.tex.expand_fully(v.unwrap_or_default())?;
     let mut out = Vec::new();
-    for item in super::foreach_items(&list) {
+    for item in super::super::foreach_items(&list) {
         let s = e.tex.expand_to_string(item)?;
         out.push(e.number(&s)?);
     }
@@ -1848,7 +1293,7 @@ keyfn!(k_mark_phase, |e, v| {
 keyfn!(k_mark_indices, |e, v| {
     let list = e.tex.expand_fully(v.unwrap_or_default())?;
     let mut out = Vec::new();
-    for item in super::foreach_items(&list) {
+    for item in super::super::foreach_items(&list) {
         if let Ok(n) = e.tex.expand_to_string(item)?.trim().parse::<f64>() {
             out.push(n as usize);
         }
@@ -1938,7 +1383,7 @@ keyfn!(k_name_path, |e, v| {
     Ok(())
 });
 
-keyfn!(k_name_intersections, |e, v| super::intersections::name_intersections(e, v));
+keyfn!(k_name_intersections, |e, v| super::super::intersections::name_intersections(e, v));
 
 keyfn!(k_at_begin_scope, |e, v| {
     e.st.hooks.at_begin_scope.extend(v.unwrap_or_default());
@@ -1970,12 +1415,12 @@ keyfn!(k_pic_actions, |e, _v| {
 
 keyfn!(k_level_distance, |e, v| {
     e.st.tree.level_distance = length(e, &v)?.unwrap_or(1.5);
-    super::trees::set_distance_registers(e);
+    super::super::trees::set_distance_registers(e);
     Ok(())
 });
 keyfn!(k_sibling_distance, |e, v| {
     e.st.tree.sibling_distance = length(e, &v)?.unwrap_or(1.5);
-    super::trees::set_distance_registers(e);
+    super::super::trees::set_distance_registers(e);
     Ok(())
 });
 
@@ -2596,40 +2041,40 @@ const DEFINITIONS: &str = r"
 ";
 
 /// Defines every native key and TikZ's own styles.
-pub fn define_keys(e: &mut Engine, pieces: &[&'static super::piece::Piece]) {
+pub fn define_keys(e: &mut Engine, pieces: &[&'static super::super::piece::Piece]) {
     e.tex.define("pgflinewidth", Meaning::Dimen(4000));
     e.tex.dimens.insert(4000, (0.4 * 65536.0) as i64);
-    super::trees::define(e);
-    super::decorations::define(e);
-    for (path, f) in NATIVE.iter().chain(super::decorations::KEYS).chain(super::libraries::KEYS).chain(super::three_d::KEYS) {
+    super::super::trees::define(e);
+    super::super::decorations::define(e);
+    for (path, f) in NATIVE.iter().chain(super::super::decorations::KEYS).chain(super::super::libraries::KEYS).chain(super::super::three_d::KEYS) {
         let id = NATIVE_KEY_BASE + e.key_fns.len() as u16;
         e.key_fns.push(*f);
         e.tex.define(&macro_name(&format!("{path}/.@cmd")), Meaning::Native(id));
     }
-    e.register_keys(&super::circuits::LIBRARY);
+    e.register_keys(&super::super::circuits::LIBRARY);
     e.st.key_path = "/tikz".into();
-    for (path, value) in super::shapes::INITIAL {
+    for (path, value) in super::super::shapes::INITIAL {
         e.tex.set_meaning(&Token::cs(&macro_name(path)), macro_from(value), false);
     }
     // the definitions run as TeX, with @ a letter
     let mut lexer = crate::tex::Tex::new_lexer();
     lexer.push_text(DEFINITIONS);
-    lexer.push_text(super::basic::DEFINITIONS);
-    lexer.push_text(super::decorations::DEFINITIONS);
-    lexer.push_text(super::decorations::DECLARATIONS);
-    lexer.push_text(super::decorations::textfx::DEFINITIONS);
-    lexer.push_text(super::shapes::DEFINITIONS);
+    lexer.push_text(super::super::basic::DEFINITIONS);
+    lexer.push_text(super::super::decorations::DEFINITIONS);
+    lexer.push_text(super::super::decorations::DECLARATIONS);
+    lexer.push_text(super::super::decorations::textfx::DEFINITIONS);
+    lexer.push_text(super::super::shapes::DEFINITIONS);
     let definitions: Vec<String> = pieces.iter().map(|p| (p.definitions)()).collect();
     for text in &definitions {
         lexer.push_text(text);
     }
-    lexer.push_text(super::trees::DEFINITIONS);
-    lexer.push_text(super::turtle::DEFINITIONS);
-    lexer.push_text(super::lsystem::DEFINITIONS);
-    let circuits = (super::circuits::LIBRARY.definitions)();
+    lexer.push_text(super::super::trees::DEFINITIONS);
+    lexer.push_text(super::super::turtle::DEFINITIONS);
+    lexer.push_text(super::super::lsystem::DEFINITIONS);
+    let circuits = (super::super::circuits::LIBRARY.definitions)();
     lexer.push_text(&circuits);
-    lexer.push_text(super::libraries::DEFINITIONS);
-    lexer.push_text(super::spy::DEFINITIONS);
+    lexer.push_text(super::super::libraries::DEFINITIONS);
+    lexer.push_text(super::super::spy::DEFINITIONS);
     let mut tokens = Vec::new();
     while let Some(t) = lexer.get_token() {
         tokens.push(t);
@@ -2639,5 +2084,5 @@ pub fn define_keys(e: &mut Engine, pieces: &[&'static super::piece::Piece]) {
     }
     e.tex.warnings.clear();
     e.st.key_path = "/".into();
-    super::nodes::define_sets(e);
+    super::super::nodes::define_sets(e);
 }
