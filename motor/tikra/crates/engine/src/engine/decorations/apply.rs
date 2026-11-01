@@ -36,7 +36,7 @@ impl Engine {
         }
         // a name the path still has (a pre- or postaction's `name path`) is the decorated path's
         if let Some(name) = self.st.name_path.take() {
-            self.named_paths.insert(name, segs.clone());
+            self.pgf.named_paths.insert(name, segs.clone());
         }
         let pre = std::mem::take(&mut self.st.preactions);
         let post = std::mem::take(&mut self.st.postactions);
@@ -243,8 +243,8 @@ impl Engine {
     pub fn decoration_begin(&mut self) -> Result<(), Error> {
         let list = self.argument()?;
         let meta = self.argument_string()? == "1";
-        let existing = std::mem::take(&mut self.pgf_path);
-        self.pgf_path = super::super::basic::PgfPath { segments: Vec::new(), last: existing.last, start: existing.start, quick: false };
+        let existing = std::mem::take(&mut self.pgf.pgf_path);
+        self.pgf.pgf_path = super::super::basic::PgfPath { segments: Vec::new(), last: existing.last, start: existing.start, quick: false };
         self.decoration_envs.push(Env { list, meta, existing });
         self.begin_group();
         Ok(())
@@ -256,9 +256,9 @@ impl Engine {
             self.warn("\\endpgfdecoration without \\pgfdecoration: ignored");
             return Ok(());
         };
-        let decorated = std::mem::take(&mut self.pgf_path.segments);
+        let decorated = std::mem::take(&mut self.pgf.pgf_path.segments);
         let last = env.existing.last;
-        self.pgf_path = env.existing;
+        self.pgf.pgf_path = env.existing;
         if decorated.is_empty() {
             self.warn("I cannot decorate an empty path");
             return Ok(());
@@ -274,7 +274,7 @@ impl Engine {
     /// `\pgfdecoratecurrentpath{name}`: the basic layer's path, decorated.
     pub fn decorate_current_path(&mut self) -> Result<(), Error> {
         let name = self.argument()?;
-        let path = std::mem::take(&mut self.pgf_path);
+        let path = std::mem::take(&mut self.pgf.pgf_path);
         let mut list = vec![Token::Char('{', Cat::Begin)];
         list.extend(name);
         list.push(Token::Char('}', Cat::End));
@@ -287,7 +287,7 @@ impl Engine {
     }
 
     fn add_to_pgf_path(&mut self, segs: Vec<Segment>) {
-        let path = &mut self.pgf_path;
+        let path = &mut self.pgf.pgf_path;
         for s in segs {
             match s {
                 Segment::MoveTo(q) => {

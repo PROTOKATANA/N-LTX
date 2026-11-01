@@ -370,7 +370,7 @@ impl Engine {
     /// The matrix node, then the cells in place, then what was appended after the node.
     fn draw_matrix(&mut self, job: &mut MatrixJob, inner_at: Option<(usize, usize, Point)>, grid: MatrixGrid) -> Result<(), Error> {
         let MatrixGrid { xs, ys, width, height, depth } = grid;
-        self.forced_box = Some((width, height, depth));
+        self.node_run.forced_box = Some((width, height, depth));
         let cells_every_node = self.tex.meaning(&job.every_node);
         let outer_every_node = std::mem::replace(&mut job.outer_every_node, Meaning::Undefined);
         self.tex.set_meaning(&job.every_node, outer_every_node.clone(), false);
@@ -389,7 +389,7 @@ impl Engine {
         }
         let items =
             self.node(NodeSpec { options, name: job.name.clone(), at: Some(at), text: Vec::new(), place: OnPath::Point(at), point: at, coordinate: false, default_pos: None })?;
-        self.forced_box = None;
+        self.node_run.forced_box = None;
         // what comes after the matrix's node (`append after command`, the delimiters), drawn after the cells
         let after = std::mem::take(&mut self.after_node_path);
         let matrix_node = self.last_node.clone();

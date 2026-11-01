@@ -1060,7 +1060,7 @@ keyfn!(k_transform_canvas, |e, v| {
     r?;
     // the transformations act on the canvas around the current origin, as pgf's low level does
     e.open_in_scope(crate::canvas::Item::Transform { transform: t });
-    e.canvas_transforms += 1;
+    e.scoped.canvas_transforms += 1;
     Ok(())
 });
 // `view={(a) (b) at (c) (d)}` (animations library): what the scope draws in the box from a to b,
@@ -1126,7 +1126,7 @@ keyfn!(k_path_picture, |e, v| {
     Ok(())
 });
 keyfn!(k_turn, |e, _v| {
-    let (last, from) = e.turn_from;
+    let (last, from) = e.pgf.turn_from;
     let d = last.minus(from);
     let d = if d.norm() > 1e-12 { d.scale(1.0 / d.norm()) } else { Point::new(1.0, 0.0) };
     let t = Transform { a: d.x, b: d.y, c: -d.y, d: d.x, e: last.x, f: last.y };
@@ -1606,7 +1606,7 @@ keyfn!(k_fading_transform, |e, v| {
 
 /// The fading settings just set, for the `scope fading`s of the path being read.
 fn note_fading_settings(e: &mut Engine) {
-    if let Some(s) = e.path_fading_settings.last_mut() {
+    if let Some(s) = e.fading.path_fading_settings.last_mut() {
         *s = (e.st.shade.fading_transform, e.st.shade.fit_fading);
     }
 }
@@ -1642,7 +1642,7 @@ keyfn!(k_scope_fading, |e, v| {
     // in a path's options: what the path draws, the fading fitted to it when it is done
     let t = e.st.transform.compose(&e.st.pending);
     let (start, fit) = (e.canvas.items.len(), e.st.shade.fit_fading);
-    if let Some(list) = e.path_fadings.last_mut() {
+    if let Some(list) = e.fading.path_fadings.last_mut() {
         list.push((s, start, fit, t, None));
         return Ok(());
     }
@@ -2047,8 +2047,8 @@ pub fn define_keys(e: &mut Engine, pieces: &[&'static super::super::piece::Piece
     super::super::trees::define(e);
     super::super::decorations::define(e);
     for (path, f) in NATIVE.iter().chain(super::super::decorations::KEYS).chain(super::super::libraries::KEYS).chain(super::super::three_d::KEYS) {
-        let id = NATIVE_KEY_BASE + e.key_fns.len() as u16;
-        e.key_fns.push(*f);
+        let id = NATIVE_KEY_BASE + e.plug.key_fns.len() as u16;
+        e.plug.key_fns.push(*f);
         e.tex.define(&macro_name(&format!("{path}/.@cmd")), Meaning::Native(id));
     }
     e.register_keys(&super::super::circuits::LIBRARY);

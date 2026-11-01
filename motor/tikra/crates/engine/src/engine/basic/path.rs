@@ -25,40 +25,40 @@ pub fn softpath_of(e: &Engine, macro_name: &Token) -> Option<Vec<Segment>> {
         return None;
     };
     let text: String = m.body.iter().filter_map(|b| if let tex::Body::Tok(t) = b { Some(tex::tokens_to_string(std::slice::from_ref(t))) } else { None }).collect();
-    text.starts_with("@softpath").then(|| e.saved_paths.get(&text).cloned()).flatten()
+    text.starts_with("@softpath").then(|| e.pgf.saved_paths.get(&text).cloned()).flatten()
 }
 
 impl Engine {
     pub fn pgf_add(&mut self, s: Segment) {
-        self.pgf_path.quick = false;
+        self.pgf.pgf_path.quick = false;
         let p = match s {
             Segment::MoveTo(p) | Segment::LineTo(p) | Segment::CurveTo(_, _, p) => Some(p),
-            Segment::Close => self.pgf_path.start,
+            Segment::Close => self.pgf.pgf_path.start,
         };
         if let Segment::MoveTo(p) = s {
-            self.pgf_path.start = Some(p);
+            self.pgf.pgf_path.start = Some(p);
         }
-        if !matches!(s, Segment::MoveTo(_)) && self.pgf_path.segments.is_empty() {
-            let at = self.pgf_path.last.unwrap_or_default();
-            self.pgf_path.segments.push(Segment::MoveTo(at));
-            self.pgf_path.start = Some(at);
+        if !matches!(s, Segment::MoveTo(_)) && self.pgf.pgf_path.segments.is_empty() {
+            let at = self.pgf.pgf_path.last.unwrap_or_default();
+            self.pgf.pgf_path.segments.push(Segment::MoveTo(at));
+            self.pgf.pgf_path.start = Some(at);
         }
-        self.pgf_path.segments.push(s);
-        self.pgf_path.last = p;
+        self.pgf.pgf_path.segments.push(s);
+        self.pgf.pgf_path.last = p;
     }
 
     pub(in crate::engine::basic) fn last_local(&self) -> Point {
-        self.st.transform.inverse().apply(self.pgf_path.last.unwrap_or_default())
+        self.st.transform.inverse().apply(self.pgf.pgf_path.last.unwrap_or_default())
     }
 
     /// Uses the basic layer's path with `actions` (`fill`, `stroke`, `draw`, `clip`, `discard`…).
     pub(in crate::engine::basic) fn pgf_use(&mut self, actions: &str) -> Result<(), Error> {
-        let segs = std::mem::take(&mut self.pgf_path.segments);
-        let quick = std::mem::take(&mut self.pgf_path.quick);
-        if let Some(p) = self.pgf_path.last {
-            self.last_xy = p;
+        let segs = std::mem::take(&mut self.pgf.pgf_path.segments);
+        let quick = std::mem::take(&mut self.pgf.pgf_path.quick);
+        if let Some(p) = self.pgf.pgf_path.last {
+            self.pgf.last_xy = p;
         }
-        self.pgf_path = PgfPath::default();
+        self.pgf.pgf_path = PgfPath::default();
         let frozen = self.canvas_frozen;
         self.canvas_frozen |= quick;
         self.begin_group();
@@ -76,7 +76,7 @@ impl Engine {
             }
         }
         // in a declared shape's code: a path of the shape
-        if let Some(layer) = self.shape_capture.as_ref().and_then(|c| c.layer) {
+        if let Some(layer) = self.declared.shape_capture.as_ref().and_then(|c| c.layer) {
             let mut uses = Vec::new();
             if self.st.mode.fill {
                 uses.push(Usage::Fill(self.st.fill_paint_color().xcolor()));
@@ -84,7 +84,7 @@ impl Engine {
             if self.st.mode.draw {
                 uses.push(Usage::Stroke);
             }
-            if let Some(c) = &mut self.shape_capture {
+            if let Some(c) = &mut self.declared.shape_capture {
                 c.paths.extend(uses.into_iter().map(|usage| ShapePath { layer, segments: segs.clone(), usage }));
             }
             self.end_group();
@@ -137,7 +137,7 @@ impl Engine {
         for s in segments {
             self.pgf_add(s);
         }
-        self.pgf_path.last = Some(end);
+        self.pgf.pgf_path.last = Some(end);
 
         Ok(())
     }
@@ -161,7 +161,7 @@ impl Engine {
             self.pgf_add(s);
         }
         self.pgf_add(Segment::Close);
-        self.pgf_path.last = Some(t.apply(c));
+        self.pgf.pgf_path.last = Some(t.apply(c));
 
         Ok(())
     }
@@ -175,7 +175,7 @@ impl Engine {
         self.pgf_add(Segment::LineTo(t.apply(b)));
         self.pgf_add(Segment::LineTo(t.apply(Point::new(b.x, a.y))));
         self.pgf_add(Segment::Close);
-        self.pgf_path.last = Some(t.apply(a));
+        self.pgf.pgf_path.last = Some(t.apply(a));
 
         Ok(())
     }
@@ -283,7 +283,7 @@ impl Engine {
         ) {
             self.pgf_add(s);
         }
-        self.pgf_path.last = Some(t.apply(to));
+        self.pgf.pgf_path.last = Some(t.apply(to));
 
         Ok(())
     }
@@ -293,10 +293,11 @@ impl Engine {
         let m = self.argument()?;
         let name = m.iter().find_map(|t| if let Token::Cs(n) = t { Some(n.to_string()) } else { None }).unwrap_or_default();
         if cmd == B::GetPath {
-            self.saved_paths.insert(format!("pgf@{name}"), self.pgf_path.segments.clone());
-        } else if let Some(segs) = m.iter().find(|t| matches!(t, Token::Cs(_))).and_then(|t| softpath_of(self, t)).or_else(|| self.saved_paths.get(&format!("pgf@{name}")).cloned())
+            self.pgf.saved_paths.insert(format!("pgf@{name}"), self.pgf.pgf_path.segments.clone());
+        } else if let Some(segs) =
+            m.iter().find(|t| matches!(t, Token::Cs(_))).and_then(|t| softpath_of(self, t)).or_else(|| self.pgf.saved_paths.get(&format!("pgf@{name}")).cloned())
         {
-            self.pgf_path = PgfPath::default();
+            self.pgf.pgf_path = PgfPath::default();
             for s in segs {
                 self.pgf_add(s);
             }
@@ -312,20 +313,20 @@ impl Engine {
             let code = self.argument()?;
             self.begin_group();
             self.begin_scope();
-            self.pgf_path = PgfPath::default();
+            self.pgf.pgf_path = PgfPath::default();
             let r = self.run_tokens(code);
-            paths.push(std::mem::take(&mut self.pgf_path.segments));
-            self.pgf_path = PgfPath::default();
+            paths.push(std::mem::take(&mut self.pgf.pgf_path.segments));
+            self.pgf.pgf_path = PgfPath::default();
             self.end_scope();
             self.end_group();
             r?;
         }
-        self.pgf_solutions = super::super::intersections::intersections(&paths[0], &paths[1]);
+        self.pgf.pgf_solutions = super::super::intersections::intersections(&paths[0], &paths[1]);
         // kept for `\pgfcomputeintersectionsegments`
         for (k, p) in paths.iter().enumerate() {
-            self.saved_paths.insert(format!("@intersection path {}", k + 1), p.clone());
+            self.pgf.saved_paths.insert(format!("@intersection path {}", k + 1), p.clone());
         }
-        let n = self.pgf_solutions.len();
+        let n = self.pgf.pgf_solutions.len();
         self.tex.set_meaning(&Token::cs("pgfintersectionsolutions"), super::super::macro_tokens(tikra_tokens(&n.to_string())), false);
 
         Ok(())
@@ -347,7 +348,7 @@ impl Engine {
         for s in super::super::path::arc_segments(super::super::path::EllipseArc { center: t.apply(c), rx, ry, start: a0, end: a1 }, &t) {
             self.pgf_add(s);
         }
-        self.pgf_path.last = Some(t.apply(end));
+        self.pgf.pgf_path.last = Some(t.apply(end));
 
         Ok(())
     }

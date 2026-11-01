@@ -55,7 +55,7 @@ impl Engine {
                 if let Some(v) = item.value {
                     let s = self.tex.expand_to_string(v)?;
                     if let Ok(w) = self.length(s.trim()) {
-                        self.varwidth = Some(w);
+                        self.page.varwidth = Some(w);
                     }
                 }
             } else if item.key == "border" {
@@ -121,7 +121,7 @@ impl Engine {
         let model = self.optional()?.map(|m| tex::tokens_to_string(&m));
         let spec = self.argument_string()?;
         match model.map_or_else(|| self.color(&spec), |m| color::define(&m, &spec)) {
-            Some(c) => self.page_color = Some(c),
+            Some(c) => self.page.page_color = Some(c),
             None => self.warn(format!("\\pagecolor: unknown color '{spec}'")),
         }
         Ok(())
@@ -210,7 +210,7 @@ impl Engine {
         let arg = self.argument()?;
         if self.picture_depth == 0 {
             let w = self.length_of(arg)?;
-            self.layout.push(Layout::Skip(w));
+            self.page.layout.push(Layout::Skip(w));
         }
         Ok(())
     }
@@ -224,7 +224,7 @@ impl Engine {
             }
         }
         if self.picture_depth == 0 {
-            self.layout.push(Layout::Skip(w as f64 / 65536.0 * crate::PT));
+            self.page.layout.push(Layout::Skip(w as f64 / 65536.0 * crate::PT));
         }
         Ok(())
     }
@@ -392,9 +392,9 @@ impl Engine {
     /// A `\color` of the page's text, in no group: it is still on at the paragraph's end,
     /// and `varwidth` takes its whole width (a color's end is not text it can measure).
     fn note_varwidth_color(&mut self) {
-        if let (0, Some(w), Some(d)) = (self.picture_depth, self.varwidth, self.document_depth) {
-            if self.tex.group_depth() == d && !self.layout.contains(&Layout::Width(w)) {
-                self.layout.push(Layout::Width(w));
+        if let (0, Some(w), Some(d)) = (self.picture_depth, self.page.varwidth, self.page.document_depth) {
+            if self.tex.group_depth() == d && !self.page.layout.contains(&Layout::Width(w)) {
+                self.page.layout.push(Layout::Width(w));
             }
         }
     }
@@ -637,7 +637,7 @@ impl Engine {
     }
 
     fn run_in_group(&mut self, arg: Vec<Token>) -> Result<usize, Error> {
-        let start = self.boxes.len();
+        let start = self.page.boxes.len();
         self.begin_group();
         let r = self.run_tokens(arg);
         self.end_group();
@@ -648,7 +648,7 @@ impl Engine {
     fn frame_fboxes(&mut self, start: usize) {
         let sep = self.tex.dimens.get(&247).copied().unwrap_or(0) as f64 / 65536.0 * crate::PT;
         let rule = self.tex.dimens.get(&246).copied().unwrap_or(0) as f64 / 65536.0 * crate::PT;
-        for b in &mut self.boxes[start..] {
+        for b in &mut self.page.boxes[start..] {
             let (Some(lo), Some(hi)) = (b.canvas.min, b.canvas.max) else { continue };
             let d = sep + rule / 2.0;
             let (lo, hi) = (Point::new(lo.x - d, lo.y - d), Point::new(hi.x + d, hi.y + d));

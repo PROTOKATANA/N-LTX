@@ -35,7 +35,7 @@ pub(super) fn k_set(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> 
 
 /// `/tikz/set`: any node can carry it, so it lives with the nodes, not with the graphs piece.
 pub(crate) fn define_sets(e: &mut Engine) {
-    let id = super::super::NATIVE_KEY_BASE + e.key_fns.len() as u16;
-    e.key_fns.push(k_set);
+    let id = super::super::NATIVE_KEY_BASE + e.plug.key_fns.len() as u16;
+    e.plug.key_fns.push(k_set);
     e.tex.define(&keys::macro_name("/tikz/set/.@cmd"), tex::Meaning::Native(id));
 }

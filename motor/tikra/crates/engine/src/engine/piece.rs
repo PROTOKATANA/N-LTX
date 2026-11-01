@@ -156,82 +156,82 @@ impl Engine {
     /// Puts `piece` in this engine: its commands, then what it sets up.
     pub(super) fn plug(&mut self, piece: &Piece) {
         for (name, command) in piece.commands {
-            let id = PIECE_COMMAND_BASE as usize + self.command_fns.len();
+            let id = PIECE_COMMAND_BASE as usize + self.plug.command_fns.len();
             assert!(id < NATIVE_KEY_BASE as usize, "too many commands in the pieces");
             self.tex.define(name, Meaning::Native(id as u16));
-            self.command_fns.push(*command);
+            self.plug.command_fns.push(*command);
         }
-        self.hooks.path_operations.extend_from_slice(piece.path_operations);
-        self.hooks.coordinate_systems.extend_from_slice(piece.coordinate_systems);
-        self.hooks.coordinate_fallbacks.extend_from_slice(piece.coordinate_fallbacks);
-        self.hooks.plain_coordinates.extend_from_slice(piece.plain_coordinates);
-        self.hooks.node_text.extend_from_slice(piece.node_text);
-        self.hooks.environments.extend_from_slice(piece.environments);
-        self.hooks.decorations.extend_from_slice(piece.decorations);
-        self.hooks.reading_input.extend_from_slice(piece.reading_input);
-        self.hooks.statement_filters.extend_from_slice(piece.statement_filters);
-        self.hooks.node_anchors.extend_from_slice(piece.node_anchors);
+        self.plug.hooks.path_operations.extend_from_slice(piece.path_operations);
+        self.plug.hooks.coordinate_systems.extend_from_slice(piece.coordinate_systems);
+        self.plug.hooks.coordinate_fallbacks.extend_from_slice(piece.coordinate_fallbacks);
+        self.plug.hooks.plain_coordinates.extend_from_slice(piece.plain_coordinates);
+        self.plug.hooks.node_text.extend_from_slice(piece.node_text);
+        self.plug.hooks.environments.extend_from_slice(piece.environments);
+        self.plug.hooks.decorations.extend_from_slice(piece.decorations);
+        self.plug.hooks.reading_input.extend_from_slice(piece.reading_input);
+        self.plug.hooks.statement_filters.extend_from_slice(piece.statement_filters);
+        self.plug.hooks.node_anchors.extend_from_slice(piece.node_anchors);
         (piece.define)(self);
     }
 
     /// What a piece does with the word `word` of a path.
     pub(super) fn path_operation(&self, word: &str) -> Option<PathOperationFn> {
-        self.hooks.path_operations.iter().find(|(w, _)| *w == word).map(|(_, operation)| *operation)
+        self.plug.hooks.path_operations.iter().find(|(w, _)| *w == word).map(|(_, operation)| *operation)
     }
 
     /// The coordinate system `name` of a piece.
     pub(super) fn coordinate_system_of(&self, name: &str) -> Option<CoordinateSystemFn> {
-        self.hooks.coordinate_systems.iter().find(|(n, _)| *n == name).map(|(_, system)| *system)
+        self.plug.hooks.coordinate_systems.iter().find(|(n, _)| *n == name).map(|(_, system)| *system)
     }
 
     /// The coordinate system `name` of the pieces that know many.
     pub(super) fn piece_coordinate(&mut self, name: &str, options: &str) -> Option<Result<Coord, Error>> {
-        (0..self.hooks.coordinate_fallbacks.len()).find_map(|i| (self.hooks.coordinate_fallbacks[i])(self, name, options))
+        (0..self.plug.hooks.coordinate_fallbacks.len()).find_map(|i| (self.plug.hooks.coordinate_fallbacks[i])(self, name, options))
     }
 
     /// What a piece reads in a plain `(x,y)`.
     pub(super) fn piece_plain_coordinate(&mut self, parts: &[String]) -> Option<Result<Point, Error>> {
-        (0..self.hooks.plain_coordinates.len()).find_map(|i| (self.hooks.plain_coordinates[i])(self, parts))
+        (0..self.plug.hooks.plain_coordinates.len()).find_map(|i| (self.plug.hooks.plain_coordinates[i])(self, parts))
     }
 
     /// What a piece does with the command `name` in the text of a node.
     pub fn node_text_command(&self, name: &str) -> Option<NodeTextFn> {
-        self.hooks.node_text.iter().find(|(n, _)| *n == name).map(|(_, command)| *command)
+        self.plug.hooks.node_text.iter().find(|(n, _)| *n == name).map(|(_, command)| *command)
     }
 
     /// The two ends of the environment `name` of a piece.
     pub(super) fn piece_environment(&self, name: &str) -> Option<(EnvironmentFn, EnvironmentFn)> {
-        self.hooks.environments.iter().find(|(n, _, _)| *n == name).map(|(_, begin, end)| (*begin, *end))
+        self.plug.hooks.environments.iter().find(|(n, _, _)| *n == name).map(|(_, begin, end)| (*begin, *end))
     }
 
     /// The decoration `name` of a piece.
     pub(super) fn piece_decoration(&self, name: &str) -> Option<DecorationFn> {
-        self.hooks.decorations.iter().find(|(n, _)| *n == name).map(|(_, decoration)| *decoration)
+        self.plug.hooks.decorations.iter().find(|(n, _)| *n == name).map(|(_, decoration)| *decoration)
     }
 
     /// What a piece did with the statement `name`, if it took it.
     pub(super) fn filtered_statement(&mut self, name: &str, t: &Token) -> Option<Result<(), Error>> {
-        (0..self.hooks.statement_filters.len()).find_map(|i| (self.hooks.statement_filters[i])(self, name, t))
+        (0..self.plug.hooks.statement_filters.len()).find_map(|i| (self.plug.hooks.statement_filters[i])(self, name, t))
     }
 
     /// Where the anchor `name` of a piece is, if it is one of theirs.
     pub(super) fn piece_anchor(&mut self, name: &str, local: &dyn Fn(&str) -> Option<Point>) -> Option<Point> {
-        (0..self.hooks.node_anchors.len()).find_map(|i| (self.hooks.node_anchors[i])(self, name, local))
+        (0..self.plug.hooks.node_anchors.len()).find_map(|i| (self.plug.hooks.node_anchors[i])(self, name, local))
     }
 
     /// Whether `t` is a command of a piece that reads its own input.
     pub(super) fn reads_its_input(&self, t: &Token) -> bool {
-        matches!(t, Token::Cs(name) if self.hooks.reading_input.contains(&&**name))
+        matches!(t, Token::Cs(name) if self.plug.hooks.reading_input.contains(&&**name))
     }
 
     /// The value of type `T` a piece keeps during a figure, created the first time.
     pub fn piece_state<T: Any + Clone + Default>(&mut self) -> &mut T {
-        let found = self.slots.0.iter_mut().position(|s| (**s).as_any_mut().is::<T>());
+        let found = self.plug.slots.0.iter_mut().position(|s| (**s).as_any_mut().is::<T>());
         let at = found.unwrap_or_else(|| {
-            self.slots.0.push(Box::new(T::default()));
-            self.slots.0.len() - 1
+            self.plug.slots.0.push(Box::new(T::default()));
+            self.plug.slots.0.len() - 1
         });
-        match (*self.slots.0[at]).as_any_mut().downcast_mut() {
+        match (*self.plug.slots.0[at]).as_any_mut().downcast_mut() {
             Some(state) => state,
             None => unreachable!("the slot at `at` holds a `T`"),
         }

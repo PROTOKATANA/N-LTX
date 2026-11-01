@@ -141,7 +141,7 @@ impl Engine {
                 }
             };
             if let Ok(d) = d {
-                self.anim_shifts.push(if attribute == "xshift" || attribute == "yshift" { linear.apply(d) } else { d });
+                self.anim.anim_shifts.push(if attribute == "xshift" || attribute == "yshift" { linear.apply(d) } else { d });
             }
         }
     }
@@ -158,7 +158,7 @@ impl Engine {
             _ => return Ok(()),
         };
         if let Some(o) = self.animation_option(attribute, spec)? {
-            let options = self.sys_animations.entry(whom.to_string()).or_default();
+            let options = self.anim.sys_animations.entry(whom.to_string()).or_default();
             if !options.is_empty() {
                 options.push(Token::other(','));
             }

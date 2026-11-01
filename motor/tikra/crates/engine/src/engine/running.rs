@@ -77,7 +77,7 @@ impl Engine {
                 match self.tex.next_nonspace() {
                     Some(n) if n.is_char('[') => {
                         let o = self.tex.read_until_char(']', false)?;
-                        self.brace_scopes.push(true);
+                        self.scoped.brace_scopes.push(true);
                         let r = self.open_tikz_scope(Some(o), false);
                         self.recover(r, &t)?;
                     }
@@ -85,13 +85,13 @@ impl Engine {
                         if let Some(n) = other {
                             self.tex.back(n);
                         }
-                        self.brace_scopes.push(false);
+                        self.scoped.brace_scopes.push(false);
                         self.begin_group();
                     }
                 }
             }
             Meaning::Char(_, Cat::End) if self.picture_depth > 0 => {
-                if self.brace_scopes.pop() == Some(true) {
+                if self.scoped.brace_scopes.pop() == Some(true) {
                     let r = self.close_tikz_scope();
                     self.recover(r, &t)?;
                 } else {
@@ -115,17 +115,17 @@ impl Engine {
                     return Ok(());
                 }
                 let text = format!("${}$", tex::tokens_to_string(&formula));
-                match self.layout.last() {
-                    Some(Layout::Word(i)) => self.words[*i].1.push_str(&text),
+                match self.page.layout.last() {
+                    Some(Layout::Word(i)) => self.page.words[*i].1.push_str(&text),
                     _ => {
-                        self.layout.push(Layout::Word(self.words.len()));
-                        self.words.push((self.st.text.font.clone(), text));
+                        self.page.layout.push(Layout::Word(self.page.words.len()));
+                        self.page.words.push((self.st.text.font.clone(), text));
                     }
                 }
             }
             Meaning::Prim(Prim::Par) if self.picture_depth == 0 => {
-                if !self.layout.is_empty() && self.layout.last() != Some(&Layout::Par) {
-                    self.layout.push(Layout::Par);
+                if !self.page.layout.is_empty() && self.page.layout.last() != Some(&Layout::Par) {
+                    self.page.layout.push(Layout::Par);
                 }
             }
             Meaning::Prim(Prim::Begingroup) => self.begin_group(),
@@ -145,7 +145,7 @@ impl Engine {
                     self.unknown_command(name)?;
                 } else if matches!(t, Token::Char('~', Cat::Active)) && self.picture_depth == 0 {
                     // `~`: an interword space where the line cannot break
-                    self.layout.push(Layout::Skip(SPACE));
+                    self.page.layout.push(Layout::Skip(SPACE));
                 }
             }
             _ => {
@@ -161,46 +161,46 @@ impl Engine {
 
     /// A box of text in the paragraph, a word of its own (a `tabular`).
     pub fn typeset_word(&mut self, text: String) {
-        self.layout.push(Layout::Word(self.words.len()));
-        self.words.push((self.st.text.font.clone(), text));
+        self.page.layout.push(Layout::Word(self.page.words.len()));
+        self.page.words.push((self.st.text.font.clone(), text));
     }
 
     /// Whether a `tabular` around the pictures is open.
     pub(super) fn in_table(&self) -> bool {
-        let opened = self.layout.iter().filter(|l| matches!(l, Layout::TabStart(_))).count();
-        opened > self.layout.iter().filter(|l| matches!(l, Layout::TabEnd)).count()
+        let opened = self.page.layout.iter().filter(|l| matches!(l, Layout::TabStart(_))).count();
+        opened > self.page.layout.iter().filter(|l| matches!(l, Layout::TabEnd)).count()
     }
 
     /// A character outside any statement: TeX would typeset it; in a picture TikZ ignores it.
     pub(super) fn text(&mut self, c: char) {
         if self.picture_depth == 0 && c == '&' && self.in_table() {
-            self.layout.push(Layout::Cell);
+            self.page.layout.push(Layout::Cell);
             return;
         }
         if self.picture_depth == 0 && c.is_whitespace() {
             // a space after a picture or a word is TeX's interword space; spaces with commands
             // between them (`\tikzset{…}` on its own line) are glue each, so is one after `\hspace{…}`
-            if matches!(self.layout.last(), Some(Layout::Picture(_) | Layout::Word(_) | Layout::Space | Layout::Skip(_))) {
-                self.layout.push(Layout::Space);
+            if matches!(self.page.layout.last(), Some(Layout::Picture(_) | Layout::Word(_) | Layout::Space | Layout::Skip(_))) {
+                self.page.layout.push(Layout::Space);
             }
             return;
         }
         if self.picture_depth == 0 {
             // text of the paragraph, set word by word around the pictures
-            match self.layout.last() {
-                Some(Layout::Word(i)) => self.words[*i].1.push(c),
+            match self.page.layout.last() {
+                Some(Layout::Word(i)) => self.page.words[*i].1.push(c),
                 _ => {
-                    self.layout.push(Layout::Word(self.words.len()));
-                    self.words.push((self.st.text.font.clone(), c.to_string()));
+                    self.page.layout.push(Layout::Word(self.page.words.len()));
+                    self.page.words.push((self.st.text.font.clone(), c.to_string()));
                 }
             }
             return;
         }
-        if c.is_whitespace() || c == ';' || self.text_reported {
+        if c.is_whitespace() || c == ';' || self.page.text_reported {
             return;
         }
         if self.picture_depth > 0 {
-            self.text_reported = true;
+            self.page.text_reported = true;
             self.warn("text outside a statement ignored");
         }
     }
@@ -216,23 +216,23 @@ impl Engine {
                     self.tex.back(t);
                 }
             }
-            self.layout.push(if self.in_table() { Layout::Row } else { Layout::Break });
+            self.page.layout.push(if self.in_table() { Layout::Row } else { Layout::Break });
             return Ok(());
         }
         if self.picture_depth == 0 && name == " " {
             // `\ `: an interword space, also after a command that eats the spaces after it
-            self.layout.push(Layout::Space);
+            self.page.layout.push(Layout::Space);
             return Ok(());
         }
         if self.picture_depth == 0 && TEXT_STYLES.contains(&name) {
             // `Ti\emph{k}Z`: set with the word it is in, as a node's text is
             let arg = self.argument()?;
             let text = format!("\\{name}{{{}}}", tex::tokens_to_string(&self.tex.expand_fully(arg)?));
-            match self.layout.last() {
-                Some(Layout::Word(i)) => self.words[*i].1.push_str(&text),
+            match self.page.layout.last() {
+                Some(Layout::Word(i)) => self.page.words[*i].1.push_str(&text),
                 _ => {
-                    self.layout.push(Layout::Word(self.words.len()));
-                    self.words.push((self.st.text.font.clone(), text));
+                    self.page.layout.push(Layout::Word(self.page.words.len()));
+                    self.page.words.push((self.st.text.font.clone(), text));
                 }
             }
             return Ok(());

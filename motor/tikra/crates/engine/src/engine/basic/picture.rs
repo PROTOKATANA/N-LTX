@@ -120,7 +120,7 @@ impl Engine {
             }
         }
         // in a declared shape's code: a text of the shape
-        if let Some(c) = &mut self.shape_capture {
+        if let Some(c) = &mut self.declared.shape_capture {
             use crate::extension::TextAnchor as A;
             let anchor = match anchor.as_str() {
                 "west" => A::West,
@@ -202,13 +202,13 @@ impl Engine {
         let point = self.argument()?;
         let list = self.tex.expand_fully(list)?;
         let name = var.into_iter().find(|t| matches!(t, Token::Cs(_)));
-        self.plot_stream.clear();
+        self.pgf.plot_stream.clear();
         for item in super::super::foreach_items(&list) {
             if let Some(n) = &name {
                 self.tex.set_meaning(n, super::super::macro_tokens(item), false);
             }
             let p = self.point_of(point.clone())?;
-            self.plot_stream.push(t.apply(p));
+            self.pgf.plot_stream.push(t.apply(p));
         }
         self.plot_stream_end()?;
 
@@ -291,7 +291,7 @@ impl Engine {
                 point = tex::tokens_to_string(&item.value.unwrap_or_default());
             }
         }
-        self.plot_handlers.insert(name.to_string(), point);
+        self.declared.plot_handlers.insert(name.to_string(), point);
         let args: String = (1..=n).map(|k| format!("{{#{k}}}")).collect();
         let params: String = (1..=n).map(|k| format!("#{k}")).collect();
         self.run_tokens(tikra_tokens(&format!("\\def\\{name}{params}{{\\tikra@plothandler{{{name}}}{{{args}}}}}")))?;
@@ -326,7 +326,7 @@ impl Engine {
 
     pub(in crate::engine::basic) fn get_last_xy(&mut self) -> Result<(), Error> {
         // \pgfgetlastxy{\x}{\y}: the last point of the path, on the canvas, in pt
-        let p = self.pgf_path.last.unwrap_or(self.last_xy);
+        let p = self.pgf.pgf_path.last.unwrap_or(self.pgf.last_xy);
         for v in [p.x, p.y] {
             let target = self.argument()?;
             if let Some(name) = target.iter().find(|t| matches!(t, Token::Cs(_))) {
@@ -433,7 +433,7 @@ impl Engine {
     /// `\pgfplotstreamend`: the points streamed go into the path as the plot handler makes it, or
     /// each gets the mark handler's code, shifted there.
     pub(in crate::engine::basic) fn plot_stream_end(&mut self) -> Result<(), Error> {
-        let points = std::mem::take(&mut self.plot_stream);
+        let points = std::mem::take(&mut self.pgf.plot_stream);
         let (handler, code) = self.st.plot.basic_plot.clone();
         match handler.as_str() {
             "discard" => {}
@@ -452,7 +452,7 @@ impl Engine {
             }
             h if h.starts_with("custom:") => {
                 // a declared handler: its code at each point, `##1` the point, `#k` its arguments
-                let code = self.plot_handlers.get(&h["custom:".len()..]).cloned().unwrap_or_default();
+                let code = self.declared.plot_handlers.get(&h["custom:".len()..]).cloned().unwrap_or_default();
                 let inv = self.st.transform.inverse();
                 let params = super::super::options::split_arguments(&self.st.plot.basic_plot.1, 9);
                 for p in points {
@@ -486,7 +486,7 @@ impl Engine {
                 self.st.plot.plot_handler = saved;
                 let mut segs = r?;
                 // \pgfsetlinetofirstplotpoint: the plot goes on from the path's last point
-                if self.st.plot.plot_first_lineto && self.pgf_path.last.is_some() {
+                if self.st.plot.plot_first_lineto && self.pgf.pgf_path.last.is_some() {
                     if let Some(Segment::MoveTo(p)) = segs.first().copied() {
                         segs[0] = Segment::LineTo(p);
                     }

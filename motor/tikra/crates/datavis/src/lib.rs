@@ -208,8 +208,8 @@ impl Dv {
 /// The native keys and their defaults. The TeX of the library runs with TikZ's definitions.
 fn define(e: &mut Engine) {
     for (path, f) in keys::NATIVE {
-        let id = NATIVE_KEY_BASE + e.key_fns.len() as u16;
-        e.key_fns.push(*f);
+        let id = NATIVE_KEY_BASE + e.plug.key_fns.len() as u16;
+        e.plug.key_fns.push(*f);
         e.tex.define(&macro_name(&format!("{path}/.@cmd")), Meaning::Native(id));
     }
     for (path, v) in keys::DEFAULTS {

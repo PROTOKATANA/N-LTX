@@ -477,7 +477,7 @@ pub(super) fn draw_handler(e: &mut Engine, draw: &PlotDraw<'_>, style: Vec<Token
     }
     let name_path = e.st.name_path.take();
     if let Some(name) = &name_path {
-        e.named_paths.insert(name.clone(), segs.clone());
+        e.pgf.named_paths.insert(name.clone(), segs.clone());
     }
     let only_marks = e.st.plot.only_marks;
     let mark = e.st.plot.plot_mark.clone();

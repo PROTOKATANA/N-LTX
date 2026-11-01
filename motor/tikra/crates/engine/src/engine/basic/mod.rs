@@ -205,10 +205,10 @@ impl Engine {
                 let v = self.argument()?;
                 self.st.plot.tension = self.number_of(v)?;
             }
-            B::StreamStart => self.plot_stream.clear(),
+            B::StreamStart => self.pgf.plot_stream.clear(),
             B::StreamPoint => {
                 let p = self.point_arg()?;
-                self.plot_stream.push(t.apply(p));
+                self.pgf.plot_stream.push(t.apply(p));
             }
             B::StreamEnd => self.plot_stream_end()?,
             B::PlotHandlerRecord => {
@@ -229,7 +229,7 @@ impl Engine {
             B::DeclarePlotMark => {
                 let name = self.argument_string()?;
                 let code = self.argument()?;
-                self.plot_marks_declared.insert(name.trim().to_string(), code);
+                self.declared.plot_marks_declared.insert(name.trim().to_string(), code);
             }
             B::Triangle => self.transform_triangle(t)?,
             B::ArrowFrame => self.transform_arrow(t)?,
@@ -263,9 +263,9 @@ impl Engine {
             B::QMoveTo | B::QLineTo | B::QCurveTo | B::QCircle => {
                 // the quick commands take canvas lengths, untransformed; a path of them only does
                 // not make the picture larger
-                let quick = self.pgf_path.segments.is_empty() || self.pgf_path.quick;
+                let quick = self.pgf.pgf_path.segments.is_empty() || self.pgf.pgf_path.quick;
                 self.quick_path(cmd)?;
-                self.pgf_path.quick = quick;
+                self.pgf.pgf_path.quick = quick;
             }
             B::ArcTo => self.path_svg_arc(t)?,
             B::DeclareFunctional => self.declare_functional_shading()?,
@@ -285,7 +285,7 @@ impl Engine {
             }
             B::Svg => {
                 let data = self.argument_string()?;
-                for s in super::path::svg_path(self, &data, self.pgf_path.last) {
+                for s in super::path::svg_path(self, &data, self.pgf.pgf_path.last) {
                     self.pgf_add(s);
                 }
             }

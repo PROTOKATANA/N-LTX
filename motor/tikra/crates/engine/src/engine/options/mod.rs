@@ -70,12 +70,12 @@ impl Engine {
     }
 
     fn run_items(&mut self, items: Vec<keys::Item>, at: ListPath<'_>) -> Result<(), Error> {
-        if self.key_lists == 0 {
-            self.keys_allowed += super::KEYS_PER_LIST;
+        if self.keyrun.key_lists == 0 {
+            self.keyrun.keys_allowed += super::KEYS_PER_LIST;
         }
-        self.key_lists += 1;
+        self.keyrun.key_lists += 1;
         let r = self.nested(|e, depth| e.list_of(items, at, depth));
-        self.key_lists -= 1;
+        self.keyrun.key_lists -= 1;
         r
     }
 
@@ -120,17 +120,17 @@ impl Engine {
     }
 
     pub fn invoke(&mut self, key: &str, value: Option<Vec<Token>>) -> Result<(), Error> {
-        self.keys_run += 1;
-        if self.keys_run > self.keys_allowed {
-            if !std::mem::replace(&mut self.keys_capped, true) {
-                self.warn(format!("more than {} options (styles that multiply?): the rest ignored", self.keys_allowed));
+        self.keyrun.keys_run += 1;
+        if self.keyrun.keys_run > self.keyrun.keys_allowed {
+            if !std::mem::replace(&mut self.keyrun.keys_capped, true) {
+                self.warn(format!("more than {} options (styles that multiply?): the rest ignored", self.keyrun.keys_allowed));
             }
             return Ok(());
         }
         // `/handlers/first char syntax`: a key that starts with a character that has a macro there
         // is that macro, with the whole key (and its value) as argument
         // (looked up only once it is on: every key passes here)
-        if let Some(c) = key.trim_start().chars().next().filter(|_| self.first_char_syntax) {
+        if let Some(c) = key.trim_start().chars().next().filter(|_| self.keyrun.first_char_syntax) {
             let handler = format!("/handlers/first char syntax/the character {c}");
             if let Some(code) = keys::value(&self.tex, &handler).filter(|_| self.key_text("/handlers/first char syntax").trim() == "true") {
                 let mut whole = tikra_tokens(key.trim());
@@ -145,7 +145,7 @@ impl Engine {
         }
         let path = keys::full_path(&self.st.key_path, key);
         if path == "/handlers/first char syntax" {
-            self.first_char_syntax = true;
+            self.keyrun.first_char_syntax = true;
         }
         // a key named like a handler (`characters/.append`) is a key: pgfkeys looks for keys first
         if let Some((base, h)) = keys::handler(&path).filter(|_| !self.tex.is_defined(&macro_name(&format!("{path}/.@cmd")))) {
@@ -186,17 +186,17 @@ impl Engine {
         let value = value.or_else(|| keys::stored(&self.tex, &name));
         match cmd {
             Meaning::Native(id) if id >= EXTENSION_KEY_BASE => {
-                let f = self.extension_fns[(id - EXTENSION_KEY_BASE) as usize];
-                self.current_key.clear();
-                self.current_key.push_str(path);
+                let f = self.plug.extension_fns[(id - EXTENSION_KEY_BASE) as usize];
+                self.keyrun.current_key.clear();
+                self.keyrun.current_key.push_str(path);
                 let v = value.filter(|v| !is_novalue(v)).map(crate::extension::Tokens);
                 f(&mut crate::extension::Context { e: self }, v)?;
                 Ok(true)
             }
             Meaning::Native(id) if id >= NATIVE_KEY_BASE => {
-                let f = self.key_fns[(id - NATIVE_KEY_BASE) as usize];
-                self.current_key.clear();
-                self.current_key.push_str(path);
+                let f = self.plug.key_fns[(id - NATIVE_KEY_BASE) as usize];
+                self.keyrun.current_key.clear();
+                self.keyrun.current_key.push_str(path);
                 let v = value.filter(|v| !is_novalue(v));
                 f(self, v)?;
                 Ok(true)
@@ -289,7 +289,7 @@ impl Engine {
                 self.st.pen.end_arrow = b;
                 return Ok(());
             }
-            if super::nodes::is_shape(&name) || self.user_shapes.contains_key(&name) {
+            if super::nodes::is_shape(&name) || self.declared.user_shapes.contains_key(&name) {
                 self.tex.define_string(&macro_name("/tikz/shape"), &name, false);
                 return Ok(());
             }

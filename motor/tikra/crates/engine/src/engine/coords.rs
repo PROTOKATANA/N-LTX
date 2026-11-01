@@ -147,7 +147,7 @@ impl Engine {
             _ => (t, None),
         };
         if name == "current subpath start" {
-            return Ok(Coord { p: self.subpath_start, node: None });
+            return Ok(Coord { p: self.pgf.subpath_start, node: None });
         }
         // pgfplots' extra anchors of an axis are coordinates of their own
         if let Some(a) = anchor {

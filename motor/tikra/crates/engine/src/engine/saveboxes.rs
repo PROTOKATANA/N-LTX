@@ -17,9 +17,9 @@ impl Engine {
             self.warn("\\newsavebox: no box name".to_string());
             return Ok(());
         };
-        let n = self.saved_boxes.len() as i64;
+        let n = self.page.saved_boxes.len() as i64;
         self.tex.set_meaning(&Token::cs(&name), tex::Meaning::CharDef(n), true);
-        self.saved_boxes.insert(name, PictureBox { canvas: Canvas::default(), baseline: 0.0 });
+        self.page.saved_boxes.insert(name, PictureBox { canvas: Canvas::default(), baseline: 0.0 });
         Ok(())
     }
 
@@ -61,8 +61,8 @@ impl Engine {
         let name = self.argument()?;
         let Some(b) = self.saved_box(&name) else { return Ok(()) };
         if self.picture_depth == 0 {
-            self.layout.push(Layout::Picture(self.boxes.len()));
-            self.boxes.push(b);
+            self.page.layout.push(Layout::Picture(self.page.boxes.len()));
+            self.page.boxes.push(b);
         }
         Ok(())
     }
@@ -111,7 +111,7 @@ impl Engine {
     /// The box the name (a control sequence) holds, or none with a warning.
     fn saved_box(&mut self, name: &[Token]) -> Option<PictureBox> {
         let found = box_name(name);
-        match found.as_ref().and_then(|n| self.saved_boxes.get(n)) {
+        match found.as_ref().and_then(|n| self.page.saved_boxes.get(n)) {
             Some(b) => Some(b.clone()),
             None => {
                 self.warn(format!("\\usebox: no box '\\{}'", found.unwrap_or_default()));
@@ -142,7 +142,7 @@ impl Engine {
                 PictureBox { canvas: super::typeset(&boxes, &layout, &words, 0.0), baseline: 0.0 }
             }
         };
-        self.saved_boxes.insert(n, b);
+        self.page.saved_boxes.insert(n, b);
         Ok(())
     }
 }

@@ -63,7 +63,7 @@ impl Engine {
             let size = self.argument()?;
             let code = self.argument()?;
             let lazy = LazyPattern { origin, size, code, tile_options: Vec::new(), defaults: Vec::new(), tikz: false };
-            self.user_patterns.insert(name.trim().to_string(), UserPattern::lazy(lazy, colored));
+            self.declared.user_patterns.insert(name.trim().to_string(), UserPattern::lazy(lazy, colored));
             return Ok(());
         }
         let origin = self.point_arg()?;
@@ -71,7 +71,7 @@ impl Engine {
         let size = self.point_arg()?;
         let code = self.argument()?;
         let items = self.draw_tile(code)?;
-        self.user_patterns.insert(name.trim().to_string(), UserPattern { items, origin, size, transform: Transform::default(), colored, lazy: None });
+        self.declared.user_patterns.insert(name.trim().to_string(), UserPattern { items, origin, size, transform: Transform::default(), colored, lazy: None });
         Ok(())
     }
 
@@ -108,7 +108,7 @@ impl Engine {
         }
         let pattern = UserPattern::lazy(p, colored);
         let pattern = if lazy { pattern } else { self.instantiate(&pattern, "")? };
-        self.user_patterns.insert(name, pattern);
+        self.declared.user_patterns.insert(name, pattern);
         Ok(())
     }
 
@@ -174,7 +174,7 @@ impl Engine {
             Some((b, o)) => (b.trim(), o.trim_end().trim_end_matches(']')),
             None => (name, ""),
         };
-        let p = match self.user_patterns.get(base).cloned() {
+        let p = match self.declared.user_patterns.get(base).cloned() {
             Some(p) => match self.instantiate(&p, options) {
                 Ok(p) => p,
                 Err(e) => {

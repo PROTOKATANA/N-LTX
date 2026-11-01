@@ -150,7 +150,7 @@ const KINDS: &[Kind] = &[
 ];
 
 fn name_of(e: &Engine) -> String {
-    keys::name(&e.current_key).to_string()
+    keys::name(&e.keyrun.current_key).to_string()
 }
 
 fn text_of(e: &mut Engine, v: Option<Vec<Token>>) -> Result<String, Error> {
@@ -314,11 +314,11 @@ fn new_axis(e: &mut Engine, name: &str) -> Result<(), Error> {
 
 /// Makes `path` a key with native code `f` (for keys defined while running, like axes).
 pub fn define_native(e: &mut Engine, path: &str, f: KeyFn) {
-    let id = match e.key_fns.iter().position(|g| *g as usize == f as usize) {
+    let id = match e.plug.key_fns.iter().position(|g| *g as usize == f as usize) {
         Some(i) => tikra_engine::engine::NATIVE_KEY_BASE + i as u16,
         None => {
-            e.key_fns.push(f);
-            tikra_engine::engine::NATIVE_KEY_BASE + (e.key_fns.len() - 1) as u16
+            e.plug.key_fns.push(f);
+            tikra_engine::engine::NATIVE_KEY_BASE + (e.plug.key_fns.len() - 1) as u16
         }
     };
     e.tex.define(&macro_name(&format!("{path}/.@cmd")), Meaning::Native(id));
@@ -360,7 +360,7 @@ fn k_new_polar_axes(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> 
 
 /// `x axis={options}` (and every other axis): the options with `axis options` as the path.
 fn k_axis(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
-    let axis = e.current_key.clone();
+    let axis = e.keyrun.current_key.clone();
     let old = e.tex.meaning_of("tikra@dv@axis");
     e.tex.define_string("tikra@dv@axis", &axis, false);
     let r = e.keys_command(v.unwrap_or_default(), Some(&format!("{DV}/axis options")), true);
@@ -404,7 +404,7 @@ fn k_setter(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
     if crate::running(e).last().is_some_and(|d| d.setters_off) {
         return Ok(());
     }
-    let key = e.current_key.clone();
+    let key = e.keyrun.current_key.clone();
     let mut old = keys::value(&e.tex, &key).unwrap_or_default();
     old.push(Token::other(','));
     old.extend(v.unwrap_or_default());
@@ -640,7 +640,7 @@ fn new_visualizer(e: &mut Engine, name: &str, options: Vec<Token>, legend: Vec<T
 
 /// `name={options}` of a visualizer: its options, and its data points from now on are its set.
 fn k_visualizer(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
-    let name = e.current_key.trim_start_matches(DV).trim_start_matches('/').to_string();
+    let name = e.keyrun.current_key.trim_start_matches(DV).trim_start_matches('/').to_string();
     let old = e.tex.meaning_of("tikra@dv@visualizer");
     e.tex.define_string("tikra@dv@visualizer", &name, false);
     let r = e.keys_command(v.unwrap_or_default(), Some(&format!("{DV}/visualizer options")), true);
@@ -778,7 +778,7 @@ fn k_legend_style(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
 
 /// A legend's options key: `legend options` with the legend as the one they set.
 fn k_legend(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), Error> {
-    let legend = e.current_key.clone();
+    let legend = e.keyrun.current_key.clone();
     let old = e.tex.meaning_of("tikra@dv@legend");
     e.tex.define_string("tikra@dv@legend", &legend, false);
     let r = e.keys_command(v.unwrap_or_default(), Some(&format!("{DV}/legend options")), true);

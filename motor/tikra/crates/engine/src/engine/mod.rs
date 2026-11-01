@@ -13,6 +13,7 @@ pub mod decorations;
 pub mod fadings;
 pub mod functional;
 pub mod graphics;
+pub mod groups;
 pub mod intersections;
 mod layout;
 pub mod libraries;
@@ -85,148 +86,42 @@ pub const MAX_DEPTH: usize = 64;
 pub struct Engine {
     pub tex: Tex,
     pub st: state::Shared<GState>,
-    saved: Vec<state::Shared<GState>>,
+    pub saved: Vec<state::Shared<GState>>,
     pub canvas: Canvas,
     pub nodes: HashMap<String, nodes::NodeInfo>,
     pub colors: HashMap<String, Color>,
-    /// `\pagecolor`: the color of the page behind the figure
-    page_color: Option<Color>,
-    /// `varwidth=…` of the `standalone` class: the widest the page gets (cm)
-    varwidth: Option<f64>,
-    /// the group depth inside `\begin{document}`, where a `\color` lasts to the page's end
-    document_depth: Option<usize>,
+    pub page: groups::Page,
     scopes: Vec<PgfScope>,
     /// how many pictures are open (`tikzpicture` inside `tikzpicture` is a scope)
     pub picture_depth: usize,
     pub pictures: usize,
     pub steps: usize,
     pub depth: usize,
-    /// text outside nodes was seen and reported
-    text_reported: bool,
-    /// the native keys, by id − NATIVE_KEY_BASE
-    pub key_fns: Vec<options::KeyFn>,
-    /// the keys of libraries from outside ([`crate::extension`]), by id − EXTENSION_KEY_BASE
-    extension_fns: Vec<crate::extension::KeyFn>,
-    /// the commands of the pieces, by id − PIECE_COMMAND_BASE
-    command_fns: Vec<piece::CommandFn>,
-    /// what the pieces add to the work of the engine
-    hooks: piece::Hooks,
-    /// what the pieces keep during a figure
-    slots: piece::Slots,
+    pub plug: groups::Plugged,
     /// `use as bounding box` was used: the bounding box no longer grows
     pub canvas_frozen: bool,
     /// nested runs of token lists (styles, loop bodies)
-    nesting: usize,
-    /// the basic layer's path being built
-    pub pgf_path: basic::PgfPath,
-    /// the points of `\pgfplotstreampoint` since `\pgfplotstreamstart`, on the canvas
-    pub plot_stream: Vec<crate::scene::Point>,
-    /// `execute at end scope` code of the open scopes, innermost last
-    scope_ends: Vec<Vec<Token>>,
-    /// for each `{` in a picture: whether it opened a scope (`{[options] …}`, the scopes library)
-    brace_scopes: Vec<bool>,
-    /// layers: their order, the items of each but main, and what `\pgfonlayer` set aside
-    layer_order: Vec<String>,
-    layers: HashMap<String, Vec<Item>>,
-    on_layer: Vec<(String, Vec<Item>)>,
+    pub nesting: usize,
+    pub pgf: groups::PgfLayer,
+    pub scoped: groups::Scoped,
+    pub layering: groups::Layers,
     /// the last node made (a tree's parent), its name, and how many tree parents were named
     pub last_node: Option<nodes::NodeInfo>,
-    /// the shifts a node's animations move it by (canvas), which its picture's size makes room for
-    pub anim_shifts: Vec<Point>,
-    /// The options the system layer's animations give, at the snapshot time, to the next object
-    /// with each name (`\pgfidrefnextuse`, `\pgfsysanimate`).
-    pub sys_animations: HashMap<String, Vec<Token>>,
+    pub anim: groups::Animations,
     pub last_node_name: Option<String>,
-    tree_count: usize,
+    pub tree: groups::TreeRun,
     /// the chains of the chains library (global, as TikZ keeps their counts)
     pub chain_list: std::collections::HashMap<String, chains::Chain>,
     /// the types `\tikzmath` declarations gave variables
     pub math_kinds: HashMap<String, tikzmath::Kind>,
     /// path operations to run after the node just made (`after node path`, joins)
     pub after_node_path: Vec<Token>,
-    /// The open `local bounding box`es: their names and the group depth they were opened at.
-    pub local_boxes: Vec<(String, usize)>,
-    /// The picture's size when each `pgfinterruptboundingbox` opened, restored when it closes.
-    interrupted_boxes: Vec<(Option<Point>, Option<Point>)>,
-    /// For each path statement being read, its `scope fading`s.
-    pub path_fadings: Vec<Vec<fadings::PathFading>>,
-    /// The `scope fading`s of a path that drew nothing: the next path is faded, the fading fitted
-    /// to the box of the path that gave it (none: at its natural size).
-    pub carried_fadings: Vec<fadings::CarriedFading>,
-    /// How many `transform canvas` groups have been opened: a path statement closes its own.
-    pub canvas_transforms: usize,
-    /// For each path statement being read, the `fading transform` and `fit fading` its options (and
-    /// its nodes') set: what its `scope fading`s use.
-    pub path_fading_settings: Vec<(Transform, bool)>,
-    /// the path's last point and where it came from, for `turn` in the next coordinate
-    pub turn_from: (crate::scene::Point, crate::scene::Point),
-    /// where the path's subpath started (`current subpath start`)
-    pub subpath_start: crate::scene::Point,
-    /// the last point of the last path, on the canvas (`\pgfgetlastxy`); it outlives scopes
-    pub last_xy: crate::scene::Point,
-    /// fadings defined by `\tikzfading`, in their 100 bp box
-    pub fadings: HashMap<String, crate::canvas::Shading>,
-    /// fadings drawn as pictures (`\pgfdeclarefading`, `tikzfadingfrompicture`)
-    pub picture_fadings: HashMap<String, fadings::PictureFading>,
-    /// the basic layer's declared shadings
-    pub basic_shadings: HashMap<String, shadings::BasicShading>,
-    /// the declared functional shadings
-    pub functional_shadings: HashMap<String, functional::Functional>,
-    /// marks declared by `\pgfdeclareplotmark`: their code
-    pub plot_marks_declared: HashMap<String, Vec<Token>>,
-    /// plot handlers declared by `\pgfdeclareplothandler`: the code for each point (`##1` the
-    /// point, `#1`… the handler's arguments)
-    pub plot_handlers: HashMap<String, String>,
-    /// paths kept by `save path`
-    pub saved_paths: HashMap<String, Vec<crate::scene::Segment>>,
-    /// the points `\pgfintersectionofpaths` found (canvas)
-    pub pgf_solutions: Vec<Point>,
-    /// patterns declared by the basic layer
-    pub user_patterns: HashMap<String, patterns::UserPattern>,
-    /// shapes declared by `\pgfdeclareshape`
-    pub user_shapes: HashMap<String, user_shapes::UserShape>,
-    /// while a declared shape's path code runs: what it draws, kept for the shape
-    pub shape_capture: Option<user_shapes::ShapeCapture>,
-    /// the node shapes libraries declared, by name
-    pub extension_shapes: HashMap<String, crate::extension::ShapeFn>,
-    /// the node `\pgfpositionnodelater` kept: what it draws, where its anchors are, its name
-    pub later_node: Option<(Vec<Item>, nodes::NodeInfo, Option<String>)>,
-    /// the text box a node must take (a matrix's cells), instead of its text's
-    pub forced_box: Option<(f64, f64, f64)>,
-    /// the shading a node's text is (`\pgfuseshading{name}`), with its half width and height (cm)
-    pub text_shading: Option<(String, f64, f64)>,
-    /// the picture a node's text is (`\begin{tikzpicture}…\end{tikzpicture}`, `\tikz…`,
-    /// `\usebox`): what it draws, its box's corners, and its depth below the baseline (cm)
-    pub text_picture: Option<(Vec<Item>, Point, Point, f64)>,
-    /// the name of each child being grown, set by the first node its statement makes
-    pub tree_child_names: Vec<Option<String>>,
-    /// a child's `edge from parent[…]`, read inside its statement
-    pub tree_edge_out: Option<(Vec<Token>, Vec<Token>)>,
-    /// what the `behind path` nodes of the path being built draw, drawn before it
-    pub behind_path: Vec<Item>,
+    pub fading: groups::Fadings,
+    pub declared: groups::Declared,
+    pub node_run: groups::NodeRun,
     /// open `\pgfdecoration`s
     pub decoration_envs: Vec<decorations::Env>,
-    /// paths kept by `name path`
-    pub named_paths: HashMap<String, Vec<crate::scene::Segment>>,
-    /// pictures already drawn, and how the document lays them out
-    boxes: Vec<PictureBox>,
-    layout: Vec<Layout>,
-    /// the words of the text around the pictures, each with the font it starts in
-    words: Vec<(String, String)>,
-    /// the boxes `\savebox`, `\sbox` and `lrbox` keep, by their names (`\newsavebox`)
-    saved_boxes: HashMap<String, PictureBox>,
-    /// keys run so far
-    /// `/handlers/first char syntax` was set: keys are checked for a handler of their first character.
-    pub first_char_syntax: bool,
-    pub keys_run: usize,
-    /// how many keys may run: grows with the lists of the figure
-    keys_allowed: usize,
-    /// the key lists being run, innermost last: more than one is a style's
-    key_lists: usize,
-    /// the cap on keys was reached and told
-    keys_capped: bool,
-    /// the full path of the native key being run (natives that share code tell keys apart by it)
-    pub current_key: String,
+    pub keyrun: groups::KeyRun,
     /// node sets (`new set`, `set=`): a node with `set=` joins the set once it has a name
     pub node_sets: nodes::NodeSets,
     /// the open spy scopes, innermost last
@@ -266,77 +161,30 @@ impl Clone for Engine {
             canvas: self.canvas.clone(),
             nodes: self.nodes.clone(),
             colors: self.colors.clone(),
-            page_color: self.page_color,
-            varwidth: self.varwidth,
-            document_depth: self.document_depth,
+            page: self.page.clone(),
             scopes: self.scopes.clone(),
             picture_depth: self.picture_depth,
             pictures: self.pictures,
             steps: self.steps,
             depth: self.depth,
-            text_reported: self.text_reported,
-            key_fns: self.key_fns.clone(),
-            extension_fns: self.extension_fns.clone(),
-            command_fns: self.command_fns.clone(),
-            hooks: self.hooks.clone(),
-            slots: self.slots.clone(),
+            plug: self.plug.clone(),
             canvas_frozen: self.canvas_frozen,
             nesting: self.nesting,
-            keys_run: self.keys_run,
-            keys_allowed: self.keys_allowed,
-            key_lists: self.key_lists,
-            keys_capped: self.keys_capped,
-            first_char_syntax: self.first_char_syntax,
-            pgf_path: self.pgf_path.clone(),
-            plot_stream: Vec::new(),
+            keyrun: self.keyrun.clone(),
+            pgf: self.pgf.clone(),
             decoration_envs: self.decoration_envs.clone(),
-            named_paths: self.named_paths.clone(),
             last_node: self.last_node.clone(),
             last_node_name: self.last_node_name.clone(),
-            tree_count: self.tree_count,
+            tree: self.tree.clone(),
             chain_list: self.chain_list.clone(),
             math_kinds: self.math_kinds.clone(),
             after_node_path: Vec::new(),
-            local_boxes: Vec::new(),
-            interrupted_boxes: Vec::new(),
-            path_fadings: Vec::new(),
-            carried_fadings: Vec::new(),
-            canvas_transforms: 0,
-            path_fading_settings: Vec::new(),
-            turn_from: Default::default(),
-            subpath_start: Default::default(),
-            last_xy: Default::default(),
-            tree_edge_out: self.tree_edge_out.clone(),
-            behind_path: Vec::new(),
-            tree_child_names: self.tree_child_names.clone(),
-            forced_box: self.forced_box,
-            text_shading: None,
-            text_picture: None,
-            fadings: self.fadings.clone(),
-            picture_fadings: self.picture_fadings.clone(),
-            basic_shadings: self.basic_shadings.clone(),
-            functional_shadings: self.functional_shadings.clone(),
-            plot_marks_declared: self.plot_marks_declared.clone(),
-            plot_handlers: self.plot_handlers.clone(),
-            saved_paths: self.saved_paths.clone(),
-            pgf_solutions: self.pgf_solutions.clone(),
-            anim_shifts: Vec::new(),
-            sys_animations: HashMap::new(),
-            user_patterns: self.user_patterns.clone(),
-            user_shapes: self.user_shapes.clone(),
-            shape_capture: None,
-            extension_shapes: self.extension_shapes.clone(),
-            later_node: None,
-            scope_ends: self.scope_ends.clone(),
-            brace_scopes: Vec::new(),
-            layer_order: self.layer_order.clone(),
-            layers: self.layers.clone(),
-            on_layer: self.on_layer.clone(),
-            boxes: self.boxes.clone(),
-            layout: self.layout.clone(),
-            words: self.words.clone(),
-            saved_boxes: self.saved_boxes.clone(),
-            current_key: self.current_key.clone(),
+            scoped: self.scoped.clone(),
+            fading: self.fading.clone(),
+            node_run: self.node_run.clone(),
+            declared: self.declared.clone(),
+            anim: self.anim.clone(),
+            layering: self.layering.clone(),
             node_sets: self.node_sets.clone(),
             spy_scopes: self.spy_scopes.clone(),
             facts: self.facts.clone(),
@@ -389,19 +237,19 @@ impl Engine {
     /// Defines a library's keys only (TikZ's own libraries run their definitions with TikZ's).
     pub(crate) fn register_keys(&mut self, library: &crate::extension::Library) {
         for (path, f) in library.keys {
-            let id = EXTENSION_KEY_BASE as usize + self.extension_fns.len();
+            let id = EXTENSION_KEY_BASE as usize + self.plug.extension_fns.len();
             if id > u16::MAX as usize {
                 self.warn(format!("library {}: too many keys, {path} left out", library.name));
                 continue;
             }
-            self.extension_fns.push(*f);
+            self.plug.extension_fns.push(*f);
             self.tex.define(&crate::keys::macro_name(&format!("{path}/.@cmd")), Meaning::Native(id as u16));
         }
     }
 
     fn command(&mut self, id: u16, t: &Token) -> Result<(), Error> {
         if id >= piece::PIECE_COMMAND_BASE {
-            let command = self.command_fns[(id - piece::PIECE_COMMAND_BASE) as usize];
+            let command = self.plug.command_fns[(id - piece::PIECE_COMMAND_BASE) as usize];
             return command(self, t);
         }
         if basic::is_basic(id) {
@@ -530,7 +378,7 @@ impl Engine {
             }
             Cmd::Pagecolor => self.command_pagecolor(),
             Cmd::Nopagecolor => {
-                self.page_color = None;
+                self.page.page_color = None;
                 Ok(())
             }
             Cmd::Textcolor => {
@@ -559,7 +407,7 @@ impl Engine {
             }
             Cmd::SetLayers => {
                 let list = self.argument_string()?;
-                self.layer_order = list.split(',').map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect();
+                self.layering.layer_order = list.split(',').map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect();
                 Ok(())
             }
             Cmd::Frame => self.frame_macros(),
@@ -609,7 +457,7 @@ impl Engine {
                 // 1em and 2em of the 10pt font, as glue between the pictures
                 if self.picture_depth == 0 {
                     let em = if t.is_cs("qquad") { 2.0 } else { 1.0 };
-                    self.layout.push(Layout::Skip(em * 10.0 * crate::PT));
+                    self.page.layout.push(Layout::Skip(em * 10.0 * crate::PT));
                 }
                 Ok(())
             }
@@ -737,8 +585,8 @@ pub fn run_document_in(code: &str, parts: piece::Parts<'_>) -> Result<(Canvas, V
         e.end_scope();
     }
     let margin = e.canvas.margin;
-    e.canvas = typeset(&e.boxes, &e.layout, &e.words, margin);
-    e.canvas.page_color = e.page_color;
+    e.canvas = typeset(&e.page.boxes, &e.page.layout, &e.page.words, margin);
+    e.canvas.page_color = e.page.page_color;
     let mut warnings = std::mem::take(&mut e.tex.warnings);
     warnings.dedup();
     let _ = Transform::default();

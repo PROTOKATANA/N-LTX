@@ -450,7 +450,7 @@ impl Engine {
         let init = self.argument()?;
         let code = self.argument()?;
         let (ll, ur) = (ll.scale(1.0 / BP), ur.scale(1.0 / BP));
-        self.functional_shadings.insert(name, Functional { ll, ur, init, code });
+        self.declared.functional_shadings.insert(name, Functional { ll, ur, init, code });
         Ok(())
     }
 
@@ -485,14 +485,14 @@ impl Engine {
                     kind: Kind::Wheel { white_center: name.ends_with("white center"), black_center: name.ends_with("black center") },
                 });
             }
-            "Mandelbrot set" if !self.functional_shadings.contains_key(name) => return Some(Prepared { ll: square.0, ur: square.1, kind: Kind::Mandelbrot }),
-            "bilinear interpolation" if !self.functional_shadings.contains_key(name) => {
+            "Mandelbrot set" if !self.declared.functional_shadings.contains_key(name) => return Some(Prepared { ll: square.0, ur: square.1, kind: Kind::Mandelbrot }),
+            "bilinear interpolation" if !self.declared.functional_shadings.contains_key(name) => {
                 let c = |e: &Engine, n: &str| e.color(n).unwrap_or(Color::WHITE);
                 let corners = [c(self, "lower left"), c(self, "lower right"), c(self, "upper left"), c(self, "upper right")];
                 return Some(Prepared { ll: Point::default(), ur: Point::new(100.0, 100.0), kind: Kind::Bilinear(Box::new(corners)) });
             }
             _ => {
-                let f = self.functional_shadings.get(name)?.clone();
+                let f = self.declared.functional_shadings.get(name)?.clone();
                 self.begin_group();
                 let text = self.run_tokens(f.init).and_then(|()| self.tex.expand_to_string(f.code));
                 self.end_group();

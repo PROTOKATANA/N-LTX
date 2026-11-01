@@ -108,7 +108,7 @@ impl Engine {
                 // the solution (counted from 1) in the current coordinate system
                 let k = arg(self)?;
                 let k = self.number_of(k)?;
-                let p = (k >= 1.0).then(|| self.pgf_solutions.get(k as usize - 1).copied()).flatten();
+                let p = (k >= 1.0).then(|| self.pgf.pgf_solutions.get(k as usize - 1).copied()).flatten();
                 let p = p.ok_or_else(|| Error::Figure(format!("no intersection {k}")))?;
                 self.st.transform.inverse().apply(p)
             }

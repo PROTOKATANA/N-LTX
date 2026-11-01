@@ -54,7 +54,7 @@ pub struct ShapeInput {
 
 /// What `\pgfusepath` and `\pgftext` give while a shape's path code runs: paths and texts of the
 /// shape, in the layer being run.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct ShapeCapture {
     pub layer: Option<Layer>,
     pub paths: Vec<ShapePath>,
@@ -293,14 +293,14 @@ struct LayerCapture<'a> {
 
 fn capture_layer(e: &mut Engine, g: &mut Geometry, cap: LayerCapture<'_>) -> Result<Vec<Segment>, Error> {
     let LayerCapture { layer, code, left } = cap;
-    let saved_path = std::mem::take(&mut e.pgf_path);
-    e.pgf_path.segments = left;
-    let saved_capture = e.shape_capture.replace(ShapeCapture { layer: Some(layer), ..ShapeCapture::default() });
+    let saved_path = std::mem::take(&mut e.pgf.pgf_path);
+    e.pgf.pgf_path.segments = left;
+    let saved_capture = e.declared.shape_capture.replace(ShapeCapture { layer: Some(layer), ..ShapeCapture::default() });
     e.begin_group();
     let r = e.run_tokens(ended(code));
     e.end_group();
-    let capture = std::mem::replace(&mut e.shape_capture, saved_capture).unwrap_or_default();
-    let path = std::mem::replace(&mut e.pgf_path, saved_path);
+    let capture = std::mem::replace(&mut e.declared.shape_capture, saved_capture).unwrap_or_default();
+    let path = std::mem::replace(&mut e.pgf.pgf_path, saved_path);
     r?;
     g.paths.extend(capture.paths);
     g.texts.extend(capture.texts);
@@ -342,7 +342,7 @@ impl Engine {
             self.warn(format!("\\pgfdeclareshape{{{}}}: shape '{}' to inherit from not supported: a rectangle", name.trim(), shape.base));
             shape.base = "rectangle".into();
         }
-        self.user_shapes.insert(name.trim().to_string(), shape);
+        self.declared.user_shapes.insert(name.trim().to_string(), shape);
         Ok(())
     }
 

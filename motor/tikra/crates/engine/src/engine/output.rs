@@ -49,12 +49,12 @@ impl Engine {
     fn segments_to_use(&mut self, mut segs: Vec<Segment>) -> Result<Vec<Segment>, Error> {
         // `use path=\p`: the path kept by `save path=\p` instead; `save path` keeps this one
         if let Some(Token::Cs(n)) = self.st.use_saved_path.take() {
-            if let Some(saved) = self.saved_paths.get(&*n) {
+            if let Some(saved) = self.pgf.saved_paths.get(&*n) {
                 segs = saved.clone();
             }
         }
         if let Some(Token::Cs(n)) = self.st.save_path.take() {
-            self.saved_paths.insert(n.to_string(), segs.clone());
+            self.pgf.saved_paths.insert(n.to_string(), segs.clone());
         }
         if !self.st.nonlinear.is_empty() {
             segs = self.nonlinear_path(&segs)?;
@@ -116,7 +116,7 @@ impl Engine {
     /// A path fading fitted to this path, when the mode fades.
     fn path_fade(&mut self, segs: &[Segment], fade: bool) -> Option<Item> {
         match self.st.shade.path_fading.clone().filter(|_| fade) {
-            Some(f) if self.picture_fadings.contains_key(&f) => self.picture_fading_for(&f, segs, self.st.shade.fit_fading),
+            Some(f) if self.fading.picture_fadings.contains_key(&f) => self.picture_fading_for(&f, segs, self.st.shade.fit_fading),
             Some(f) => self.fading_for(&f, segs).map(|mask| Item::Fade { mask }),
             None => None,
         }
@@ -214,7 +214,7 @@ impl Engine {
         if let Some(sh) = library_fading(name, &fit) {
             return Some(sh);
         }
-        match self.fadings.get(name).cloned() {
+        match self.fading.fadings.get(name).cloned() {
             Some(mut sh) => {
                 let (crate::canvas::Shading::Axial { transform, .. } | crate::canvas::Shading::Radial { transform, .. }) = &mut sh;
                 *transform = fit.compose(transform);
@@ -235,7 +235,7 @@ impl Engine {
 
     /// The cells of the current shading if it is a functional one, fitted to the path's box.
     fn functional_cells(&mut self, segs: &[Segment]) -> Option<Vec<Item>> {
-        if self.basic_shadings.contains_key(&self.st.shade.shading) {
+        if self.declared.basic_shadings.contains_key(&self.st.shade.shading) {
             return None;
         }
         let name = self.st.shade.shading.clone();

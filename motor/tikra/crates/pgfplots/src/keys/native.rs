@@ -93,7 +93,7 @@ pub(in crate::keys) fn text(e: &mut Engine, v: &Option<Vec<Token>>) -> Result<St
 
 /// The key's last name, for keys that share their code (`/pgfplots/axis x line`).
 pub(in crate::keys) fn current_name(e: &Engine) -> String {
-    keys::name(&e.current_key).to_string()
+    keys::name(&e.keyrun.current_key).to_string()
 }
 
 /// `axis x line*=bottom`: where the line is, and the ticks go with it.
@@ -625,8 +625,8 @@ pub(in crate::keys) const NUMBER_FORMAT: &[&str] = &[
 ];
 
 pub(in crate::keys) fn native(e: &mut Engine, path: &str, f: KeyFn) {
-    let id = NATIVE_KEY_BASE + e.key_fns.len() as u16;
-    e.key_fns.push(f);
+    let id = NATIVE_KEY_BASE + e.plug.key_fns.len() as u16;
+    e.plug.key_fns.push(f);
     e.tex.define(&keys::macro_name(&format!("{path}/.@cmd")), Meaning::Native(id));
 }
 

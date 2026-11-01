@@ -352,7 +352,7 @@ impl<'a> Run<'a> {
             path.segments = crate::canvas::transform_segments(&std::mem::take(&mut out.segs), &scale);
         }
         let e = &mut *self.e;
-        let saved = std::mem::replace(&mut e.pgf_path, path);
+        let saved = std::mem::replace(&mut e.pgf.pgf_path, path);
         let saved_t = (e.st.transform, e.st.pending);
         if grouped {
             e.begin_group();
@@ -365,7 +365,7 @@ impl<'a> Run<'a> {
         } else {
             (e.st.transform, e.st.pending) = saved_t;
         }
-        let path = std::mem::replace(&mut e.pgf_path, saved);
+        let path = std::mem::replace(&mut e.pgf.pgf_path, saved);
         let mut segs = crate::canvas::transform_segments(&path.segments, &Transform::scaling(1.0 / PT, 1.0 / PT));
         let out = &mut self.w.out;
         if !full && had {

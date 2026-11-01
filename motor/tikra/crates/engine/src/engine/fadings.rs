@@ -85,7 +85,7 @@ impl Engine {
         let canvas = self.draw_apart(code)?;
         let Canvas { items, min, max, .. } = canvas;
         if let (Some(min), Some(max)) = (min, max) {
-            self.picture_fadings.insert(name, PictureFading { items, min, max });
+            self.fading.picture_fadings.insert(name, PictureFading { items, min, max });
         }
         Ok(())
     }
@@ -101,9 +101,9 @@ impl Engine {
     /// aside meanwhile.
     pub(super) fn run_apart(&mut self, code: Vec<Token>) -> Result<super::Apart, Error> {
         let saved_canvas = std::mem::take(&mut self.canvas);
-        let saved_boxes = std::mem::take(&mut self.boxes);
-        let saved_layout = std::mem::take(&mut self.layout);
-        let saved_words = std::mem::take(&mut self.words);
+        let saved_boxes = std::mem::take(&mut self.page.boxes);
+        let saved_layout = std::mem::take(&mut self.page.layout);
+        let saved_words = std::mem::take(&mut self.page.words);
         let saved_depth = std::mem::replace(&mut self.picture_depth, 0);
         let saved_frozen = std::mem::replace(&mut self.canvas_frozen, false);
         self.begin_group();
@@ -113,7 +113,8 @@ impl Engine {
         }
         self.end_group();
         self.canvas = saved_canvas;
-        let apart = (std::mem::replace(&mut self.boxes, saved_boxes), std::mem::replace(&mut self.layout, saved_layout), std::mem::replace(&mut self.words, saved_words));
+        let apart =
+            (std::mem::replace(&mut self.page.boxes, saved_boxes), std::mem::replace(&mut self.page.layout, saved_layout), std::mem::replace(&mut self.page.words, saved_words));
         self.picture_depth = saved_depth;
         self.canvas_frozen = saved_frozen;
         r?;
@@ -181,14 +182,14 @@ impl Engine {
         let name = self.argument_string()?;
         let code = self.argument()?;
         let mut c = Canvas::default();
-        c.include_path(&self.pgf_path.segments);
+        c.include_path(&self.pgf.pgf_path.segments);
         let (Some(mut lo), Some(mut hi)) = (c.min, c.max) else { return Ok(()) };
         if stroked {
             let w = self.st.pen.line_width / 2.0;
             (lo, hi) = (Point::new(lo.x - w, lo.y - w), Point::new(hi.x + w, hi.y + w));
         }
         let extra = self.fading_transform(code)?;
-        let (fit, inner) = match self.picture_fadings.get(name.trim()) {
+        let (fit, inner) = match self.fading.picture_fadings.get(name.trim()) {
             Some(f) => (f.fit(lo, hi), self.st.transform.inverse().compose(&extra)),
             None => (Transform::default(), extra),
         };
@@ -227,13 +228,13 @@ impl Engine {
             let t = t.compose(&fading_transform);
             let fitted = fixed.or(self.st.path_box.filter(|_| fit && fit_now));
             if start == self.canvas.items.len() {
-                self.carried_fadings.push((name, fitted, t));
+                self.fading.carried_fadings.push((name, fitted, t));
                 continue;
             }
             let mask = match fitted {
                 Some((lo, hi)) => {
                     let segs = [Segment::MoveTo(lo), Segment::LineTo(Point::new(hi.x, lo.y)), Segment::LineTo(hi), Segment::LineTo(Point::new(lo.x, hi.y)), Segment::Close];
-                    if self.picture_fadings.contains_key(&name) {
+                    if self.fading.picture_fadings.contains_key(&name) {
                         self.picture_fading_for(&name, &segs, true)
                     } else {
                         self.fading_for(&name, &segs).map(|mask| Item::Fade { mask })
@@ -250,14 +251,14 @@ impl Engine {
 
     /// A fading at its natural size, centered at the origin of `t`.
     fn natural_fading(&mut self, name: &str, t: &Transform) -> Option<Item> {
-        if let Some(f) = self.picture_fadings.get(name) {
+        if let Some(f) = self.fading.picture_fadings.get(name) {
             return Some(f.mask(t));
         }
         let k = 2.0 * 2.54 / 72.0;
         if let Some(mask) = super::output::library_fading(name, &t.compose(&Transform::scaling(k, k))) {
             return Some(Item::Fade { mask });
         }
-        match self.fadings.get(name).cloned() {
+        match self.fading.fadings.get(name).cloned() {
             Some(mut sh) => {
                 let (crate::canvas::Shading::Axial { transform, .. } | crate::canvas::Shading::Radial { transform, .. }) = &mut sh;
                 *transform = t.compose(transform);
@@ -272,7 +273,7 @@ impl Engine {
 
     /// A picture fading for one path, fitted to it (`path fading` with `fit fading`).
     pub fn picture_fading_for(&self, name: &str, segs: &[Segment], fit: bool) -> Option<Item> {
-        let f = self.picture_fadings.get(name)?;
+        let f = self.fading.picture_fadings.get(name)?;
         let mut c = Canvas::default();
         c.include_path(segs);
         let (lo, hi) = (c.min?, c.max?);

@@ -105,8 +105,8 @@ impl Engine {
         after.extend(joins);
         self.after_node_path.extend(after);
         let shape_name = self.key_text("/tikz/shape").split_whitespace().collect::<Vec<_>>().join(" ");
-        let user = self.user_shapes.get(shape_name.trim()).cloned();
-        let library = self.extension_shapes.get(shape_name.trim()).copied();
+        let user = self.declared.user_shapes.get(shape_name.trim()).cloned();
+        let library = self.declared.extension_shapes.get(shape_name.trim()).copied();
         let shape = if let Some(u) = &user {
             u.base.clone()
         } else if library.is_some() {
@@ -122,7 +122,7 @@ impl Engine {
         let listed = sets_macro(self);
         let name = spec.name.clone().or_else(|| self.st.node.name.clone()).or_else(|| self.node_sets.set_member_name(&listed));
         // what the system layer's animations give the node at the snapshot time
-        if let Some(options) = name.as_ref().and_then(|n| self.sys_animations.remove(n)) {
+        if let Some(options) = name.as_ref().and_then(|n| self.anim.sys_animations.remove(n)) {
             self.process_keys(options, Some("/tikz"))?;
         }
         Ok(ChosenNode { outer_name_path, shape, shape_name, user, library, name, chain_names })
@@ -169,24 +169,24 @@ impl Engine {
         let color = self.st.text_paint_color();
         let font = self.st.text.font.clone();
         // a text that is a shading (`\pgfuseshading{name}`): its box, drawn where the text goes
-        self.text_shading = None;
+        self.node_run.text_shading = None;
         if let Some(name) = texts.first().and_then(|(_, t)| t.strip_prefix("\\pgfuseshading")).map(|n| n.trim().trim_start_matches('{').trim_end_matches('}').trim().to_string()) {
             if let Some((w, h)) = self.shading_half_size(&name) {
-                self.text_shading = Some((name, w, h));
+                self.node_run.text_shading = Some((name, w, h));
                 texts[0].1.clear();
             }
         }
         // a text that is a picture: its box (its baseline at its bottom), drawn where the text goes
-        self.text_picture = None;
+        self.node_run.text_picture = None;
         if texts.len() == 1 {
             if let Some((drawn, lo, hi)) = self.text_image(&texts[0].1)? {
-                self.text_picture = Some((drawn, lo, hi, 0.0));
+                self.node_run.text_picture = Some((drawn, lo, hi, 0.0));
                 texts[0].1.clear();
             } else if let Some(b) = self.text_box(&texts[0].1) {
                 // a saved box (`\usebox{\name}`): where it was set, its baseline where it was
                 let origin = Point::new(0.0, b.baseline);
                 let (lo, hi) = (b.canvas.min.unwrap_or(origin), b.canvas.max.unwrap_or(origin));
-                self.text_picture = Some((b.canvas.items, lo, hi, b.baseline - lo.y));
+                self.node_run.text_picture = Some((b.canvas.items, lo, hi, b.baseline - lo.y));
                 texts[0].1.clear();
             }
         }
@@ -194,7 +194,7 @@ impl Engine {
         let tikz = whole.strip_prefix("\\tikz").is_some_and(|r| !r.starts_with(|c: char| c.is_ascii_alphabetic()));
         if texts.len() == 1 && (tikz || (whole.starts_with("\\begin{tikzpicture}") && whole.ends_with("\\end{tikzpicture}"))) {
             if let Some((drawn, lo, hi)) = self.inner_picture(spec.text.clone())? {
-                self.text_picture = Some((drawn, lo, hi, 0.0));
+                self.node_run.text_picture = Some((drawn, lo, hi, 0.0));
                 texts[0].1.clear();
             }
         }
@@ -258,13 +258,13 @@ impl Engine {
                 }
             }
             if k == 0 {
-                if let Some((_, w, h)) = &self.text_shading {
+                if let Some((_, w, h)) = &self.node_run.text_shading {
                     (wd, ht, dp) = (2.0 * w, 2.0 * h, 0.0);
                 }
-                if let Some((_, lo, hi, depth)) = &self.text_picture {
+                if let Some((_, lo, hi, depth)) = &self.node_run.text_picture {
                     (wd, ht, dp) = (hi.x - lo.x, hi.y - lo.y - depth, *depth);
                 }
-                if let Some(b) = self.forced_box.take() {
+                if let Some(b) = self.node_run.forced_box.take() {
                     (wd, ht, dp) = b;
                 }
                 if let Some((w, h)) = self.st.node.fit {
@@ -436,7 +436,7 @@ impl Engine {
             let g = &info.geometry;
             let border =
                 g.paths.iter().filter(|p| p.layer == Layer::Background && matches!(p.usage, Usage::Node)).flat_map(|p| transform_segments(&p.segments, &info.transform)).collect();
-            self.named_paths.insert(n, border);
+            self.pgf.named_paths.insert(n, border);
         }
         Ok(Some(info))
     }
@@ -474,7 +474,7 @@ impl Engine {
             let all: Vec<&str> = texts.iter().map(|(_, t)| t.as_str()).chain(own).filter(|t| !t.trim().is_empty()).collect();
             self.facts.nodes.push(crate::describe::NodeFact { key, named: registered.is_some(), text: all.join(" "), at: info.center(), on_link: false });
         }
-        if let Some(slot @ None) = self.tree_child_names.last_mut() {
+        if let Some(slot @ None) = self.tree.tree_child_names.last_mut() {
             *slot = Some(registered.clone().unwrap_or_default());
         }
         let last = (Some(info.clone()), registered);
@@ -500,7 +500,7 @@ impl Engine {
         if self.st.position_later {
             // kept for `\pgfpositionnodenow`: not in the picture, nor its size, nor known by name yet
             (self.canvas.min, self.canvas.max) = size;
-            self.later_node = Some((items, info, chosen.name.map(|n| format!("{}{n}", self.st.name_prefix))));
+            self.node_run.later_node = Some((items, info, chosen.name.map(|n| format!("{}{n}", self.st.name_prefix))));
             return Ok((Vec::new(), None));
         }
         self.finish_node(FinishNode { chosen, info, texts: &node_text.texts }, items)

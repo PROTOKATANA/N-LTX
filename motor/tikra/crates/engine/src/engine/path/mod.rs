@@ -212,24 +212,24 @@ pub fn statement(e: &mut Engine, defaults: &str) -> Result<(), Error> {
     e.st.pending = crate::scene::Transform::default();
     reset_path_settings(e);
     // a `scope fading` of a path that drew nothing fades the next one
-    let carried = std::mem::take(&mut e.carried_fadings);
-    e.path_fadings.push(carried.into_iter().map(|(name, fit, t)| (name, e.canvas.items.len(), fit.is_some(), t, fit)).collect());
-    e.path_fading_settings.push((e.st.shade.fading_transform, e.st.shade.fit_fading));
+    let carried = std::mem::take(&mut e.fading.carried_fadings);
+    e.fading.path_fadings.push(carried.into_iter().map(|(name, fit, t)| (name, e.canvas.items.len(), fit.is_some(), t, fit)).collect());
+    e.fading.path_fading_settings.push((e.st.shade.fading_transform, e.st.shade.fit_fading));
     // `transform canvas` among the path's options (or an animated `:rotate`) is for this path only;
     // a clip it makes stays for the rest of the scope
-    let (opened, transforms) = (e.scopes.last().map(|s| s.ends), e.canvas_transforms);
+    let (opened, transforms) = (e.scopes.last().map(|s| s.ends), e.scoped.canvas_transforms);
     let r = statement_in_group(e, defaults, &outer);
     if let (Some(before), Some(s)) = (opened, e.scopes.last_mut()) {
-        let mut own = e.canvas_transforms - transforms;
+        let mut own = e.scoped.canvas_transforms - transforms;
         while own > 0 && s.ends > before {
             s.ends -= 1;
             own -= 1;
             e.canvas.push(crate::canvas::Item::End);
         }
     }
-    e.canvas_transforms = transforms;
-    let fadings = e.path_fadings.pop().unwrap_or_default();
-    let settings = e.path_fading_settings.pop().unwrap_or((crate::scene::Transform::default(), true));
+    e.scoped.canvas_transforms = transforms;
+    let fadings = e.fading.path_fadings.pop().unwrap_or_default();
+    let settings = e.fading.path_fading_settings.pop().unwrap_or((crate::scene::Transform::default(), true));
     e.close_path_fadings(fadings, settings);
     e.end_group();
     r
@@ -343,7 +343,7 @@ fn statement_in_group(e: &mut Engine, defaults: &str, outer: &super::GState) -> 
     let (color, dash, start) = (e.st.stroke_color(), e.st.pen.dash.clone(), e.canvas.items.len());
     operations(e, &mut b, None)?;
     if b.current.is_some() {
-        e.last_xy = b.point();
+        e.pgf.last_xy = b.point();
     }
     // a node left between an operation and a target that never came
     place_mid_nodes(e, &mut b, None)?;
@@ -369,9 +369,9 @@ fn statement_in_group(e: &mut Engine, defaults: &str, outer: &super::GState) -> 
         segs.clear();
     }
     if let Some(name) = e.st.name_path.take() {
-        e.named_paths.insert(name, segs.clone());
+        e.pgf.named_paths.insert(name, segs.clone());
     }
-    let behind = std::mem::take(&mut e.behind_path);
+    let behind = std::mem::take(&mut e.node_run.behind_path);
     e.canvas.items.extend(behind);
     // `current path bounding box`, and what a `scope fading` of the path is fitted to
     let mut bounds = crate::canvas::Canvas::default();
@@ -467,8 +467,8 @@ fn note_link(e: &mut Engine, b: &mut Builder, r: &Coord) {
 
 /// A point that must follow: skips spaces and reads `(…)`, with an optional `+`/`++`.
 fn target(e: &mut Engine, b: &mut Builder, depth: Option<usize>, what: &str) -> Result<Coord, Error> {
-    e.turn_from = b.tangent();
-    e.subpath_start = b.subpath_start.unwrap_or_else(|| b.point());
+    e.pgf.turn_from = b.tangent();
+    e.pgf.subpath_start = b.subpath_start.unwrap_or_else(|| b.point());
     e.facts.touched = None;
     match next(e, depth)? {
         Some(t) if t.is_char('(') => coordinate(e),
@@ -521,8 +521,8 @@ fn relative(e: &mut Engine, b: &mut Builder, depth: Option<usize>) -> Result<Coo
 
 /// The direction a `turn` is measured from, and where this subpath began.
 fn remember_turn(e: &mut Engine, b: &Builder) {
-    e.turn_from = b.tangent();
-    e.subpath_start = b.subpath_start.unwrap_or_else(|| b.point());
+    e.pgf.turn_from = b.tangent();
+    e.pgf.subpath_start = b.subpath_start.unwrap_or_else(|| b.point());
 }
 
 /// `--` or `-|` after a `-`. Done when the fragment is not one of those.
@@ -723,7 +723,7 @@ fn tree_edge_labels(e: &mut Engine, b: &Builder, depth: Option<usize>) -> Result
         }
     }
     e.st.tree.tree_edge = Some((o, labels));
-    e.tree_edge_out = e.st.tree.tree_edge.clone();
+    e.tree.tree_edge_out = e.st.tree.tree_edge.clone();
     Ok(())
 }
 
@@ -867,9 +867,9 @@ fn pgfextra(e: &mut Engine, b: &mut Builder) -> Result<(), Error> {
         }
         None => Vec::new(),
     };
-    let outer = std::mem::take(&mut e.pgf_path);
+    let outer = std::mem::take(&mut e.pgf.pgf_path);
     let r = e.run_tokens(code);
-    let built = std::mem::replace(&mut e.pgf_path, outer);
+    let built = std::mem::replace(&mut e.pgf.pgf_path, outer);
     r?;
     if !built.segments.is_empty() {
         b.segs = built.segments;

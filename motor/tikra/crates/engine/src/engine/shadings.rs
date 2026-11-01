@@ -103,7 +103,7 @@ impl Engine {
         let stops: Vec<(f64, Color)> = order.iter().map(|&i| stops[i]).collect();
         let colors = depends.then(|| order.iter().map(|&i| written[i].clone()).collect());
         if !stops.is_empty() {
-            self.basic_shadings.insert(name.trim().to_string(), BasicShading { kind, stops, across, center, colors });
+            self.declared.basic_shadings.insert(name.trim().to_string(), BasicShading { kind, stops, across, center, colors });
         }
         Ok(())
     }
@@ -121,19 +121,19 @@ impl Engine {
             return Ok(());
         };
         // a box: in vertical mode (a paragraph not started) a line of its own
-        let vertical = matches!(self.layout.last(), None | Some(super::Layout::Par));
+        let vertical = matches!(self.page.layout.last(), None | Some(super::Layout::Par));
         self.begin_picture(None)?;
         let r = self.draw_shading(name.trim(), &Transform::translation(w, h));
         self.end_picture();
         if vertical {
-            self.layout.push(super::Layout::Par);
+            self.page.layout.push(super::Layout::Par);
         }
         r
     }
 
     /// The declared shading `name`, its colors as they are now if it depends on them.
     fn shading_named(&self, name: &str) -> Option<BasicShading> {
-        let mut sh = self.basic_shadings.get(name)?.clone();
+        let mut sh = self.declared.basic_shadings.get(name)?.clone();
         if let Some(colors) = &sh.colors {
             for (stop, written) in sh.stops.iter_mut().zip(colors) {
                 if let Some(c) = self.color(written).filter(|_| !written.is_empty()) {
@@ -203,8 +203,8 @@ impl Engine {
 
     /// The half sizes of a declared shading's box.
     pub fn shading_half_size(&self, name: &str) -> Option<(f64, f64)> {
-        self.basic_shadings.get(name).map(BasicShading::half_size).or_else(|| {
-            let f = self.functional_shadings.get(name)?;
+        self.declared.basic_shadings.get(name).map(BasicShading::half_size).or_else(|| {
+            let f = self.declared.functional_shadings.get(name)?;
             let (lo, hi) = f.corners();
             Some(((hi.x - lo.x) * BP / 2.0, (hi.y - lo.y) * BP / 2.0))
         })
@@ -215,7 +215,7 @@ impl Engine {
         let name = self.argument_string()?;
         let angle = self.argument()?;
         let angle = self.number_of(angle)?;
-        let segs = self.pgf_path.segments.clone();
+        let segs = self.pgf.pgf_path.segments.clone();
         let Some(paint) = self.basic_shading_for(name.trim(), &segs, angle) else {
             self.warn(format!("shading '{}' not declared: ignored", name.trim()));
             return Ok(());

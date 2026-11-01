@@ -461,6 +461,6 @@ impl Context<'_> {
     /// Declares the node shape `name`, drawn by `shape`: `node[shape=name]`, or a style that sets
     /// it, makes a node of that shape, for the rest of the conversion.
     pub fn declare_shape(&mut self, name: &str, shape: ShapeFn) {
-        self.e.extension_shapes.insert(name.trim().to_string(), shape);
+        self.e.declared.extension_shapes.insert(name.trim().to_string(), shape);
     }
 }

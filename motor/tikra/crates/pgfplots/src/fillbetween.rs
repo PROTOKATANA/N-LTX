@@ -298,7 +298,7 @@ pub fn draw(e: &mut Engine, p: &Plot, spec: &[Token]) -> Result<(), Error> {
         e.warn("fill between: 'of=A and B' missing");
         return Ok(());
     };
-    let (Some(pa), Some(pb)) = (e.named_paths.get(a.trim()).cloned(), e.named_paths.get(b.trim()).cloned()) else {
+    let (Some(pa), Some(pb)) = (e.pgf.named_paths.get(a.trim()).cloned(), e.pgf.named_paths.get(b.trim()).cloned()) else {
         e.warn(format!("fill between: no path named '{}' or '{}'", a.trim(), b.trim()));
         return Ok(());
     };
@@ -375,7 +375,7 @@ fn cut_paths(e: &mut Engine, of: &str) -> Option<CutPaths> {
         e.warn("intersection segments: 'of=A and B' missing");
         return None;
     };
-    let (Some(pa), Some(pb)) = (e.named_paths.get(a.trim()).cloned(), e.named_paths.get(b.trim()).cloned()) else {
+    let (Some(pa), Some(pb)) = (e.pgf.named_paths.get(a.trim()).cloned(), e.pgf.named_paths.get(b.trim()).cloned()) else {
         e.warn(format!("intersection segments: no path named '{}' or '{}'", a.trim(), b.trim()));
         return None;
     };
@@ -535,8 +535,8 @@ pub fn intersection_segments(e: &mut Engine, v: Option<Vec<Token>>) -> Result<()
 
 /// A soft path in a macro (`\pgfretval`): the macro holds a key into the engine's saved paths.
 pub fn softpath(e: &mut Engine, segs: Vec<Segment>) -> tex::Meaning {
-    let key = format!("@softpath{}", e.saved_paths.len());
-    e.saved_paths.insert(key.clone(), segs);
+    let key = format!("@softpath{}", e.pgf.saved_paths.len());
+    e.pgf.saved_paths.insert(key.clone(), segs);
     tikra_engine::engine::macro_from(&key)
 }
 
@@ -557,7 +557,7 @@ pub fn soft_command(e: &mut Engine, name: &str) -> Result<(), Error> {
         "tikzgetnamedpath" => {
             let arg = e.argument()?;
             let n = e.tex.expand_to_string(arg)?;
-            let Some(segs) = e.named_paths.get(n.trim()).cloned() else {
+            let Some(segs) = e.pgf.named_paths.get(n.trim()).cloned() else {
                 e.warn(format!("\\tikzgetnamedpath: no path named '{}'", n.trim()));
                 return Ok(());
             };
@@ -568,17 +568,17 @@ pub fn soft_command(e: &mut Engine, name: &str) -> Result<(), Error> {
             let arg = e.argument()?;
             let k = e.tex.expand_to_string(arg)?;
             let k = k.trim().to_string();
-            let path = e.saved_paths.get(&format!("@intersection path {k}")).cloned().unwrap_or_default();
+            let path = e.pgf.saved_paths.get(&format!("@intersection path {k}")).cloned().unwrap_or_default();
             let line = polyline(&path);
-            let pieces = if line.is_empty() { Vec::new() } else { cut(&line, &e.pgf_solutions.clone()) };
+            let pieces = if line.is_empty() { Vec::new() } else { cut(&line, &e.pgf.pgf_solutions.clone()) };
             for (j, piece) in pieces.iter().enumerate() {
-                e.saved_paths.insert(format!("@intersection segment {k} {j}"), path_of(piece));
+                e.pgf.saved_paths.insert(format!("@intersection segment {k} {j}"), path_of(piece));
             }
         }
         "pgfgetintersectionsegmentpath" => {
             let (a, b) = (e.argument()?, e.argument()?);
             let (k, j) = (e.tex.expand_to_string(a)?, e.tex.expand_to_string(b)?);
-            let segs = e.saved_paths.get(&format!("@intersection segment {} {}", k.trim(), j.trim())).cloned().unwrap_or_default();
+            let segs = e.pgf.saved_paths.get(&format!("@intersection segment {} {}", k.trim(), j.trim())).cloned().unwrap_or_default();
             let m = softpath(e, segs);
             e.tex.set_meaning(&retval, m, false);
         }
@@ -586,7 +586,7 @@ pub fn soft_command(e: &mut Engine, name: &str) -> Result<(), Error> {
             let t = macro_arg(e)?;
             let segs = tikra_engine::engine::basic::softpath_of(e, &t).unwrap_or_default();
             if name == "pgfsetpathandBB" {
-                e.pgf_path = tikra_engine::engine::basic::PgfPath::default();
+                e.pgf.pgf_path = tikra_engine::engine::basic::PgfPath::default();
             }
             for s in segs {
                 e.pgf_add(s);

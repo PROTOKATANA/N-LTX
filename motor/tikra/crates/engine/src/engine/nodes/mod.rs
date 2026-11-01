@@ -309,7 +309,7 @@ impl shapes::Keys for EngineKeys<'_> {
         // run where nothing it draws stays or counts for the picture's size
         let n = e.canvas.items.len();
         let frozen = e.canvas_frozen;
-        let path = std::mem::take(&mut e.pgf_path);
+        let path = std::mem::take(&mut e.pgf.pgf_path);
         e.begin_group();
         e.canvas_frozen = true;
         e.st.transform = t;
@@ -318,7 +318,7 @@ impl shapes::Keys for EngineKeys<'_> {
         let r = e.run_tokens(code);
         e.end_group();
         e.canvas_frozen = frozen;
-        e.pgf_path = path;
+        e.pgf.pgf_path = path;
         if let Err(err) = r {
             e.warn(format!("{key}: {err}"));
         }
@@ -452,14 +452,14 @@ impl Engine {
         self.st.decorate = false;
         self.st.preactions = Default::default();
         self.st.postactions = Default::default();
-        let shifts_before = self.anim_shifts.len();
+        let shifts_before = self.anim.anim_shifts.len();
         let r = self.node_in_group(spec, &outer);
         // `behind path`: drawn before the path the node is on
         let behind = matches!(self.tex.meaning_of("tikra@behindpath"), tex::Meaning::Macro(m) if tex::tokens_to_string(&tex::substitute(&m.body, &[])).trim() == "1");
         self.end_group();
         let (mut items, labels) = r?;
         // animated shifts of the node: the picture makes room for it at each
-        let shifts: Vec<Point> = self.anim_shifts.drain(shifts_before..).collect();
+        let shifts: Vec<Point> = self.anim.anim_shifts.drain(shifts_before..).collect();
         if let (false, Some(info)) = (shifts.is_empty(), self.last_node.clone()) {
             let ends: Vec<Point> = ["north", "south", "east", "west"].iter().filter_map(|a| info.anchor(a)).collect();
             if self.counts_for_size() {
@@ -471,7 +471,7 @@ impl Engine {
             }
         }
         if behind {
-            self.behind_path.append(&mut items);
+            self.node_run.behind_path.append(&mut items);
         }
         // labels and pins: made after the node, out of its options (TikZ's `append after command`)
         if let Some((info, labels, last, kept)) = labels {
@@ -519,7 +519,7 @@ impl Engine {
     pub fn position_node_now(&mut self) -> Result<(), Error> {
         let p = self.point_arg()?;
         let d = self.st.transform.apply(p);
-        let Some((items, mut info, name)) = self.later_node.take() else {
+        let Some((items, mut info, name)) = self.node_run.later_node.take() else {
             self.warn("\\pgfpositionnodenow: no node kept by \\pgfpositionnodelater".to_string());
             return Ok(());
         };

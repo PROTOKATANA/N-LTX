@@ -30,14 +30,14 @@ impl Engine {
     /// `local bounding box=name`: a rectangle node `name` over what is drawn from here to the end
     /// of the group.
     pub fn open_local_box(&mut self, name: String) {
-        self.local_boxes.push((name, self.saved.len()));
+        self.scoped.local_boxes.push((name, self.saved.len()));
         self.canvas.local.push((None, None));
     }
 
     /// The local bounding boxes of the groups that ended, as nodes.
     pub(super) fn close_local_boxes(&mut self) {
-        while self.local_boxes.last().is_some_and(|b| b.1 > self.saved.len()) {
-            let (name, _) = self.local_boxes.pop().expect("checked");
+        while self.scoped.local_boxes.last().is_some_and(|b| b.1 > self.saved.len()) {
+            let (name, _) = self.scoped.local_boxes.pop().expect("checked");
             if let Some((Some(lo), Some(hi))) = self.canvas.local.pop() {
                 self.nodes.insert(name, super::libraries::box_node(lo, hi));
             }
@@ -62,10 +62,10 @@ impl Engine {
     pub fn run_unseen<T>(&mut self, code: Vec<Token>, read: impl FnOnce(&mut Engine) -> T) -> Result<(T, Option<(Point, Point)>), Error> {
         let saved_canvas = std::mem::take(&mut self.canvas);
         let saved_frozen = std::mem::replace(&mut self.canvas_frozen, false);
-        let saved_layers = std::mem::take(&mut self.layers);
-        let saved_behind = std::mem::take(&mut self.behind_path);
+        let saved_layers = std::mem::take(&mut self.layering.layers);
+        let saved_behind = std::mem::take(&mut self.node_run.behind_path);
         let nodes = self.nodes.clone();
-        let named_paths = self.named_paths.clone();
+        let named_paths = self.pgf.named_paths.clone();
         let last_node = (self.last_node.clone(), self.last_node_name.clone());
         self.begin_group();
         self.begin_scope();
@@ -75,10 +75,10 @@ impl Engine {
         self.end_group();
         let drawn = std::mem::replace(&mut self.canvas, saved_canvas);
         self.canvas_frozen = saved_frozen;
-        self.layers = saved_layers;
-        self.behind_path = saved_behind;
+        self.layering.layers = saved_layers;
+        self.node_run.behind_path = saved_behind;
         self.nodes = nodes;
-        self.named_paths = named_paths;
+        self.pgf.named_paths = named_paths;
         (self.last_node, self.last_node_name) = last_node;
         r?;
         Ok((value.expect("read after the code ran"), drawn.min.zip(drawn.max)))

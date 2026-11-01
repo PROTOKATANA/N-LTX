@@ -161,8 +161,8 @@ pub fn name_intersections(e: &mut Engine, v: Option<Vec<Token>>) -> Result<(), E
         e.warn("name intersections without of=a and b: ignored");
         return Ok(());
     };
-    let (Some(pa), Some(pb)) = (e.named_paths.get(&a).cloned(), e.named_paths.get(&b).cloned()) else {
-        return Err(Error::Figure(format!("name intersections: no path named '{}'", if e.named_paths.contains_key(&a) { &b } else { &a })));
+    let (Some(pa), Some(pb)) = (e.pgf.named_paths.get(&a).cloned(), e.pgf.named_paths.get(&b).cloned()) else {
+        return Err(Error::Figure(format!("name intersections: no path named '{}'", if e.pgf.named_paths.contains_key(&a) { &b } else { &a })));
     };
     let points = if sort_by.as_deref() == Some(b.as_str()) { intersections(&pb, &pa) } else { intersections(&pa, &pb) };
     for (k, p) in points.iter().enumerate() {

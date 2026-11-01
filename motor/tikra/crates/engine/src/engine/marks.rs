@@ -179,7 +179,7 @@ impl Engine {
             }
             return Ok(items);
         }
-        if let Some(code) = self.plot_marks_declared.get(name).cloned() {
+        if let Some(code) = self.declared.plot_marks_declared.get(name).cloned() {
             // a mark of `\pgfdeclareplotmark`: its code at each point
             for (k, p) in points.iter().enumerate() {
                 if !p.x.is_finite() || !chosen(k + 1, repeat, phase, &indices) {

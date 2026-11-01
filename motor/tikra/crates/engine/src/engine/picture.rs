@@ -20,7 +20,7 @@ impl Engine {
             let margin = self.canvas.margin;
             self.canvas = Canvas { margin, ..Canvas::default() };
             self.canvas_frozen = false;
-            self.last_xy = Point::default();
+            self.pgf.last_xy = Point::default();
         }
         self.picture_depth += 1;
         self.begin_group();
@@ -37,7 +37,7 @@ impl Engine {
         begin.append(&mut self.st.hooks.at_begin_picture);
         let mut end = std::mem::take(&mut self.st.hooks.at_end_picture);
         end.append(&mut self.st.hooks.at_end_scope);
-        self.scope_ends.push(end);
+        self.scoped.scope_ends.push(end);
         self.run_tokens(begin)
     }
 
@@ -70,12 +70,12 @@ impl Engine {
         self.open_transparency_group();
         let begin = std::mem::take(&mut self.st.hooks.at_begin_scope);
         let end = std::mem::take(&mut self.st.hooks.at_end_scope);
-        self.scope_ends.push(end);
+        self.scoped.scope_ends.push(end);
         self.run_tokens(begin)
     }
 
     pub fn close_tikz_scope(&mut self) -> Result<(), Error> {
-        let end = self.scope_ends.pop().unwrap_or_default();
+        let end = self.scoped.scope_ends.pop().unwrap_or_default();
         let r = self.run_tokens(end);
         self.end_scope();
         self.end_group();
@@ -113,7 +113,7 @@ impl Engine {
         self.end_group();
         r?;
         if !name.is_empty() {
-            self.fadings.insert(name, sh);
+            self.fading.fadings.insert(name, sh);
         }
         Ok(())
     }
@@ -122,16 +122,16 @@ impl Engine {
     pub(super) fn begin_on_layer(&mut self, name: String) {
         self.begin_group();
         let main = std::mem::take(&mut self.canvas.items);
-        self.on_layer.push((name, main));
+        self.layering.on_layer.push((name, main));
     }
 
     pub(super) fn end_on_layer(&mut self) {
-        let Some((name, main)) = self.on_layer.pop() else {
+        let Some((name, main)) = self.layering.on_layer.pop() else {
             self.warn("\\endpgfonlayer without \\pgfonlayer");
             return;
         };
         let drawn = std::mem::replace(&mut self.canvas.items, main);
-        self.layers.entry(name).or_default().extend(drawn);
+        self.layering.layers.entry(name).or_default().extend(drawn);
         self.end_group();
     }
 
@@ -170,20 +170,20 @@ impl Engine {
 
     pub fn end_picture(&mut self) {
         // execute at end picture, while the picture is still open
-        let end = self.scope_ends.pop().unwrap_or_default();
+        let end = self.scoped.scope_ends.pop().unwrap_or_default();
         if let Err(e) = self.run_tokens(end) {
             self.warn(format!("execute at end picture: {e}"));
         }
-        while !self.on_layer.is_empty() {
+        while !self.layering.on_layer.is_empty() {
             self.end_on_layer();
         }
         self.end_scope();
         let outermost = self.picture_depth == 1;
-        if outermost && !self.layers.is_empty() {
+        if outermost && !self.layering.layers.is_empty() {
             // the layers, in the order of \pgfsetlayers (main where it is listed)
             let main = std::mem::take(&mut self.canvas.items);
-            let mut layers = std::mem::take(&mut self.layers);
-            let mut order = self.layer_order.clone();
+            let mut layers = std::mem::take(&mut self.layering.layers);
+            let mut order = self.layering.layer_order.clone();
             if !order.iter().any(|l| l == "main") {
                 order.push("main".into());
             }
@@ -212,13 +212,13 @@ impl Engine {
             // in a `\vbox` of another `\hsize`, the line is that wide
             let hsize = self.tex.dimens.get(&255).copied().unwrap_or(0);
             if hsize != 345 * 65536 && hsize > 0 {
-                self.layout.push(Layout::Width(hsize as f64 / 65536.0 * crate::PT));
+                self.page.layout.push(Layout::Width(hsize as f64 / 65536.0 * crate::PT));
                 if !self.tex.env_stack.iter().any(|n| n == "minipage") {
-                    self.layout.push(Layout::Vbox);
+                    self.page.layout.push(Layout::Vbox);
                 }
             }
-            self.layout.push(Layout::Picture(self.boxes.len()));
-            self.boxes.push(PictureBox { canvas, baseline });
+            self.page.layout.push(Layout::Picture(self.page.boxes.len()));
+            self.page.boxes.push(PictureBox { canvas, baseline });
         }
     }
 
@@ -265,13 +265,13 @@ impl Engine {
     /// for the size of all of them together: its width, and its height and depth at the first
     /// one's baseline.
     pub(super) fn scale_boxes(&mut self, start: usize, factors: impl Fn(f64, f64, f64) -> (f64, f64)) {
-        let corners: Vec<(Point, Point)> = self.boxes[start..].iter().filter_map(|b| b.canvas.min.zip(b.canvas.max)).collect();
+        let corners: Vec<(Point, Point)> = self.page.boxes[start..].iter().filter_map(|b| b.canvas.min.zip(b.canvas.max)).collect();
         let Some(&(first_lo, first_hi)) = corners.first() else { return };
         let (lo, hi) = corners.iter().fold((first_lo, first_hi), |(a, b), (l, h)| (Point::new(a.x.min(l.x), a.y.min(l.y)), Point::new(b.x.max(h.x), b.y.max(h.y))));
-        let baseline = self.boxes[start].baseline;
+        let baseline = self.page.boxes[start].baseline;
         let (fx, fy) = factors(hi.x - lo.x, hi.y - baseline, baseline - lo.y);
         let t = crate::scene::Transform::scaling(fx, fy);
-        for b in &mut self.boxes[start..] {
+        for b in &mut self.page.boxes[start..] {
             b.canvas.items.iter_mut().for_each(|i| i.transform(&t));
             let corners = [b.canvas.min, b.canvas.max];
             if let [Some(lo), Some(hi)] = corners {
@@ -337,7 +337,7 @@ impl Engine {
             "pgfviewboxscope" => self.begin_view_box_scope(),
             // what is drawn inside does not make the picture larger
             "pgfinterruptboundingbox" => {
-                self.interrupted_boxes.push((self.canvas.min, self.canvas.max));
+                self.scoped.interrupted_boxes.push((self.canvas.min, self.canvas.max));
                 self.begin_group();
                 Ok(())
             }
@@ -365,13 +365,13 @@ impl Engine {
                     .take(12)
                     .collect();
                 let code = cols.iter().enumerate().fold(cols.len() as u32, |acc, (k, a)| acc | (a << (8 + 2 * k)));
-                self.layout.push(Layout::TabStart(code));
+                self.page.layout.push(Layout::TabStart(code));
                 self.begin_group();
                 Ok(())
             }
             "document" | "center" | "figure" | "flushleft" | "flushright" | "minipage" => {
                 if name == "center" && self.picture_depth == 0 {
-                    self.layout.extend([Layout::Par, Layout::Center(true)]);
+                    self.page.layout.extend([Layout::Par, Layout::Center(true)]);
                 }
                 if name == "minipage" {
                     let _ = self.optional()?;
@@ -379,14 +379,14 @@ impl Engine {
                     // the page is as wide as the minipage
                     if self.picture_depth == 0 {
                         let w = self.length_of(width)?;
-                        self.layout.push(Layout::Width(w));
+                        self.page.layout.push(Layout::Width(w));
                     }
                 } else if name == "figure" {
                     let _ = self.optional()?;
                 }
                 self.begin_group();
                 if name == "document" {
-                    self.document_depth = Some(self.tex.group_depth());
+                    self.page.document_depth = Some(self.tex.group_depth());
                 }
                 Ok(())
             }
@@ -434,7 +434,7 @@ impl Engine {
             "pgfonlayer" => self.end_on_layer(),
             "pgfinterruptboundingbox" => {
                 self.end_group();
-                if let Some((min, max)) = self.interrupted_boxes.pop() {
+                if let Some((min, max)) = self.scoped.interrupted_boxes.pop() {
                     (self.canvas.min, self.canvas.max) = (min, max);
                 }
             }
@@ -448,10 +448,10 @@ impl Engine {
                 }
                 self.end_group();
                 if name == "center" && self.picture_depth == 0 {
-                    self.layout.extend([Layout::Par, Layout::Center(false)]);
+                    self.page.layout.extend([Layout::Par, Layout::Center(false)]);
                 }
                 if name == "tabular" && self.picture_depth == 0 {
-                    self.layout.push(Layout::TabEnd);
+                    self.page.layout.push(Layout::TabEnd);
                 }
                 // what follows `\end{document}` is never typeset
                 if name == "document" {

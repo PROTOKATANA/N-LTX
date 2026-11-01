@@ -106,7 +106,7 @@ impl Engine {
 
     /// A picture or a saved box, where the text part goes.
     fn place_text_picture(&mut self, t: Transform, g: &Geometry, items: &mut Vec<Item>) {
-        if let Some((drawn, lo, _, depth)) = self.text_picture.take() {
+        if let Some((drawn, lo, _, depth)) = self.node_run.text_picture.take() {
             if let Some(origin) = g.parts.iter().find(|(n, _)| n == "text").map(|(_, p)| *p) {
                 let place = t.compose(&Transform::translation(origin.x - lo.x, origin.y - lo.y - depth));
                 items.push(Item::Transform { transform: place });
@@ -118,7 +118,7 @@ impl Engine {
 
     /// A shading used as the text, where the text part goes.
     fn place_text_shading(&mut self, t: Transform, g: &Geometry, items: &mut Vec<Item>) -> Result<(), Error> {
-        if let Some((name, w, h)) = self.text_shading.take() {
+        if let Some((name, w, h)) = self.node_run.text_shading.take() {
             if let Some(origin) = g.parts.iter().find(|(n, _)| n == "text").map(|(_, p)| *p) {
                 let saved = std::mem::take(&mut self.canvas.items);
                 let r = self.draw_shading(&name, &t.compose(&Transform::translation(origin.x + w, origin.y + h)));
