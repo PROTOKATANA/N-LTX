@@ -1,7 +1,8 @@
 # Pintor GPU
 
-C++ sobre DiligentCore y Vulkan, unido a Rust por `cxx`. `linux/base` resuelve el dispositivo, el hilo de
-render y compartir la imagen con Flutter, y `linux` pinta.
+C++ sobre DiligentCore y Vulkan, unido a Rust por `cxx`. `nucleo/` pinta y solo necesita un dispositivo
+Diligent: no conoce Flutter, GTK ni la ventana. El dispositivo, el hilo de render y enseñar la imagen son de
+quien lo integra (`ejemplo/linux` es el pegamento de referencia).
 
 ```
 src/compilador.rs     de `Escena` a una lista de dibujo: recorre y reparte
@@ -15,8 +16,7 @@ src/lienzo.rs         qué se compila en cada fotograma
 src/taller.rs         el hilo que lo hace y lleva el ritmo
 src/almacen.rs        lo hecho, hasta que C++ lo copia
 src/puente_lienzo.rs  la frontera cxx del lienzo
-linux/                el renderizador en C++, sus recursos y su familia de texturas
-linux/base/           la superficie compartida con Flutter, el hilo de render y DiligentCore
+nucleo/               el renderizador en C++ y sus recursos; `pintor_lienzo.h` es su frontera
 ```
 
 El límite de inglete significa lo mismo que en PDF y SVG, comparado con 1/sen(ángulo/2). lyon lo compara
@@ -29,12 +29,12 @@ la vista; lo que produce son valores ya hechos, que deja en el **almacén**. El 
 cubre copiar esos valores, nunca un cálculo: C++ jamás espera a que se compile nada.
 
 C++ solo copia lo que cambió, por generaciones: desplazar el documento copia la vista y nada más. Un
-hilo vigía espera en Rust a que haya algo nuevo y pide el fotograma. Lo que se publica entra por `rinf`
-en la aplicación; este crate no depende de `rinf`, y `Taller` y `Animador` son su interfaz.
+hilo vigía de quien integra espera en Rust a que haya algo nuevo y pide el fotograma. Lo que se publica
+entra por `visor`; este crate no depende de `rinf`, y `Taller` y `Animador` son su interfaz.
 
 ## Cómo pinta
 
-Cada vista tiene una superficie, con texto, fórmulas, figuras y animaciones juntos. Flutter no sabe
+Cada vista tiene una superficie, con texto, fórmulas, figuras y animaciones juntos. La interfaz no sabe
 de su contenido: solo muestra la textura y dice qué parte se ve.
 
 - **Rellenos:** triángulos de lyon, suavizados con MSAA 8×, o lo que dé la GPU.
@@ -59,7 +59,7 @@ de su contenido: solo muestra la textura y dice qué parte se ve.
 
 La geometría va en píxeles físicos: cambiar la escala recompila la escena y vacía el atlas.
 
-**Redimensionar:** la superficie mide lo que el monitor más grande (`lienzo.h`) y no se recrea: solo
+**Redimensionar:** en `ejemplo`, la superficie mide lo que el monitor más grande y no se recrea: solo
 cambia la parte que se pinta. Flutter la muestra sin reescalar, recortada a la vista.
 
 **Sin soporte todavía**, y por eso se avisa al publicar: los patrones con nombre (salen de su color, lisos)
@@ -67,16 +67,16 @@ y los mosaicos. `Capa::BordesNitidos` se ignora: esos bordes salen suavizados.
 
 ## Cómo se compila
 
-DiligentCore v2.5.6 se descarga la primera vez en `pintor/deps`, fijado a un commit y sin versionar, para
-sobrevivir a `flutter clean`. `DILIGENT_CORE_SOURCE_DIR` usa otra copia.
+`nucleo/CMakeLists.txt` da el destino `ltx_pintor` y pide a quien lo añade dos cosas: DiligentCore ya
+añadido y, en `NLTX_CXX`, dónde deja `cxx` lo que genera.
 
 **Diligent solo admite un dispositivo por proceso:** usa punteros globales a Vulkan y rechaza el segundo.
-No importa mientras N-LTX sea la única aplicación. Una aplicación que ya use Diligent y quiera llevar N-LTX
-dentro tendrá que aislarlo en su propia biblioteca, con sus símbolos ocultos, o cambiarlo por Vulkan directo.
+Por eso `nucleo` no crea ninguno: recibe el dispositivo y un contexto, y una aplicación que ya use Diligent
+le da los suyos. Cada recurso se crea solo para ese contexto. Todo va en el `namespace` `ltx`: los nombres
+no chocan con los de la aplicación.
 
 El `build.rs` deja lo que genera `cxx` en `pintor/cxx`, que se ignora a sí misma (u otra carpeta con
-`NLTX_CXX`), y el runner lo compila después del hub. `cxx` y `cxx-build` van fijados a una versión
-exacta. El ejecutable enlaza la biblioteca de Rust: C++ la llama directamente, sin `dlopen`.
+`NLTX_CXX`), y CMake lo compila después del crate. `cxx` y `cxx-build` van fijados a una versión exacta.
+El ejecutable enlaza la biblioteca de Rust: C++ la llama directamente, sin `dlopen`.
 
-Se puede medir con `NLTX_BANCO_GPU=1`, pedir otro MSAA con `NLTX_MSAA=2|4|8` y volcar cada fotograma a
-un PPM con `NLTX_VOLCAR_LIENZO=<archivo>`. `linux/base/pruebas/probar.sh` prueba las piezas puras.
+`NLTX_MSAA=2|4|8` pide otro MSAA. Lo demás para medir y probar está en `ejemplo/README.md`.

@@ -203,24 +203,6 @@ private:
 
 bool gpu_fallo(GError ** error , const char * mensaje) ;
 
-// Crea (o agranda) un buffer de GPU con capacidad creciente.
-bool gpu_asegurar_buffer(
-
-	Diligent :: IRenderDevice * device ,
-
-	Diligent :: RefCntAutoPtr<Diligent :: IBuffer> & buffer ,
-
-	std :: uint64_t & capacidad ,
-
-	std :: uint64_t necesario ,
-
-	Diligent :: BIND_FLAGS flags ,
-
-	const char * nombre ,
-
-	GError ** error
-
-) ;
 
 // 0xRRGGBBAA → float[4].
 void gpu_color(std :: uint32_t rgba , float out[4]) ;

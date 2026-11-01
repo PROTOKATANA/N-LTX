@@ -4,7 +4,11 @@
 
 # include <cstdint>
 
+# include <string>
+
 # include "recursos_lienzo.h"
+
+namespace ltx {
 
 // Lo que se ve del documento en este fotograma, en píxeles físicos
 
@@ -28,9 +32,9 @@ public:
 
 	Ejecucion(const Gpu & gpu , Recursos & recursos , const Recuadro & recuadro) ;
 
-	bool abrir_base(GError ** error) ;
+	bool abrir_base(std :: string & error) ;
 
-	bool lista(rust :: Slice<const ltx :: Comando> comandos , Malla & malla , GError ** error) ;
+	bool lista(rust :: Slice<const ltx :: Comando> comandos , Malla & malla , std :: string & error) ;
 
 	Diligent :: ITexture * resolver_base() ;
 
@@ -44,7 +48,7 @@ private:
 
 	void imagen(const ltx :: Comando & c) ;
 
-	bool abrir_capa(GError ** error) ;
+	bool abrir_capa(std :: string & error) ;
 
 	void resolver(std :: size_t i) ;
 
@@ -65,3 +69,5 @@ private:
 	Diligent :: IPipelineState * actual_ = nullptr ;
 
 } ;
+
+}  // namespace ltx

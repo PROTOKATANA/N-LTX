@@ -1,5 +1,5 @@
 // La familia del lienzo : su canal, su fábrica y el método «lienzo» (el resto lo
-// atiende el registro de texturas, base/texturas.cc).
+// atiende el registro de texturas, gpu/texturas.cc).
 
 # include "familia_lienzo.h"
 

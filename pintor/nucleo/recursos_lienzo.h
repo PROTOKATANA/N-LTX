@@ -4,13 +4,21 @@
 
 # include <memory>
 
+# include <string>
+
 # include <unordered_map>
 
 # include <vector>
 
-# include "gpu_surface.h"
+# include "DeviceContext.h"
+
+# include "RefCntAutoPtr.hpp"
+
+# include "RenderDevice.h"
 
 # include "pintor/src/puente_lienzo.rs.h"
+
+namespace ltx {
 
 inline constexpr Diligent :: TEXTURE_FORMAT formato_color = Diligent :: TEX_FORMAT_RGBA8_UNORM ;
 
@@ -38,13 +46,19 @@ struct UniformesCapa {
 
 } ;
 
-// El dispositivo y su contexto : van siempre juntos
+// El dispositivo y el contexto con que se pinta : los pone quien integra N-LTX
 
 struct Gpu {
 
 	Diligent :: IRenderDevice * device ;
 
 	Diligent :: IDeviceContext * ctx ;
+
+	// Cada recurso es solo de ese contexto : Diligent libera un recurso cuando
+	// avanzan todos los contextos de su máscara, y con más bits lo soltado
+	// esperaría a un contexto quieto
+
+	Diligent :: Uint64 mascara() const { return Diligent :: Uint64{ 1 } << ctx->GetDesc().ContextId ; }
 
 } ;
 
@@ -81,7 +95,7 @@ struct Objetivo {
 
 	Diligent :: RefCntAutoPtr<Diligent :: ITexture> resuelta ;
 
-	bool crear(Diligent :: IRenderDevice * device , const FormatoObjetivo & formato , GError ** error) ;
+	bool crear(const Gpu & gpu , const FormatoObjetivo & formato , std :: string & error) ;
 
 } ;
 
@@ -105,7 +119,7 @@ struct Malla {
 
 	std :: uint64_t capacidad_indices = 0 ;
 
-	bool subir(const Gpu & gpu , const Geometria & geometria , GError ** error) ;
+	bool subir(const Gpu & gpu , const Geometria & geometria , std :: string & error) ;
 
 } ;
 
@@ -163,25 +177,27 @@ struct Recursos {
 
 	bool listos = false ;
 
-	bool crear(Diligent :: IRenderDevice * device , GError ** error) ;
+	bool crear(const Gpu & gpu , std :: string & error) ;
 
 	// Solo crecen, y a saltos : encoger o estirar la ventana no crea texturas
 	// en cada paso, y una ventana pequeña no paga el monitor entero
 
 	void acomodar(std :: uint32_t w , std :: uint32_t h) ;
 
-	Objetivo * objetivo(Diligent :: IRenderDevice * device , std :: size_t i , GError ** error) ;
+	Objetivo * objetivo(const Gpu & gpu , std :: size_t i , std :: string & error) ;
 
 	// Sube lo que falte de lo que pinta `marco` y suelta lo que ya no pinta
 
-	bool subir_imagenes(const Gpu & gpu , const ltx :: Marco & marco , GError ** error) ;
+	bool subir_imagenes(const Gpu & gpu , const ltx :: Marco & marco , std :: string & error) ;
 
 private:
 
-	bool crear_datos(Diligent :: IRenderDevice * device , GError ** error) ;
+	bool crear_datos(const Gpu & gpu , std :: string & error) ;
 
-	bool crear_pasadas_lista(Diligent :: IRenderDevice * device , GError ** error) ;
+	bool crear_pasadas_lista(const Gpu & gpu , std :: string & error) ;
 
-	bool crear_pasadas_capa(Diligent :: IRenderDevice * device , GError ** error) ;
+	bool crear_pasadas_capa(const Gpu & gpu , std :: string & error) ;
 
 } ;
+
+}  // namespace ltx

@@ -1,7 +1,5 @@
 # include "gpu_lienzo.h"
 
-# include <algorithm>
-
 # include <atomic>
 
 # include <chrono>
@@ -18,11 +16,9 @@
 
 # include "banco_gpu.h"
 
-# include "ejecucion_lienzo.h"
-
 # include "gpu_surface.h"
 
-# include "recursos_lienzo.h"
+# include "pintor_lienzo.h"
 
 using namespace Diligent ;
 
@@ -41,8 +37,6 @@ constexpr std :: uint32_t alto_sin_monitor = 1080 ;
 constexpr std :: uint32_t espera_vigia_ms = 200 ;
 
 using Reloj = std :: chrono :: steady_clock ;
-
-ITextureView * vista_srv(ITexture * t) { return t->GetDefaultView(TEXTURE_VIEW_SHADER_RESOURCE) ; }
 
 }  // namespace
 
@@ -110,70 +104,6 @@ struct GpuLienzo :: Impl {
 
 	}
 
-	bool subir(const Gpu & gpu , Recursos & r , const ltx :: Marco & marco , GError ** error) {
-
-		IDeviceContext * ctx = gpu.ctx ;
-
-		const bool base = marco.generacion_base() != r.generacion_base ;
-
-		const bool vivos = marco.generacion_vivos() != r.generacion_vivos ;
-
-		if (base && !r.base.subir(gpu , Geometria{ marco.vertices_base() , marco.indices_base() } , error)) { return false ; }
-
-		if (vivos && !r.vivos.subir(gpu , Geometria{ marco.vertices_vivos() , marco.indices_vivos() } , error)) { return false ; }
-
-		if (base || vivos) {
-
-			const auto tintas = marco.tintas() ;
-
-			ctx->UpdateBuffer(r.tintas , 0 , tintas.size() * sizeof(ltx :: Tinta) , tintas.data() , RESOURCE_STATE_TRANSITION_MODE_TRANSITION) ;
-
-		}
-
-		r.generacion_base = marco.generacion_base() ;
-
-		r.generacion_vivos = marco.generacion_vivos() ;
-
-		if ((base || vivos) && !r.subir_imagenes(gpu , marco , error)) { return false ; }
-
-		const ltx :: Limites limites = ltx :: limites() ;
-
-		for (std :: size_t i = 0 ; i < marco.parches_atlas() ; i++) {
-
-			subir_filas(ctx , r.atlas , marco.parche_atlas(i) , marco.fila_atlas(i) , limites.lado_atlas) ;
-
-		}
-
-		for (std :: size_t i = 0 ; i < marco.parches_rampas() ; i++) {
-
-			subir_filas(ctx , r.rampas , marco.parche_rampas(i) , marco.fila_rampas(i) , limites.ancho_rampa * 4) ;
-
-		}
-
-		return true ;
-
-	}
-
-	void subir_filas(IDeviceContext * ctx , ITexture * textura , rust :: Slice<const std :: uint8_t> bytes , std :: uint32_t y0 , std :: uint32_t largo_fila) {
-
-		if (bytes.empty()) { return ; }
-
-		const auto & desc = textura->GetDesc() ;
-
-		const std :: uint32_t filas = static_cast<std :: uint32_t>(bytes.size() / largo_fila) ;
-
-		Box caja(0 , desc.Width , y0 , y0 + filas , 0 , 1) ;
-
-		TextureSubResData sub ;
-
-		sub.pData = bytes.data() ;
-
-		sub.Stride = largo_fila ;
-
-		ctx->UpdateTexture(textura , 0 , 0 , caja , sub , RESOURCE_STATE_TRANSITION_MODE_NONE , RESOURCE_STATE_TRANSITION_MODE_TRANSITION) ;
-
-	}
-
 	bool dibujar(GError ** error) {
 
 		if (banco) { banco->empezar() ; }
@@ -192,11 +122,15 @@ struct GpuLienzo :: Impl {
 
 		}
 
-		auto & r = surface.estado<Recursos>() ;
+		auto & pintor = surface.estado<ltx :: Pintor>() ;
 
-		const bool nuevos = !r.listos ;
+		const bool nuevos = !pintor.listo() ;
 
-		if (!r.crear(surface.device() , error)) { return false ; }
+		const ltx :: Gpu gpu{ surface.device() , surface.context() } ;
+
+		std :: string fallo ;
+
+		if (!pintor.preparar(gpu , fallo)) { return gpu_fallo(error , fallo.c_str()) ; }
 
 		if (banco) { banco->comenzar() ; }
 
@@ -212,65 +146,29 @@ struct GpuLienzo :: Impl {
 
 		}
 
-		IDeviceContext * ctx = surface.context() ;
-
 		// después de comenzar : los parches que se recogen hay que subirlos
 
 		const rust :: Box<ltx :: Marco> marco = ltx :: tomar(id , nuevos) ;
 
-		const ltx :: Vista vista = marco->vista() ;
+		if (!pintor.subir(gpu , * marco , fallo)) { return gpu_fallo(error , fallo.c_str()) ; }
 
-		const std :: uint32_t w = std :: clamp(vista.ancho , 1u , lienzo_ancho) ;
-
-		const std :: uint32_t h = std :: clamp(vista.alto , 1u , lienzo_alto) ;
-
-		r.acomodar(w , h) ;
-
-		const Gpu gpu{ surface.device() , ctx } ;
-
-		if (!subir(gpu , r , * marco , error)) { return false ; }
-
-		const UniformesVista u{ float(w) , float(h) , 0.0f , float(vista.y) } ;
-
-		ctx->UpdateBuffer(r.uniforme_vista , 0 , sizeof(u) , &u , RESOURCE_STATE_TRANSITION_MODE_TRANSITION) ;
-
-		Ejecucion ejecucion(gpu , r , Recuadro{ w , h , float(vista.y) , float(vista.y + h) }) ;
-
-		ITexture * resuelta = nullptr ;
+		ltx :: Pintado pintado ;
 
 		{
 
-			Tramo tramo(banco.get() , 0 , Etapa :: dibujar , surface.device() , ctx) ;
+			Tramo tramo(banco.get() , 0 , Etapa :: dibujar , gpu.device , gpu.ctx) ;
 
-			if (!ejecucion.abrir_base(error)) { return false ; }
-
-			if (
-
-				!ejecucion.lista(marco->comandos_base() , r.base , error) ||
-
-				!ejecucion.lista(marco->comandos_vivos() , r.vivos , error)
-
-			) { return false ; }
-
-			resuelta = ejecucion.resolver_base() ;
+			pintado = pintor.pintar(gpu , * marco , lienzo_ancho , lienzo_alto , fallo) ;
 
 		}
 
-		surface.fijar_region(w , h , fondo_lienzo) ;
+		if (!pintado.imagen) { return gpu_fallo(error , fallo.c_str()) ; }
 
-		r.copia.enlace->GetVariableByName(SHADER_TYPE_PIXEL , "Capa")->Set(vista_srv(resuelta)) ;
+		surface.fijar_region(pintado.ancho , pintado.alto , fondo_lienzo) ;
 
-		ctx->SetPipelineState(r.copia.pipeline) ;
+		pintor.copiar(gpu , pintado.imagen) ;
 
-		ctx->CommitShaderResources(r.copia.enlace , RESOURCE_STATE_TRANSITION_MODE_TRANSITION) ;
-
-		DrawAttribs draw ;
-
-		draw.NumVertices = 3 ;
-
-		ctx->Draw(draw) ;
-
-		if (volcado) { surface.volcar(volcado , w , h) ; }
+		if (volcado) { surface.volcar(volcado , pintado.ancho , pintado.alto) ; }
 
 		// lo que gasta el carril, antes de esperar a la GPU en terminar()
 
@@ -280,7 +178,7 @@ struct GpuLienzo :: Impl {
 
 		if (!surface.terminar(error)) { return false ; }
 
-		if (banco) { banco->terminar(ctx , surface.width() , surface.height()) ; }
+		if (banco) { banco->terminar(gpu.ctx , surface.width() , surface.height()) ; }
 
 		return true ;
 

@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 
-# La base GPU del pintor : la superficie que Vulkan comparte con Flutter, el
-# registro de texturas, el hilo de render, el banco y DiligentCore. Necesita los
+# La base GPU del ejemplo : la superficie que Vulkan comparte con Flutter, el
+# registro de texturas, el hilo de render, el banco y DiligentCore. Es pegamento :
+# N-LTX no la conoce, y un proyecto con su propia base no la necesita. Necesita los
 # targets `flutter`, `PkgConfig::GTK` y `PkgConfig::EPOXY` y la función
 # apply_standard_settings del CMakeLists de Linux de la app.
 add_library(ltx_gpu STATIC
@@ -24,7 +25,7 @@ target_include_directories(ltx_gpu PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 find_package(Threads REQUIRED)
 target_link_libraries(ltx_gpu PUBLIC flutter PkgConfig::GTK PkgConfig::EPOXY ${CMAKE_DL_LIBS} Threads::Threads)
 
-# DiligentCore v2.5.6, solo con Vulkan. Se descarga una vez en pintor/deps, fuera
+# DiligentCore v2.5.6, solo con Vulkan. Se descarga una vez en ejemplo/deps, fuera
 # de build/ para sobrevivir a `flutter clean`, u otra copia con
 # DILIGENT_CORE_SOURCE_DIR.
 set(DILIGENT_CORE_SOURCE_DIR "$ENV{DILIGENT_CORE_SOURCE_DIR}" CACHE PATH "Copia local de DiligentCore")

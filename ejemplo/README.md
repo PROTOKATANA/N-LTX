@@ -8,15 +8,33 @@ cd ejemplo
 flutter run -d linux --release
 ```
 
-La primera vez, CMake descarga DiligentCore en `pintor/deps`: ver `pintor/README.md`.
+La primera vez, CMake descarga DiligentCore v2.5.6 en `deps/`, fijado a un commit y sin versionar, para
+sobrevivir a `flutter clean`. `DILIGENT_CORE_SOURCE_DIR` usa otra copia.
 
-`flutter` compila el hub de Rust (`native/hub`) con `cargokit`, y el ejecutable lo enlaza. Tras cambiar
-una señal de `native/hub/src/signals` se regeneran los bindings de Dart con `rinf gen`.
+## El pegamento
 
-Las fronteras son las de `PUENTES.md`: Flutter habla con Rust por `rinf`, a través de un repositorio
-(`lib/repositorio.dart`), y el canal de método solo se usa para registrar la textura. Todo se pinta con
-Vulkan en una sola superficie: ver `pintor/README.md`. Lo que el pintor no sabe hacer
-se avisa en pantalla: patrones (los aproxima con su color) y mosaicos.
+N-LTX no sabe nada de Flutter ni de `rinf`: todo lo que los une está aquí, y es lo que un proyecto copia y
+adapta para integrarlo (ver el README de la raíz).
+
+```
+native/hub/    las señales de rinf, traducidas a `visor` y `pintor`
+lib/           el widget del documento y el repositorio que lo separa de las señales
+linux/gpu/     la base: el dispositivo Vulkan, el hilo de render y la imagen compartida con Flutter
+linux/lienzo/  une `ltx::Pintor` con esa base y registra la textura
+```
+
+`flutter` compila el hub de Rust con `cargokit`, y el ejecutable lo enlaza. Tras cambiar una señal de
+`native/hub/src/signals` se regeneran los bindings de Dart con `rinf gen`.
+
+Flutter habla con Rust por `rinf`, a través de un repositorio (`lib/repositorio.dart`), y el canal de método
+solo se usa para registrar la textura. Todo se pinta con Vulkan en una sola superficie: ver
+`pintor/README.md`. Lo que el pintor no sabe hacer se avisa en pantalla: patrones (los aproxima con su
+color) y mosaicos.
+
+Se puede medir con `NLTX_BANCO_GPU=1` y volcar cada fotograma a un PPM con `NLTX_VOLCAR_LIENZO=<archivo>`.
+`linux/gpu/pruebas/probar.sh` prueba las piezas puras de la base.
+
+## Lo que enseña
 
 `\includegraphics` lee PNG, JPEG y SVG de `assets/` y, si la hay, de la carpeta de `NLTX_MUESTRAS`. Una
 fuente puede venir de un modelo de lenguaje: una ruta absoluta, con `..` o que salga de esas carpetas por un
@@ -33,7 +51,7 @@ cada uno con su título y sus avisos debajo: sirve para ver cómo se comporta el
 Las muestras no se versionan: ese conjunto no declara licencia y mezcla orígenes distintos.
 
 La pestaña K1 es `assets/k1.tex`: un solo documento con todo lo que el motor sabe pintar (texto, matemáticas,
-física, química, diagramas, electrónica y animaciones). Una prueba del hub exige que se componga sin avisos,
+física, química, diagramas, electrónica y animaciones). Una prueba de `visor` exige que se componga sin avisos,
 también en cada fotograma de sus animaciones. Sin avisos no significa bien: hay que mirarlo pintado.
 
 Una tabla es una rejilla más un estilo: `\begin{tabular}[estilo=…]{lcr}` admite lo estándar de LaTeX
@@ -49,6 +67,6 @@ Las animaciones se escriben con `\begin{animacion}[t=0:360, duracion=4]` y un `t
 Cada fotograma solo depende de su instante: `animacion::Proyector` los compone por adelantado en varios
 hilos y los guarda, así que una vuelta que cabe en memoria (256 MiB entre todas) deja de gastar CPU. Solo
 trabajan las que están en pantalla, y ninguna se lleva más de la mitad de los hilos: si no le alcanza, baja
-de 60 fps. El coste se mide con `cargo test --release -p hub --test banco_animacion -- --ignored --nocapture`.
+de 60 fps. El coste se mide con `cargo test --release -p visor --test banco_animacion -- --ignored --nocapture`.
 
 El runner desactiva Impeller: pixela los recortes y los trazados.

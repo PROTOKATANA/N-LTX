@@ -581,52 +581,6 @@ bool gpu_fallo(GError ** error , const char * mensaje) {
 
 }
 
-bool gpu_asegurar_buffer(
-
-	IRenderDevice * device ,
-
-	RefCntAutoPtr<IBuffer> & buffer ,
-
-	std :: uint64_t & capacidad ,
-
-	std :: uint64_t necesario ,
-
-	BIND_FLAGS flags ,
-
-	const char * nombre ,
-
-	GError ** error
-
-){
-
-	if (buffer && capacidad >= necesario) return true ;
-
-	std :: uint64_t nueva = std :: max<std :: uint64_t>(necesario * 3 / 2 , 1 << 16) ;
-
-	BufferDesc desc ;
-
-	desc.Name = nombre ;
-
-	desc.Size = nueva ;
-
-	desc.Usage = USAGE_DEFAULT ;
-
-	desc.BindFlags = flags ;
-
-	buffer.Release() ;
-
-	desc.ImmediateContextMask = gpu_mascara() ;
-
-	device->CreateBuffer(desc , nullptr , &buffer) ;
-
-	if (!buffer) return gpu_fallo(error , "OUT_OF_GPU_MEMORY: buffer de GPU") ;
-
-	capacidad = nueva ;
-
-	return true ;
-
-}
-
 void gpu_color(std :: uint32_t rgba , float out[4]) {
 
 	out[0] = ((rgba >> 24) & 255) / 255.0f ;

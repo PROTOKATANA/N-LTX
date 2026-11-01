@@ -3,6 +3,8 @@
 // Los shaders del lienzo, en HLSL. `lista_ps` usa los TIPO_* de la tinta, que
 // define quien lo compila a partir de `ltx :: TipoTinta`
 
+namespace ltx {
+
 inline constexpr const char * hlsl_lista_vs = R"(
 cbuffer Vista { float2 tam; float2 desplazamiento; };
 struct Entrada {
@@ -183,3 +185,5 @@ float4 main(in float4 Position : SV_POSITION) : SV_TARGET {
   float3 c = (1.0 - s.a) * b.rgb + (1.0 - b.a) * s.rgb + s.a * b.a * mezclar(cb, cs);
   return float4(c, s.a + b.a * (1.0 - s.a));
 })" ;
+
+}  // namespace ltx

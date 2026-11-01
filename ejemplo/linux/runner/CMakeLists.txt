@@ -25,6 +25,9 @@ target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GTK)
 
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
-# El pintor. La biblioteca Rust con la que habla por cxx la enlaza cargokit.
-add_subdirectory("${CMAKE_SOURCE_DIR}/../../pintor/linux" "${CMAKE_BINARY_DIR}/ltx_pintor")
-target_link_libraries(${BINARY_NAME} PRIVATE ltx_pintor)
+# La base GPU, el pintor de N-LTX, que no sabe nada de Flutter, y lo que los une.
+add_subdirectory("${CMAKE_SOURCE_DIR}/gpu" "${CMAKE_BINARY_DIR}/ltx_gpu")
+add_subdirectory("${CMAKE_SOURCE_DIR}/../../pintor/nucleo" "${CMAKE_BINARY_DIR}/ltx_pintor")
+apply_standard_settings(ltx_pintor)
+add_subdirectory("${CMAKE_SOURCE_DIR}/lienzo" "${CMAKE_BINARY_DIR}/ltx_lienzo")
+target_link_libraries(${BINARY_NAME} PRIVATE ltx_lienzo)

@@ -2,6 +2,8 @@
 
 using namespace Diligent ;
 
+namespace ltx {
+
 namespace {
 
 constexpr float fondo_lienzo[4] = { 1.0f , 1.0f , 1.0f , 1.0f } ;
@@ -16,9 +18,9 @@ Ejecucion :: Ejecucion(const Gpu & gpu , Recursos & recursos , const Recuadro & 
 
 	gpu_(gpu) , r_(recursos) , recuadro_(recuadro) {}
 
-bool Ejecucion :: abrir_base(GError ** error) {
+bool Ejecucion :: abrir_base(std :: string & error) {
 
-	if (!r_.objetivo(gpu_.device , 0 , error)) { return false ; }
+	if (!r_.objetivo(gpu_ , 0 , error)) { return false ; }
 
 	fijar(0 , fondo_lienzo) ;
 
@@ -26,7 +28,7 @@ bool Ejecucion :: abrir_base(GError ** error) {
 
 }
 
-bool Ejecucion :: lista(rust :: Slice<const ltx :: Comando> comandos , Malla & malla , GError ** error) {
+bool Ejecucion :: lista(rust :: Slice<const ltx :: Comando> comandos , Malla & malla , std :: string & error) {
 
 	if (comandos.empty() || !malla.vertices) { return true ; }
 
@@ -176,9 +178,9 @@ void Ejecucion :: imagen(const ltx :: Comando & c) {
 
 }
 
-bool Ejecucion :: abrir_capa(GError ** error) {
+bool Ejecucion :: abrir_capa(std :: string & error) {
 
-	if (!r_.objetivo(gpu_.device , profundidad_ + 1 , error)) { return false ; }
+	if (!r_.objetivo(gpu_ , profundidad_ + 1 , error)) { return false ; }
 
 	profundidad_++ ;
 
@@ -263,3 +265,5 @@ void Ejecucion :: cerrar_capa(const ltx :: Comando & c) {
 	actual_ = nullptr ;
 
 }
+
+}  // namespace ltx

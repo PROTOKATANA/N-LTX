@@ -12,7 +12,65 @@
 
 using namespace Diligent ;
 
+namespace ltx {
+
 namespace {
+
+bool fallo(std :: string & error , const char * mensaje) {
+
+	error = mensaje ;
+
+	return false ;
+
+}
+
+// Crea o agranda un búfer, con capacidad de sobra para no hacerlo cada vez
+
+bool asegurar_buffer(
+
+	const Gpu & gpu ,
+
+	RefCntAutoPtr<IBuffer> & buffer ,
+
+	std :: uint64_t & capacidad ,
+
+	std :: uint64_t necesario ,
+
+	BIND_FLAGS flags ,
+
+	const char * nombre ,
+
+	std :: string & error
+
+) {
+
+	if (buffer && capacidad >= necesario) { return true ; }
+
+	const std :: uint64_t nueva = std :: max<std :: uint64_t>(necesario * 3 / 2 , 1 << 16) ;
+
+	BufferDesc desc ;
+
+	desc.Name = nombre ;
+
+	desc.Size = nueva ;
+
+	desc.Usage = USAGE_DEFAULT ;
+
+	desc.BindFlags = flags ;
+
+	buffer.Release() ;
+
+	desc.ImmediateContextMask = gpu.mascara() ;
+
+	gpu.device->CreateBuffer(desc , nullptr , &buffer) ;
+
+	if (!buffer) { return fallo(error , "OUT_OF_GPU_MEMORY: buffer de GPU") ; }
+
+	capacidad = nueva ;
+
+	return true ;
+
+}
 
 constexpr BlendStateDesc premultiplicada() {
 
@@ -156,7 +214,7 @@ struct RecetaCapa {
 
 	bool mezclada ;
 
-	// a la superficie de Flutter : una muestra y sin stencil
+	// a la superficie de quien integra : una muestra y sin stencil
 
 	bool final_ ;
 
@@ -164,7 +222,7 @@ struct RecetaCapa {
 
 }  // namespace
 
-bool Objetivo :: crear(IRenderDevice * device , const FormatoObjetivo & formato , GError ** error) {
+bool Objetivo :: crear(const Gpu & gpu , const FormatoObjetivo & formato , std :: string & error) {
 
 	TextureDesc desc ;
 
@@ -182,15 +240,15 @@ bool Objetivo :: crear(IRenderDevice * device , const FormatoObjetivo & formato 
 
 	desc.BindFlags = BIND_RENDER_TARGET ;
 
-	desc.ImmediateContextMask = gpu_mascara() ;
+	desc.ImmediateContextMask = gpu.mascara() ;
 
-	device->CreateTexture(desc , nullptr , &color) ;
+	gpu.device->CreateTexture(desc , nullptr , &color) ;
 
 	desc.Format = formato.plantilla ;
 
 	desc.BindFlags = BIND_DEPTH_STENCIL ;
 
-	device->CreateTexture(desc , nullptr , &plantilla) ;
+	gpu.device->CreateTexture(desc , nullptr , &plantilla) ;
 
 	desc.Format = formato_color ;
 
@@ -198,13 +256,13 @@ bool Objetivo :: crear(IRenderDevice * device , const FormatoObjetivo & formato 
 
 	desc.BindFlags = BIND_RENDER_TARGET | BIND_SHADER_RESOURCE ;
 
-	device->CreateTexture(desc , nullptr , &resuelta) ;
+	gpu.device->CreateTexture(desc , nullptr , &resuelta) ;
 
-	return (color && plantilla && resuelta) || gpu_fallo(error , "No se pudo crear un objetivo de LTX") ;
+	return (color && plantilla && resuelta) || fallo(error , "No se pudo crear un objetivo de LTX") ;
 
 }
 
-bool Malla :: subir(const Gpu & gpu , const Geometria & geometria , GError ** error) {
+bool Malla :: subir(const Gpu & gpu , const Geometria & geometria , std :: string & error) {
 
 	const auto & v = geometria.vertices ;
 
@@ -218,9 +276,9 @@ bool Malla :: subir(const Gpu & gpu , const Geometria & geometria , GError ** er
 
 	if (
 
-		!gpu_asegurar_buffer(gpu.device , vertices , capacidad_vertices , bytes_v , BIND_VERTEX_BUFFER , "LTX vértices" , error) ||
+		!asegurar_buffer(gpu , vertices , capacidad_vertices , bytes_v , BIND_VERTEX_BUFFER , "LTX vértices" , error) ||
 
-		!gpu_asegurar_buffer(gpu.device , indices , capacidad_indices , bytes_i , BIND_INDEX_BUFFER , "LTX índices" , error)
+		!asegurar_buffer(gpu , indices , capacidad_indices , bytes_i , BIND_INDEX_BUFFER , "LTX índices" , error)
 
 	) { return false ; }
 
@@ -232,21 +290,21 @@ bool Malla :: subir(const Gpu & gpu , const Geometria & geometria , GError ** er
 
 }
 
-bool Recursos :: crear(IRenderDevice * device , GError ** error) {
+bool Recursos :: crear(const Gpu & gpu , std :: string & error) {
 
 	if (listos) { return true ; }
 
-	muestras = muestras_posibles(device) ;
+	muestras = muestras_posibles(gpu.device) ;
 
-	formato_plantilla = elegir_plantilla(device , muestras) ;
+	formato_plantilla = elegir_plantilla(gpu.device , muestras) ;
 
 	if (
 
-		!crear_datos(device , error) ||
+		!crear_datos(gpu , error) ||
 
-		!crear_pasadas_lista(device , error) ||
+		!crear_pasadas_lista(gpu , error) ||
 
-		!crear_pasadas_capa(device , error)
+		!crear_pasadas_capa(gpu , error)
 
 	) { return false ; }
 
@@ -256,7 +314,7 @@ bool Recursos :: crear(IRenderDevice * device , GError ** error) {
 
 }
 
-bool Recursos :: crear_datos(IRenderDevice * device , GError ** error) {
+bool Recursos :: crear_datos(const Gpu & gpu , std :: string & error) {
 
 	const ltx :: Limites limites = ltx :: limites() ;
 
@@ -270,13 +328,13 @@ bool Recursos :: crear_datos(IRenderDevice * device , GError ** error) {
 
 	desc.BindFlags = BIND_UNIFORM_BUFFER ;
 
-	desc.ImmediateContextMask = gpu_mascara() ;
+	desc.ImmediateContextMask = gpu.mascara() ;
 
-	device->CreateBuffer(desc , nullptr , &uniforme_vista) ;
+	gpu.device->CreateBuffer(desc , nullptr , &uniforme_vista) ;
 
 	desc.Size = sizeof(UniformesCapa) ;
 
-	device->CreateBuffer(desc , nullptr , &uniforme_capa) ;
+	gpu.device->CreateBuffer(desc , nullptr , &uniforme_capa) ;
 
 	desc.Name = "LTX tintas" ;
 
@@ -288,7 +346,7 @@ bool Recursos :: crear_datos(IRenderDevice * device , GError ** error) {
 
 	desc.ElementByteStride = sizeof(ltx :: Tinta) ;
 
-	device->CreateBuffer(desc , nullptr , &tintas) ;
+	gpu.device->CreateBuffer(desc , nullptr , &tintas) ;
 
 	TextureDesc textura ;
 
@@ -306,9 +364,9 @@ bool Recursos :: crear_datos(IRenderDevice * device , GError ** error) {
 
 	textura.BindFlags = BIND_SHADER_RESOURCE ;
 
-	textura.ImmediateContextMask = gpu_mascara() ;
+	textura.ImmediateContextMask = gpu.mascara() ;
 
-	device->CreateTexture(textura , nullptr , &atlas) ;
+	gpu.device->CreateTexture(textura , nullptr , &atlas) ;
 
 	textura.Name = "LTX rampas" ;
 
@@ -318,27 +376,27 @@ bool Recursos :: crear_datos(IRenderDevice * device , GError ** error) {
 
 	textura.Format = formato_color ;
 
-	device->CreateTexture(textura , nullptr , &rampas) ;
+	gpu.device->CreateTexture(textura , nullptr , &rampas) ;
 
 	return (uniforme_vista && uniforme_capa && tintas && atlas && rampas) ||
 
-		gpu_fallo(error , "No se pudieron crear los datos de LTX") ;
+		fallo(error , "No se pudieron crear los datos de LTX") ;
 
 }
 
-bool Recursos :: crear_pasadas_lista(IRenderDevice * device , GError ** error) {
+bool Recursos :: crear_pasadas_lista(const Gpu & gpu , std :: string & error) {
 
 	const std :: string fuente = con_tipos(hlsl_lista_ps) ;
 
-	auto vs = compilar(device , "LTX lista VS" , SHADER_TYPE_VERTEX , hlsl_lista_vs) ;
+	auto vs = compilar(gpu.device , "LTX lista VS" , SHADER_TYPE_VERTEX , hlsl_lista_vs) ;
 
-	auto ps = compilar(device , "LTX lista PS" , SHADER_TYPE_PIXEL , fuente.c_str()) ;
+	auto ps = compilar(gpu.device , "LTX lista PS" , SHADER_TYPE_PIXEL , fuente.c_str()) ;
 
-	auto marca = compilar(device , "LTX marca PS" , SHADER_TYPE_PIXEL , hlsl_marca_ps) ;
+	auto marca = compilar(gpu.device , "LTX marca PS" , SHADER_TYPE_PIXEL , hlsl_marca_ps) ;
 
-	auto ps_imagen = compilar(device , "LTX imagen PS" , SHADER_TYPE_PIXEL , hlsl_imagen_ps) ;
+	auto ps_imagen = compilar(gpu.device , "LTX imagen PS" , SHADER_TYPE_PIXEL , hlsl_imagen_ps) ;
 
-	if (!vs || !ps || !marca || !ps_imagen) { return gpu_fallo(error , "No se pudieron compilar los shaders de LTX") ; }
+	if (!vs || !ps || !marca || !ps_imagen) { return fallo(error , "No se pudieron compilar los shaders de LTX") ; }
 
 	const auto crear = [&](const RecetaLista & receta , Pasada & pasada) {
 
@@ -348,7 +406,7 @@ bool Recursos :: crear_pasadas_lista(IRenderDevice * device , GError ** error) {
 
 		pso.PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS ;
 
-		pso.PSODesc.ImmediateContextMask = gpu_mascara() ;
+		pso.PSODesc.ImmediateContextMask = gpu.mascara() ;
 
 		auto & g = pso.GraphicsPipeline ;
 
@@ -428,9 +486,9 @@ bool Recursos :: crear_pasadas_lista(IRenderDevice * device , GError ** error) {
 
 		pso.pPS = receta.ps ;
 
-		device->CreateGraphicsPipelineState(pso , &pasada.pipeline) ;
+		gpu.device->CreateGraphicsPipelineState(pso , &pasada.pipeline) ;
 
-		if (!pasada.pipeline) { return gpu_fallo(error , "No se pudo crear un pipeline de LTX") ; }
+		if (!pasada.pipeline) { return fallo(error , "No se pudo crear un pipeline de LTX") ; }
 
 		IPipelineState * p = pasada.pipeline ;
 
@@ -444,7 +502,7 @@ bool Recursos :: crear_pasadas_lista(IRenderDevice * device , GError ** error) {
 
 		p->CreateShaderResourceBinding(&pasada.enlace , true) ;
 
-		return pasada.enlace || gpu_fallo(error , "No se pudo enlazar un pipeline de LTX") ;
+		return pasada.enlace || fallo(error , "No se pudo enlazar un pipeline de LTX") ;
 
 	} ;
 
@@ -462,17 +520,17 @@ bool Recursos :: crear_pasadas_lista(IRenderDevice * device , GError ** error) {
 
 }
 
-bool Recursos :: crear_pasadas_capa(IRenderDevice * device , GError ** error) {
+bool Recursos :: crear_pasadas_capa(const Gpu & gpu , std :: string & error) {
 
-	auto vs = compilar(device , "LTX pantalla VS" , SHADER_TYPE_VERTEX , hlsl_pantalla_vs) ;
+	auto vs = compilar(gpu.device , "LTX pantalla VS" , SHADER_TYPE_VERTEX , hlsl_pantalla_vs) ;
 
-	auto ps_capa = compilar(device , "LTX capa PS" , SHADER_TYPE_PIXEL , hlsl_capa_ps) ;
+	auto ps_capa = compilar(gpu.device , "LTX capa PS" , SHADER_TYPE_PIXEL , hlsl_capa_ps) ;
 
-	auto ps_mezcla = compilar(device , "LTX mezcla PS" , SHADER_TYPE_PIXEL , hlsl_mezcla_ps) ;
+	auto ps_mezcla = compilar(gpu.device , "LTX mezcla PS" , SHADER_TYPE_PIXEL , hlsl_mezcla_ps) ;
 
-	auto ps_copia = compilar(device , "LTX copia PS" , SHADER_TYPE_PIXEL , hlsl_copia_ps) ;
+	auto ps_copia = compilar(gpu.device , "LTX copia PS" , SHADER_TYPE_PIXEL , hlsl_copia_ps) ;
 
-	if (!vs || !ps_capa || !ps_mezcla || !ps_copia) { return gpu_fallo(error , "No se pudieron compilar los shaders de capa de LTX") ; }
+	if (!vs || !ps_capa || !ps_mezcla || !ps_copia) { return fallo(error , "No se pudieron compilar los shaders de capa de LTX") ; }
 
 	const auto crear = [&](const RecetaCapa & receta , Pasada & pasada) {
 
@@ -482,7 +540,7 @@ bool Recursos :: crear_pasadas_capa(IRenderDevice * device , GError ** error) {
 
 		pso.PSODesc.PipelineType = PIPELINE_TYPE_GRAPHICS ;
 
-		pso.PSODesc.ImmediateContextMask = gpu_mascara() ;
+		pso.PSODesc.ImmediateContextMask = gpu.mascara() ;
 
 		auto & g = pso.GraphicsPipeline ;
 
@@ -532,15 +590,15 @@ bool Recursos :: crear_pasadas_capa(IRenderDevice * device , GError ** error) {
 
 		pso.pPS = receta.ps ;
 
-		device->CreateGraphicsPipelineState(pso , &pasada.pipeline) ;
+		gpu.device->CreateGraphicsPipelineState(pso , &pasada.pipeline) ;
 
-		if (!pasada.pipeline) { return gpu_fallo(error , "No se pudo crear un pipeline de capa de LTX") ; }
+		if (!pasada.pipeline) { return fallo(error , "No se pudo crear un pipeline de capa de LTX") ; }
 
 		fijar_estatica(pasada.pipeline , SHADER_TYPE_PIXEL , "Composicion" , uniforme_capa) ;
 
 		pasada.pipeline->CreateShaderResourceBinding(&pasada.enlace , true) ;
 
-		return pasada.enlace || gpu_fallo(error , "No se pudo enlazar un pipeline de capa de LTX") ;
+		return pasada.enlace || fallo(error , "No se pudo enlazar un pipeline de capa de LTX") ;
 
 	} ;
 
@@ -568,7 +626,7 @@ void Recursos :: acomodar(std :: uint32_t w , std :: uint32_t h) {
 
 }
 
-bool Recursos :: subir_imagenes(const Gpu & gpu , const ltx :: Marco & marco , GError ** error) {
+bool Recursos :: subir_imagenes(const Gpu & gpu , const ltx :: Marco & marco , std :: string & error) {
 
 	std :: unordered_set<std :: uint64_t> pintadas ;
 
@@ -600,13 +658,13 @@ bool Recursos :: subir_imagenes(const Gpu & gpu , const ltx :: Marco & marco , G
 
 		desc.MiscFlags = MISC_TEXTURE_FLAG_GENERATE_MIPS ;
 
-		desc.ImmediateContextMask = gpu_mascara() ;
+		desc.ImmediateContextMask = gpu.mascara() ;
 
 		RefCntAutoPtr<ITexture> textura ;
 
 		gpu.device->CreateTexture(desc , nullptr , &textura) ;
 
-		if (!textura) { return gpu_fallo(error , "No se pudo crear la textura de una imagen de LTX") ; }
+		if (!textura) { return fallo(error , "No se pudo crear la textura de una imagen de LTX") ; }
 
 		const auto rgba = marco.rgba_imagen(i) ;
 
@@ -636,13 +694,13 @@ bool Recursos :: subir_imagenes(const Gpu & gpu , const ltx :: Marco & marco , G
 
 }
 
-Objetivo * Recursos :: objetivo(IRenderDevice * device , std :: size_t i , GError ** error) {
+Objetivo * Recursos :: objetivo(const Gpu & gpu , std :: size_t i , std :: string & error) {
 
 	while (objetivos.size() <= i) {
 
 		auto nuevo = std :: make_unique<Objetivo>() ;
 
-		if (!nuevo->crear(device , FormatoObjetivo{ ancho , alto , muestras , formato_plantilla } , error)) { return nullptr ; }
+		if (!nuevo->crear(gpu , FormatoObjetivo{ ancho , alto , muestras , formato_plantilla } , error)) { return nullptr ; }
 
 		objetivos.push_back(std :: move(nuevo)) ;
 
@@ -651,3 +709,5 @@ Objetivo * Recursos :: objetivo(IRenderDevice * device , std :: size_t i , GErro
 	return objetivos[i].get() ;
 
 }
+
+}  // namespace ltx

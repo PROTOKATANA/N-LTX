@@ -1,13 +1,14 @@
 # N-LTX
 
-Motor LaTeX para Flutter sobre la GPU, sin depender de una instalación de TeX. Entra LaTeX y sale una
-lista neutra de primitivas (glifos, trazados, recortes, grupos) que un pintor convierte en píxeles.
+Motor LaTeX sobre la GPU, sin depender de una instalación de TeX. Entra LaTeX y sale una lista neutra de
+primitivas (glifos, trazados, recortes, grupos) que un pintor convierte en píxeles.
 
 **Estado:** el motor produce la lista para texto, fórmulas, química, física y TikZ, y `ejemplo/` la
 pinta en Flutter sobre Vulkan (`pintor/`), con animaciones por parámetro.
 
-La app no depende de otros repositorios: `pintor/linux` lleva su propio código Vulkan sobre DiligentCore,
-que CMake descarga una vez en `pintor/deps`, fijado a un commit.
+N-LTX es una biblioteca: no sabe nada de Flutter, de Dart ni de `rinf`. Cada proyecto pone el pegamento
+que lo une a su interfaz (ver [Integrar N-LTX](#integrar-n-ltx)), y `ejemplo/` es el de referencia. No
+depende de otros repositorios: `pintor/nucleo` lleva su propio código de pintado sobre DiligentCore.
 
 ```
 primitivas/   el contrato: la lista neutra y el trait `Compositor`. Sin dependencias.
@@ -15,9 +16,10 @@ documento/    modo texto: LaTeX en flujo continuo, con fórmulas y figuras inyec
 animacion/    animaciones por parámetro: la misma figura, recompuesta en cada fotograma.
 pintor/       pintor GPU: Rust compila la escena y C++ la pinta sobre Diligent/Vulkan, unidos por `cxx`.
 adaptador/    `Compositor` sobre el motor. Desaparecerá cuando el motor emita `primitivas`.
+visor/        ver un documento, sin interfaz: compone en su propio hilo y lleva la selección.
 motor/        `mathra` (fórmulas, química, física), `tikra` (TikZ) y `voltik` (CircuiTikZ): nacieron
               de un fork y hoy son código propio, en piezas (ver motor/README.md).
-ejemplo/      app Flutter: galería y editor de LaTeX, unida a Rust por `rinf` (ver su README).
+ejemplo/      app Flutter y pegamento de referencia: `rinf`, el widget y la base Vulkan (ver su README).
 ```
 
 ## Uso
@@ -40,6 +42,23 @@ for aviso in &c.avisos {
 
 Lo que no se entiende nunca se pierde en silencio: o se rechaza (`estricto`), o llega como aviso en
 `Composicion::avisos`. Una escena se basta a sí misma: trae los contornos de sus glifos.
+
+## Integrar N-LTX
+
+Lo que pone N-LTX son los crates de Rust y el pintor en C++ (`pintor/nucleo`). Lo que pone cada proyecto es
+el pegamento, y `ejemplo/` lo tiene entero para copiarlo:
+
+- **Rust:** depende de `visor` y `pintor`, y traduce sus señales a `Compositor`, `Seleccion` y `Taller`
+  (`ejemplo/native/hub`). `Compositor::abrir` recibe de qué carpetas se pueden leer las imágenes.
+- **Rendimiento:** el perfil y el asignador son de quien compila. Sin `lto = "fat"` y `codegen-units = 1`,
+  un fotograma de animación cuesta un 11 % más, y sin `mimalloc` en el hub, entre un 5 % y un 13 % más.
+- **C++:** añade DiligentCore, dice en `NLTX_CXX` dónde deja `cxx` lo que genera y hace
+  `add_subdirectory` de `pintor/nucleo`. `ltx::Pintor` recibe su dispositivo y su contexto y devuelve una
+  textura (`pintor_lienzo.h`). N-LTX no crea el dispositivo: una app que ya use Diligent le da el suyo.
+- **Interfaz:** muestra la textura y le dice al `Taller` qué parte se ve (`ejemplo/lib`, `ejemplo/linux/lienzo`,
+  y `ejemplo/linux/gpu` si el proyecto no tiene su propia base Vulkan).
+
+Por ahora, el único pegamento probado es el de `ejemplo/`.
 
 ## Para un pintor
 
