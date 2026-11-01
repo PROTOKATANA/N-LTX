@@ -11,6 +11,7 @@ class Publicado {
     required this.avisos,
     this.error,
     this.muestras = 0,
+    this.completo = true,
   });
 
   /// En bp, con el margen.
@@ -20,6 +21,9 @@ class Publicado {
 
   /// Cuántas muestras lleva el documento.
   final int muestras;
+
+  /// Falso en un tramo: lo de arriba ya se ve y [alto] seguirá creciendo.
+  final bool completo;
 }
 
 /// Lo que se está midiendo en el pintor.
@@ -145,6 +149,7 @@ class RepositorioRinf implements RepositorioMotor {
       avisos: s.message.avisos,
       error: s.message.error.isEmpty ? null : s.message.error,
       muestras: s.message.muestras,
+      completo: s.message.completo,
     ),
   );
 

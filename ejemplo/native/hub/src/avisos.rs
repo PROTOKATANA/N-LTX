@@ -15,6 +15,7 @@ impl Avisos for AvisosRinf {
             avisos: r.avisos,
             error: r.error,
             muestras: r.muestras,
+            completo: r.completo,
         }
         .send_signal_to_dart();
     }

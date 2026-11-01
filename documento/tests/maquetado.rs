@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use documento::{
     Apartado, ColorDefinido, Colores, ColoresEditor, Documento, EstiloTabla, Formato, Fragmento, Imagen, Imagenes,
-    Incrustados, Piezas, Resaltador, Tema,
+    Incrustados, Memoria, Piezas, Resaltador, Seguimiento, Tema,
 };
 use primitivas::{
     Caja, Capa, Color, Composicion, Compositor, ErrorComposicion, Escena, MapaDeBits, Pintura, Primitiva, Relleno,
@@ -973,4 +973,139 @@ fn las_anclas_caen_donde_esta_el_texto() {
         documento::seleccion::cursor_en(&c.escena.anclas, primitivas::Punto { x: 0.1, y: 5.0 }),
         0
     );
+}
+
+/// Pide todos los tramos y para tras `parar_tras` preguntas, si lo dice.
+#[derive(Default)]
+struct Siguiendo {
+    tramos: Vec<Composicion>,
+    lentos: Vec<bool>,
+    preguntas: usize,
+    parar_tras: Option<usize>,
+}
+
+impl Seguimiento for Siguiendo {
+    fn parar(&mut self) -> bool {
+        self.preguntas += 1;
+        self.parar_tras.is_some_and(|n| self.preguntas > n)
+    }
+
+    fn quiere_tramo(&mut self, _alto: f64, lento: bool) -> bool {
+        self.lentos.push(lento);
+        true
+    }
+
+    fn tramo(&mut self, parcial: Composicion) {
+        self.tramos.push(parcial);
+    }
+}
+
+const POR_PARTES: &str = r"Un párrafo con $x$.
+
+\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}
+
+Otro párrafo.
+
+\begin{quote}Una cita con $y$.\end{quote}
+
+\begin{itemize}\item Uno con $z$.\item Dos.\end{itemize}
+
+Y el último.";
+
+fn es_principio<T: PartialEq>(corto: &[T], largo: &[T]) -> bool {
+    corto.len() <= largo.len() && corto == &largo[..corto.len()]
+}
+
+#[test]
+fn seguir_da_lo_mismo_y_cada_tramo_es_un_principio_del_resultado() {
+    let d = documento(400.0);
+    let entero = d.componer_a(POR_PARTES, 400.0).unwrap();
+    let mut s = Siguiendo::default();
+    assert!(d.seguir_a(POR_PARTES, 400.0, &mut s).unwrap() == entero);
+    assert!(s.tramos.len() >= 4, "{}", s.tramos.len());
+    for tramo in &s.tramos {
+        assert!(es_principio(&tramo.escena.primitivas, &entero.escena.primitivas));
+        assert!(es_principio(&tramo.escena.anclas, &entero.escena.anclas));
+        assert!(tramo.escena.caja.alto <= entero.escena.caja.alto);
+    }
+}
+
+/// Un tramo se pinta tal cual: una capa abierta dejaría lo que venga después dentro de ella.
+#[test]
+fn un_tramo_no_deja_nada_abierto() {
+    let mut s = Siguiendo::default();
+    documento(400.0).seguir_a(POR_PARTES, 400.0, &mut s).unwrap();
+    for tramo in &s.tramos {
+        let abiertas = tramo.escena.primitivas.iter().fold(0_i32, |n, p| match p {
+            Primitiva::Abrir(_) => n + 1,
+            Primitiva::Cerrar => n - 1,
+            _ => n,
+        });
+        assert_eq!(abiertas, 0);
+    }
+}
+
+/// Lo que va dentro de una cita o de una lista se coloca junto: su barra se pinta al final.
+#[test]
+fn una_cita_o_una_lista_no_se_parten() {
+    let mut s = Siguiendo::default();
+    let fuente = r"\begin{quote}Uno.
+
+Dos.
+
+Tres.\end{quote}";
+    documento(400.0).seguir_a(fuente, 400.0, &mut s).unwrap();
+    let con_algo = s.tramos.iter().filter(|t| !t.escena.primitivas.is_empty());
+    assert_eq!(con_algo.count(), 0, "solo se mira antes de la cita");
+}
+
+#[test]
+fn parar_deja_de_componer_y_devuelve_lo_que_hay() {
+    let d = documento(400.0);
+    let entero = d.componer_a(POR_PARTES, 400.0).unwrap();
+    let mut s = Siguiendo {
+        parar_tras: Some(1),
+        ..Siguiendo::default()
+    };
+    let hecho = d.seguir_a(POR_PARTES, 400.0, &mut s).unwrap();
+    assert_eq!(s.preguntas, 2, "no sigue preguntando");
+    assert!(hecho.escena.caja.alto < entero.escena.caja.alto);
+    assert!(es_principio(&hecho.escena.primitivas, &entero.escena.primitivas));
+}
+
+#[test]
+fn parar_en_una_serie_no_empieza_los_documentos_siguientes() {
+    let d = documento(400.0);
+    let mut s = Siguiendo {
+        parar_tras: Some(0),
+        ..Siguiendo::default()
+    };
+    let serie = [apartado("uno", "Hola"), apartado("dos", "Adiós")];
+    d.seguir_serie(&serie, 400.0, &mut s).unwrap();
+    assert_eq!(s.preguntas, 1);
+}
+
+/// RAYO: si lo ya hecho contara como lento, reflujar un documento lo enseñaría a trozos.
+#[test]
+fn solo_avisa_de_lo_que_aun_no_esta_hecho() {
+    let piezas = Piezas {
+        incrustados: Box::new(Memoria::nueva(Falsos)),
+        colores: Box::new(Falsos),
+        resaltador: Box::new(Falsos),
+        imagenes: Box::new(Falsos),
+    };
+    let d = Documento::nuevo(Formato::default(), piezas);
+    let fuente = r"Algo.
+
+\begin{tikzpicture}\draw (0,0) -- (1,1);\end{tikzpicture}
+
+\begin{animacion}[t=0:1]\begin{tikzpicture}\draw (0,0) -- (\t,1);\end{tikzpicture}\end{animacion}
+
+Más.";
+    let mut primera = Siguiendo::default();
+    d.seguir_a(fuente, 400.0, &mut primera).unwrap();
+    assert_eq!(primera.lentos, [false, true, true, false]);
+    let mut segunda = Siguiendo::default();
+    d.seguir_a(fuente, 400.0, &mut segunda).unwrap();
+    assert_eq!(segunda.lentos, [false, false, false, false]);
 }

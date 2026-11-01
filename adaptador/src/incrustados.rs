@@ -59,6 +59,10 @@ impl Incrustados for IncrustadosMotor {
     fn caja_de_animacion(&self, fuente: &str) -> Result<Caja, ErrorComposicion> {
         protegido(|| filmoteca().caja(fuente, self.color).map_err(ErrorComposicion))
     }
+
+    fn anticipar(&self, animaciones: &[String]) {
+        filmoteca().anticipar(animaciones, self.color);
+    }
 }
 
 /// Las piezas que componen de verdad, sin repetir trabajo: `mathra` y `tikra`, `xcolor` y `syntect`.

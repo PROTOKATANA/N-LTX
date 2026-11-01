@@ -16,13 +16,19 @@ struct Estado {
     /// Las anclas seleccionadas.
     desde: usize,
     hasta: usize,
+    /// Se ha pedido todo: lo que llegue después, también.
+    todo: bool,
 }
 
 impl Estado {
-    /// Las anclas de otra composición de lo mismo, por ejemplo al cambiar el ancho, conservan lo
-    /// seleccionado: los bytes de la fuente no se mueven.
+    /// Las anclas de otra composición de lo mismo, al cambiar el ancho, en cada tramo o con más texto
+    /// detrás, conservan lo seleccionado: los bytes de lo que ya había no se mueven.
     fn adoptar(&mut self, anclas: Vec<Ancla>, fuentes: Vec<String>) {
-        let misma = fuentes == self.fuentes;
+        let misma = fuentes.len() == self.fuentes.len()
+            && fuentes
+                .iter()
+                .zip(&self.fuentes)
+                .all(|(n, v)| n.starts_with(v.as_str()));
         let elegidas = self.anclas.get(self.desde..self.hasta).unwrap_or(&[]);
         let (primera, ultima) = (elegidas.first().copied(), elegidas.last().copied());
         (self.desde, self.hasta) = match (misma, primera, ultima) {
@@ -34,12 +40,17 @@ impl Estado {
             }
             _ => (0, 0),
         };
+        self.todo &= misma;
+        if self.todo {
+            (self.desde, self.hasta) = (0, anclas.len());
+        }
         self.anclas = anclas;
         self.fuentes = fuentes;
     }
 
     fn poner(&mut self, a: usize, b: usize) -> Vec<Caja> {
         (self.desde, self.hasta) = (a.min(b), a.max(b));
+        self.todo = false;
         cajas(&self.anclas, self.desde, self.hasta)
     }
 
@@ -102,7 +113,9 @@ impl Seleccion {
     pub fn todo(&self) {
         self.cambiar(|e| {
             let n = e.anclas.len();
-            e.poner(0, n)
+            let cajas = e.poner(0, n);
+            e.todo = true;
+            cajas
         });
     }
 
@@ -149,6 +162,29 @@ mod tests {
         let reflujo = vec![ancla(0), ancla(1), ancla(2), ancla(3)];
         e.adoptar(reflujo, fuentes);
         assert_eq!((e.desde, e.hasta), (1, 3));
+    }
+
+    #[test]
+    fn con_mas_texto_detras_se_conserva_lo_seleccionado() {
+        let mut e = Estado::default();
+        e.adoptar((0..4).map(ancla).collect(), vec!["abcd".to_string()]);
+        e.poner(1, 3);
+        e.adoptar((0..6).map(ancla).collect(), vec!["abcdef".to_string()]);
+        assert_eq!((e.desde, e.hasta), (1, 3));
+    }
+
+    #[test]
+    fn seleccionar_todo_a_medias_incluye_lo_que_llega_despues() {
+        let mut e = Estado::default();
+        let fuentes = vec!["abcdef".to_string()];
+        e.adoptar((0..2).map(ancla).collect(), fuentes.clone());
+        e.poner(0, 2);
+        e.todo = true;
+        e.adoptar((0..6).map(ancla).collect(), fuentes.clone());
+        assert_eq!((e.desde, e.hasta), (0, 6));
+        e.poner(1, 2);
+        e.adoptar((0..6).map(ancla).collect(), fuentes);
+        assert_eq!((e.desde, e.hasta), (1, 2), "otra selección ya no crece");
     }
 
     #[test]

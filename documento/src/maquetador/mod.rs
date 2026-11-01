@@ -10,7 +10,7 @@ use primitivas::{
 
 use crate::lector::{Bloque, Estilo, Lectura, Tramo};
 use crate::tema::Opciones;
-use crate::{ColorDefinido, Formato, Piezas};
+use crate::{ColorDefinido, Formato, Piezas, Seguimiento};
 
 mod editor;
 mod imagen;
@@ -20,9 +20,9 @@ mod texto;
 use editor::BloqueDeCodigo;
 use texto::Letra;
 
-/// Separación entre bloques y sangría de las listas, en cuerpos de letra.
 /// El contraste mínimo del texto, el de WCAG AA.
 const CONTRASTE_LEGIBLE: f64 = 4.5;
+/// Separación entre bloques y sangría de las listas, en cuerpos de letra.
 const SEPARACION: f64 = 0.7;
 const SANGRIA: f64 = 1.8;
 /// Ancho de las reglas, en bp.
@@ -34,10 +34,16 @@ pub(crate) struct Entrada<'t> {
     pub(crate) lectura: Lectura,
 }
 
-pub(crate) fn maquetar(lectura: Lectura, formato: Formato, piezas: &Piezas, sistema: &mut FontSystem) -> Composicion {
-    let mut m = Maquetador::nuevo(formato, piezas, sistema);
+pub(crate) fn maquetar(
+    lectura: Lectura,
+    formato: Formato,
+    piezas: &Piezas,
+    sistema: &mut FontSystem,
+    seguimiento: &mut dyn Seguimiento,
+) -> Composicion {
+    let mut m = Maquetador::nuevo(formato, piezas, sistema, seguimiento);
     let bloques = m.adoptar(lectura);
-    m.bloques(&bloques, m.columna());
+    m.principales(&bloques, m.columna());
     m.cerrar()
 }
 
@@ -48,10 +54,14 @@ pub(crate) fn maquetar_serie(
     formato: Formato,
     piezas: &Piezas,
     sistema: &mut FontSystem,
+    seguimiento: &mut dyn Seguimiento,
 ) -> Composicion {
-    let mut m = Maquetador::nuevo(formato, piezas, sistema);
+    let mut m = Maquetador::nuevo(formato, piezas, sistema, seguimiento);
     for (n, entrada) in entradas.into_iter().enumerate() {
         m.entrada(entrada, n == 0);
+        if m.parado {
+            break;
+        }
     }
     m.cerrar()
 }
@@ -60,6 +70,9 @@ struct Maquetador<'a> {
     formato: Formato,
     piezas: &'a Piezas,
     sistema: &'a mut FontSystem,
+    seguimiento: &'a mut dyn Seguimiento,
+    /// Quien lo seguía ha dicho que ya no hace falta.
+    parado: bool,
     preambulo: String,
     macros: String,
     /// Los colores de `\textcolor`, en el orden de [`Lectura::colores`].
@@ -115,11 +128,18 @@ impl Columna {
 }
 
 impl<'a> Maquetador<'a> {
-    fn nuevo(formato: Formato, piezas: &'a Piezas, sistema: &'a mut FontSystem) -> Self {
+    fn nuevo(
+        formato: Formato,
+        piezas: &'a Piezas,
+        sistema: &'a mut FontSystem,
+        seguimiento: &'a mut dyn Seguimiento,
+    ) -> Self {
         Maquetador {
             formato,
             piezas,
             sistema,
+            seguimiento,
+            parado: false,
             preambulo: String::new(),
             macros: String::new(),
             colores: Vec::new(),
@@ -179,7 +199,7 @@ impl<'a> Maquetador<'a> {
             let tramos = vec![Tramo::Texto(titulo.into(), Estilo::default())];
             self.bloque(&Bloque::Titulo { nivel: 3, tramos }, columna);
         }
-        self.bloques(&bloques, columna);
+        self.principales(&bloques, columna);
         for aviso in std::mem::take(&mut self.avisos) {
             let tramos = vec![Tramo::Texto(format!("⚠ {aviso}").into(), Estilo::default())];
             self.bloque(&Bloque::Leyenda(tramos), columna);
@@ -187,25 +207,44 @@ impl<'a> Maquetador<'a> {
         self.documento += 1;
     }
 
+    /// Lo que ocupa lo colocado.
+    fn caja(&self) -> Caja {
+        Caja {
+            x: 0.0,
+            y: 0.0,
+            ancho: self.formato.ancho,
+            alto: self.y,
+        }
+    }
+
+    /// Una copia de lo colocado: `cerrar` da lo mismo cuando ya no hay más.
+    fn lo_colocado(&self) -> Composicion {
+        Composicion {
+            escena: Escena {
+                caja: self.caja(),
+                primitivas: self.primitivas.clone(),
+                contornos: self.contornos.clone(),
+                zonas: self.zonas.clone(),
+                anclas: self.anclas.clone(),
+                ..Escena::default()
+            },
+            avisos: self.avisos.clone(),
+        }
+    }
+
     fn cerrar(self) -> Composicion {
+        let caja = self.caja();
         let Maquetador {
-            formato,
             primitivas,
             contornos,
             avisos,
             zonas,
             anclas,
-            y,
             ..
         } = self;
         Composicion {
             escena: Escena {
-                caja: Caja {
-                    x: 0.0,
-                    y: 0.0,
-                    ancho: formato.ancho,
-                    alto: y,
-                },
+                caja,
                 primitivas,
                 contornos,
                 zonas,
@@ -251,12 +290,64 @@ struct Colocable {
 }
 
 impl Maquetador<'_> {
+    /// Los bloques del documento. Quien lo sigue mira entre uno y otro, no dentro de una lista.
+    fn principales(&mut self, bloques: &[Bloque], columna: Columna) {
+        self.recorrer(bloques, columna, true);
+    }
+
     fn bloques(&mut self, bloques: &[Bloque], columna: Columna) {
+        self.recorrer(bloques, columna, false);
+    }
+
+    fn entre_bloques(&mut self, siguiente: &Bloque) {
+        self.parado = self.seguimiento.parar();
+        if self.parado {
+            return;
+        }
+        let lento = self.puede_tardar(siguiente);
+        if self.seguimiento.quiere_tramo(self.y, lento) {
+            let parcial = self.lo_colocado();
+            self.seguimiento.tramo(parcial);
+        }
+    }
+
+    /// Lo que compone otro y aún no está hecho: en K1, en frío, 630 de los 790 ms que tarda.
+    fn puede_tardar(&self, bloque: &Bloque) -> bool {
+        let (Bloque::Figura(fuente) | Bloque::Animacion(fuente)) = bloque else {
+            return false;
+        };
+        !self.piezas.incrustados.recuerda(&format!("{}{fuente}", self.preambulo))
+    }
+
+    /// Medir las animaciones es lo que más tarda: mientras se coloca lo demás, se van adelantando.
+    fn anticipar(&self, bloques: &[Bloque]) {
+        let animaciones: Vec<String> = bloques
+            .iter()
+            .filter_map(|b| match b {
+                Bloque::Animacion(fuente) => Some(format!("{}{fuente}", self.preambulo)),
+                _ => None,
+            })
+            .collect();
+        if !animaciones.is_empty() {
+            self.piezas.incrustados.anticipar(&animaciones);
+        }
+    }
+
+    fn recorrer(&mut self, bloques: &[Bloque], columna: Columna, seguidos: bool) {
+        if seguidos {
+            self.anticipar(bloques);
+        }
         let mut origen = None;
         for bloque in bloques {
             if let Bloque::Origen(a, b) = bloque {
                 origen = Some((*a, *b));
                 continue;
+            }
+            if seguidos {
+                self.entre_bloques(bloque);
+                if self.parado {
+                    return;
+                }
             }
             let (y, anclas) = (self.y, self.anclas.len());
             self.bloque(bloque, columna);
@@ -379,7 +470,6 @@ impl Maquetador<'_> {
         })
     }
 
-    /// La fuente de lo que no se pudo componer, en un bloque sencillo.
     /// La tinta, salvo que no se lea sobre `fondo`: el texto de un panel claro con la tinta clara.
     fn tinta_sobre(&self, fondo: Color) -> Color {
         let tinta = self.formato.color;
@@ -392,6 +482,7 @@ impl Maquetador<'_> {
         }
     }
 
+    /// La fuente de lo que no se pudo componer, en un bloque sencillo.
     fn fuente_cruda(&mut self, fuente: &str, c: Columna) {
         let tam = self.formato.tam * 0.84;
         let margen = tam * 0.75;

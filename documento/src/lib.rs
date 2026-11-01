@@ -64,6 +64,39 @@ pub trait Incrustados: Send + Sync {
     fn figura(&self, fuente: &str) -> Result<Composicion, ErrorComposicion>;
     /// El tamaño que necesita una animación durante todo su recorrido.
     fn caja_de_animacion(&self, fuente: &str) -> Result<Caja, ErrorComposicion>;
+    /// Si esta figura o animación ya está hecha y pedirla será inmediato. Sin saberlo, no.
+    fn recuerda(&self, _fuente: &str) -> bool {
+        false
+    }
+    /// Las animaciones que se van a pedir, por orden: quien pueda, que las adelante en otros hilos.
+    fn anticipar(&self, _animaciones: &[String]) {}
+}
+
+/// Quien va mirando un documento mientras se compone. Se le pregunta entre dos bloques del documento:
+/// ahí no queda nada abierto y lo colocado es un principio exacto del resultado final.
+pub trait Seguimiento {
+    /// Si hay que dejarlo: lo que está saliendo ya no hace falta.
+    fn parar(&mut self) -> bool;
+    /// Si hay que enseñar ya lo colocado, que llega hasta `alto` bp. `lento`: lo que viene puede
+    /// tardar. Copiarlo cuesta, así que no se copia sin que lo pida.
+    fn quiere_tramo(&mut self, alto: f64, lento: bool) -> bool;
+    /// Lo colocado hasta aquí.
+    fn tramo(&mut self, parcial: Composicion);
+}
+
+/// Sin nadie mirando: el documento sale entero de una vez.
+pub struct SinSeguimiento;
+
+impl Seguimiento for SinSeguimiento {
+    fn parar(&mut self) -> bool {
+        false
+    }
+
+    fn quiere_tramo(&mut self, _alto: f64, _lento: bool) -> bool {
+        false
+    }
+
+    fn tramo(&mut self, _parcial: Composicion) {}
 }
 
 /// Quien sabe qué color es un nombre.
@@ -209,6 +242,17 @@ impl Documento {
     /// Varios documentos completos, uno detrás de otro y separados por una regla. Ninguno ve el
     /// preámbulo ni las macros de los demás, y los avisos de cada uno se escriben debajo de él.
     pub fn componer_serie(&self, apartados: &[Apartado<'_>], ancho: f64) -> Result<Composicion, ErrorComposicion> {
+        self.seguir_serie(apartados, ancho, &mut SinSeguimiento)
+    }
+
+    /// Como [`Documento::componer_serie`], enseñando lo que va saliendo. Si `seguimiento` lo para,
+    /// devuelve lo colocado hasta ahí.
+    pub fn seguir_serie(
+        &self,
+        apartados: &[Apartado<'_>],
+        ancho: f64,
+        seguimiento: &mut dyn Seguimiento,
+    ) -> Result<Composicion, ErrorComposicion> {
         let entradas = apartados
             .iter()
             .map(|a| maquetador::Entrada {
@@ -229,11 +273,23 @@ impl Documento {
             formato,
             &self.piezas,
             &mut sistema,
+            seguimiento,
         ))
     }
 
     /// Compone a `ancho` bp. Reflujar no exige otro documento: cargar las fuentes es caro.
     pub fn componer_a(&self, fuente: &str, ancho: f64) -> Result<Composicion, ErrorComposicion> {
+        self.seguir_a(fuente, ancho, &mut SinSeguimiento)
+    }
+
+    /// Como [`Documento::componer_a`], enseñando lo que va saliendo. Si `seguimiento` lo para,
+    /// devuelve lo colocado hasta ahí.
+    pub fn seguir_a(
+        &self,
+        fuente: &str,
+        ancho: f64,
+        seguimiento: &mut dyn Seguimiento,
+    ) -> Result<Composicion, ErrorComposicion> {
         let lectura = lector::leer(fuente);
         let mut sistema = self
             .fuentes
@@ -243,7 +299,13 @@ impl Documento {
             ancho,
             ..self.formato.clone()
         };
-        Ok(maquetador::maquetar(lectura, formato, &self.piezas, &mut sistema))
+        Ok(maquetador::maquetar(
+            lectura,
+            formato,
+            &self.piezas,
+            &mut sistema,
+            seguimiento,
+        ))
     }
 }
 

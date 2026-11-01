@@ -70,6 +70,8 @@ pub struct DocumentoPublicado {
     pub avisos: Vec<String>,
     pub error: String,
     pub muestras: u32,
+    /// `false` en un tramo: el documento sigue componiéndose y `alto` crecerá.
+    pub completo: bool,
 }
 
 /// Rust → Dart, una vez por segundo.

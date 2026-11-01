@@ -77,6 +77,23 @@ impl<I: Incrustados> Incrustados for Memoria<I> {
         self.cajas
             .dar(fuente.to_string(), || self.dentro.caja_de_animacion(fuente))
     }
+
+    fn recuerda(&self, fuente: &str) -> bool {
+        self.figuras.bloquear().contains_key(fuente) || self.cajas.bloquear().contains_key(fuente)
+    }
+
+    fn anticipar(&self, animaciones: &[String]) {
+        let cajas = self.cajas.bloquear();
+        let faltan: Vec<String> = animaciones
+            .iter()
+            .filter(|a| !cajas.contains_key(a.as_str()))
+            .cloned()
+            .collect();
+        drop(cajas);
+        if !faltan.is_empty() {
+            self.dentro.anticipar(&faltan);
+        }
+    }
 }
 
 impl<I: Resaltador> Resaltador for Memoria<I> {
@@ -99,7 +116,7 @@ mod tests {
 
     /// Falla con lo que contiene «rota» y cuenta cuántas veces se le llama.
     #[derive(Default)]
-    struct Contador(AtomicU32);
+    struct Contador(AtomicU32, Mutex<Vec<String>>);
 
     impl Contador {
         fn sumar(&self, fuente: &str) -> Result<Composicion, ErrorComposicion> {
@@ -122,6 +139,10 @@ mod tests {
 
         fn caja_de_animacion(&self, fuente: &str) -> Result<Caja, ErrorComposicion> {
             self.sumar(fuente).map(|c| c.escena.caja)
+        }
+
+        fn anticipar(&self, animaciones: &[String]) {
+            self.1.lock().unwrap().extend_from_slice(animaciones);
         }
     }
 
@@ -148,6 +169,24 @@ mod tests {
         m.formula("a", false, 10.0).unwrap();
         m.formula("a", true, 12.0).unwrap();
         assert_eq!(llamadas(&m), 3);
+    }
+
+    #[test]
+    fn solo_anticipa_lo_que_no_tiene() {
+        let m = Memoria::nueva(Contador::default());
+        m.caja_de_animacion("a").unwrap();
+        m.anticipar(&["a".to_string(), "b".to_string()]);
+        assert_eq!(*m.dentro.1.lock().unwrap(), ["b"]);
+    }
+
+    #[test]
+    fn sabe_lo_que_ya_tiene_hecho() {
+        let m = Memoria::nueva(Contador::default());
+        assert!(!m.recuerda("a") && !m.recuerda("b"));
+        m.figura("a").unwrap();
+        m.caja_de_animacion("b").unwrap();
+        assert!(m.recuerda("a") && m.recuerda("b"));
+        assert_eq!(llamadas(&m), 2, "preguntar no compone");
     }
 
     #[test]

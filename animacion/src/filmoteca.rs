@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use primitivas::{Caja, Color, Compositor, Escena};
 
+use crate::cuadrilla::Cuadrilla;
 use crate::proyector::{PRESUPUESTO, Proyector, reloj};
 
 /// Un modelo que escribe en directo deja muchas animaciones a medias.
@@ -79,6 +80,16 @@ impl<C: Compositor + Send + Sync + 'static> Filmoteca<C> {
         self.proyector(fuente, tinta).map(|p| p.caja())
     }
 
+    /// Empieza a preparar `fuentes`, sin esperar. Quien las pida después recoge lo hecho, o espera a
+    /// lo que falte: se ejecuta desordenado y se recoge en orden. Medirlas una tras otra obliga a
+    /// esperar en cada una a su muestra más lenta (K1: 340 ms frente a 200).
+    pub fn anticipar(&'static self, fuentes: &[String], tinta: Color) {
+        for fuente in fuentes {
+            let fuente = fuente.clone();
+            Cuadrilla::global().encargar(Box::new(move || drop(self.proyector(&fuente, tinta))));
+        }
+    }
+
     /// El fotograma de `fuente` a los `segundos`. Nunca espera a que se componga.
     pub fn fotograma(&self, fuente: &str, tinta: Color, segundos: f64) -> Option<Arc<Escena>> {
         let proyector = self.proyector(fuente, tinta).ok()?;
@@ -125,6 +136,30 @@ mod tests {
 
     fn cuantas(filmoteca: &Filmoteca<Contador>, fuente: &str) -> usize {
         filmoteca.proyector(fuente, NEGRO).map_or(0, |p| p.guardados())
+    }
+
+    #[test]
+    fn anticipar_prepara_sin_que_nadie_espere_y_no_repite_el_trabajo() {
+        static COMPUESTOS: OnceLock<Contador> = OnceLock::new();
+        static FILMOTECA: OnceLock<Filmoteca<Contador>> = OnceLock::new();
+        let filmoteca =
+            FILMOTECA.get_or_init(|| Filmoteca::nueva(|_| COMPUESTOS.get_or_init(Contador::default).clone()));
+        filmoteca.anticipar(&[FUENTE.to_string()], NEGRO);
+        let compuestos = || {
+            COMPUESTOS
+                .get_or_init(Contador::default)
+                .compuestos
+                .load(Ordering::SeqCst)
+        };
+        let inicio = std::time::Instant::now();
+        while compuestos() == 0 {
+            assert!(inicio.elapsed().as_secs() < 20, "nadie lo ha empezado");
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        filmoteca.caja(FUENTE, NEGRO).unwrap();
+        let hecho = compuestos();
+        filmoteca.caja(FUENTE, NEGRO).unwrap();
+        assert_eq!(compuestos(), hecho, "lo anticipado no se repite");
     }
 
     #[test]

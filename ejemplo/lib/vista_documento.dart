@@ -76,7 +76,7 @@ class _VistaDocumentoState extends State<VistaDocumento> {
   Offset _lugarDelClic = Offset.zero;
   Timer? _bordes;
 
-  /// La primera vez, muchas figuras tardan: que se note que algo está pasando.
+  /// Lo de arriba llega enseguida y el resto detrás: que se note que aún falta.
   bool _componiendo = false;
   final _suscripciones = <StreamSubscription<Object?>>[];
 
@@ -89,7 +89,7 @@ class _VistaDocumentoState extends State<VistaDocumento> {
         widget.motor.publicados.listen((p) {
           setState(() {
             _publicado = p;
-            _componiendo = false;
+            _componiendo = !p.completo;
           });
         }),
       )

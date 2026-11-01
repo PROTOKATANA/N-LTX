@@ -21,6 +21,7 @@ class DocumentoPublicado {
     required this.avisos,
     required this.error,
     required this.muestras,
+    required this.completo,
   });
 
   static DocumentoPublicado deserialize(BinaryDeserializer deserializer) {
@@ -30,6 +31,7 @@ class DocumentoPublicado {
       avisos: TraitHelpers.deserializeVectorStr(deserializer),
       error: deserializer.deserializeString(),
       muestras: deserializer.deserializeUint32(),
+      completo: deserializer.deserializeBool(),
     );
     deserializer.decreaseContainerDepth();
     return instance;
@@ -48,18 +50,21 @@ class DocumentoPublicado {
   final List<String> avisos;
   final String error;
   final int muestras;
+  final bool completo;
 
   DocumentoPublicado copyWith({
     double? alto,
     List<String>? avisos,
     String? error,
     int? muestras,
+    bool? completo,
   }) {
     return DocumentoPublicado(
       alto: alto ?? this.alto,
       avisos: avisos ?? this.avisos,
       error: error ?? this.error,
       muestras: muestras ?? this.muestras,
+      completo: completo ?? this.completo,
     );
   }
 
@@ -69,6 +74,7 @@ class DocumentoPublicado {
     TraitHelpers.serializeVectorStr(avisos, serializer);
     serializer.serializeString(error);
     serializer.serializeUint32(muestras);
+    serializer.serializeBool(completo);
     serializer.decreaseContainerDepth();
   }
 
@@ -87,7 +93,8 @@ class DocumentoPublicado {
       && alto == other.alto
       && listEquals(avisos, other.avisos)
       && error == other.error
-      && muestras == other.muestras;
+      && muestras == other.muestras
+      && completo == other.completo;
   }
 
   @override
@@ -96,6 +103,7 @@ class DocumentoPublicado {
         avisos,
         error,
         muestras,
+        completo,
       );
 
   @override
@@ -107,7 +115,8 @@ class DocumentoPublicado {
         'alto: $alto, '
         'avisos: $avisos, '
         'error: $error, '
-        'muestras: $muestras'
+        'muestras: $muestras, '
+        'completo: $completo'
         ')';
       return true;
     }());

@@ -55,6 +55,13 @@ el pegamento, y `ejemplo/` lo tiene entero para copiarlo:
   que el documento pide se respeta, aunque sea `black`, y el texto de un nodo con relleno propio solo deja
   la tinta si no se leería sobre ese relleno. Un texto sobre un relleno que no es de su nodo no se puede
   saber: `\fill[green!20]` y un `\node` encima se quedan con la tinta.
+- **Abrir un documento:** `Compositor` no espera a tenerlo entero. Enseña lo de arriba en cuanto lleva 4 ms
+  componiendo y sigue por tramos, cada vez más espaciados: `Destino::publicar` y `Avisos::publicado` llegan
+  varias veces, con `Resultado::completo` en `false` y `alto` creciendo, hasta la última. Cada tramo es un
+  principio exacto del resultado, así que nada se mueve al llegar el resto; se puede seleccionar y copiar, y
+  sus animaciones ya se reproducen. Otro documento u otra tinta abandonan lo que se esté componiendo. Si solo
+  cambia el ancho, o la fuente crece por detrás (un modelo escribiendo), lo que se ve se queda hasta que algo
+  lo supere, y figuras, fórmulas y animaciones no se repiten: el texto sí se recoloca entero, 23 ms con K1.
 - **Rendimiento:** el perfil y el asignador son de quien compila. Sin `lto = "fat"` y `codegen-units = 1`,
   un fotograma de animación cuesta un 11 % más, y sin `mimalloc` en el hub, entre un 5 % y un 13 % más.
 - **C++:** añade DiligentCore, dice en `NLTX_CXX` dónde deja `cxx` lo que genera y hace
